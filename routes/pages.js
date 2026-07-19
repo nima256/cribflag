@@ -2,7 +2,6 @@ const express = require('express');
 const Product = require('../models/Product');
 const User = require('../models/User');
 const Admin = require('../models/Admin');
-const readyDesignMap = require('../data/readyDesigns');
 const S = require('../services/serializers');
 const { asyncHandler } = require('../utils/http');
 const iranCity = require('iran-city');
@@ -37,7 +36,7 @@ async function common(req) {
     const images = (Array.isArray(item.images) ? item.images : [item.image]).map(normalizeAsset);
     return { ...item, image: images[0], images };
   });
-  const readyDesigns = Array.from(readyDesignMap.entries()).map(([id, item]) => ({ id, ...item }));
+  const readyDesigns = products.filter(item => Array.isArray(item.categories) && item.categories.includes('طرح آماده'));
   let currentUser = null;
   if (req.session?.userId) {
     const user = await User.findById(req.session.userId).lean();
@@ -97,11 +96,7 @@ router.get('/payment/success', asyncHandler((req, res) => render(req, res, 'succ
 router.get('/payment/failed', asyncHandler((req, res) => render(req, res, 'success', { paymentFailed: true })));
 router.get('/product/:id', asyncHandler(async (req, res) => {
   const data = await common(req);
-  let product = data.products.find(item => Number(item.id) === Number(req.params.id));
-  if (!product && readyDesignMap.has(Number(req.params.id))) {
-    const ready = readyDesignMap.get(Number(req.params.id));
-    product = { id: Number(req.params.id), sku: `READY-${req.params.id}`, category: 'طرح آماده', old: ready.price, badge: 'طرح آماده', rate: 4.8, status: 'active', sales: 0, stock: 999, sizes: ['۱۵۰ × ۹۰ سانتی‌متر','۱۰۰ × ۷۰ سانتی‌متر','۵۰ × ۷۰ سانتی‌متر'], fabrics: ['ساتن آمریکایی','ساتن براق','مخمل'], image: '/assets/images/ukflag.png', images: ['/assets/images/ukflag.png'], ...ready };
-  }
+  const product = data.products.find(item => Number(item.id) === Number(req.params.id));
   if (!product) return res.status(404).render('404', { ...data, message: 'محصول موردنظر پیدا نشد.' });
   res.render('product', { ...data, product });
 }));

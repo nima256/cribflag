@@ -44,6 +44,7 @@ const product = {
         title: `فلگ آزمایشی ${index + 1}`,
         sku: `TEST-${index + 1}`,
         category: 'فلگ دیواری',
+        categories: index === 0 ? ['فلگ دیواری', 'دکور اتاق', 'طرح آماده'] : ['فلگ دیواری'],
         image: '/assets/images/ukflag.png',
         badge: 'ویژه',
         rate: 4.9,
@@ -58,9 +59,11 @@ const product = {
     })
   });
   const routedHome = await request(app).get('/').expect(200);
+  const routedReady = await request(app).get('/ready').expect(200);
   Product.find = originalFind;
   if (!routedHome.text.includes('فلگ آزمایشی 1') || !routedHome.text.includes('/product/1')) throw new Error('Express EJS product route failed');
   if (!routedHome.text.includes('فلگ دیواری') || !routedHome.text.includes('استیکر مخمل')) throw new Error('Express navbar route failed');
+  if (!routedReady.text.includes('<h3>فلگ آزمایشی 1</h3>') || routedReady.text.includes('<h3>فلگ آزمایشی 2</h3>')) throw new Error('Ready route database category filtering failed');
 
   const html = await ejs.renderFile(path.join(__dirname, '..', 'views', 'index.ejs'), {
     products: [product, product, product, product, product],
@@ -76,7 +79,17 @@ const product = {
   if (!html.includes('فلگ دیواری') || !html.includes('استیکر مخمل')) throw new Error('Navbar submenu missing');
   if (!html.includes('فلگ آزمایشی') || !html.includes('/product/1')) throw new Error('EJS product rendering failed');
 
-  console.log('Smoke OK: Express EJS routes + checkout guard + anonymous order guard');
+  const serializers = require('../services/serializers');
+  const serializedOrder = serializers.order({
+    orderNumber: 'TEST-1', customer: 'کاربر تست', phone: '09120000000', createdAt: new Date(),
+    subtotal: 1000000, shipping: 0, discount: 100000, total: 900000,
+    couponCode: 'SAVE10', customerNote: 'لطفاً قبل از ارسال تماس بگیرید.', items: []
+  });
+  if (serializedOrder.couponCode !== 'SAVE10' || serializedOrder.discount !== 100000 || !serializedOrder.customerNote) {
+    throw new Error('Order discount/note serialization failed');
+  }
+
+  console.log('Smoke OK: routes, ready DB filtering, order discount/note serialization, and guards');
 })().catch(error => {
   console.error(error);
   process.exit(1);

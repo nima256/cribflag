@@ -10,6 +10,7 @@ const customRequestSchema = new mongoose.Schema({
   postalCode: { type: String, trim: true, default: '' },
   address: { type: String, trim: true, default: '' },
   shippingMethod: { type: String, trim: true, default: '' },
+  deliveryNote: { type: String, trim: true, default: '' },
   fileName: String,
   filePath: String,
   mimeType: String,

@@ -6,11 +6,12 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js",
+    "start": "nodemon server.js",
     "seed": "node scripts/seed.js",
     "check": "node scripts/check.js",
     "smoke": "node scripts/smoke.js",
-    "test": "npm run check && npm run smoke"
+    "test": "npm run check && npm run smoke",
+    "migrate:ready": "node scripts/migrate-ready-designs.js"
   },
   "engines": {
     "node": ">=18.18.0",

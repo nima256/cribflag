@@ -196,7 +196,7 @@ function orderRow(order, compact = false) {
         </td>
 
         <td>
-          <b>${D.toman(order.total || 0)}</b>
+          <b>${D.toman(order.total || 0)}</b>${Number(order.discount||0)>0?`<span class="table-secondary">تخفیف: ${D.toman(order.discount)}</span>`:''}
         </td>
 
         <td>
@@ -237,7 +237,7 @@ function orderRow(order, compact = false) {
       </td>
 
       <td>
-        <b>${D.toman(order.total || 0)}</b>
+        <b>${D.toman(order.total || 0)}</b>${Number(order.discount||0)>0?`<span class="table-secondary">تخفیف: ${D.toman(order.discount)}</span>`:''}
       </td>
 
       <td>
@@ -275,8 +275,9 @@ function orderRow(order, compact = false) {
 }
 function productRow(product){
   const sizes=(product.sizes||[]).map(item=>item.replace(' سانتی‌متر','')).join('، ')||'—';
+  const categories=(product.categories||[product.category]).filter(Boolean);
   const fabrics=(product.fabrics||[]).join('، ')||'—';
-  return `<tr><td><div class="table-product">${productThumb(product.title,product.image)}<span><b>${D.esc(product.title)}</b><small class="table-secondary">${D.esc(product.badge||'بدون نشان')}</small></span></div></td><td>${D.esc(product.sku||`CF-${product.id}`)}</td><td>${D.esc(product.category)}</td><td><b>${D.toman(product.price)}</b></td><td><span class="table-primary">${D.esc(sizes)}</span><span class="table-secondary">${D.esc(fabrics)}</span></td><td>${D.fa(product.sales||0)}</td><td>${status(product.status||'active')}</td><td><div class="table-actions"><button class="table-action edit-product" data-id="${product.id}" title="ویرایش"><svg viewBox="0 0 24 24"><path d="m4 16-1 5 5-1L19 9l-4-4L4 16ZM13 7l4 4"/></svg></button><button class="table-action clone-product" data-id="${product.id}" title="کپی"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button><button class="table-action delete-product" data-id="${product.id}" title="حذف"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></svg></button></div></td></tr>`;
+  return `<tr><td><div class="table-product">${productThumb(product.title,product.image)}<span><b>${D.esc(product.title)}</b><small class="table-secondary">${D.esc(product.badge||'بدون نشان')}</small></span></div></td><td>${D.esc(product.sku||`CF-${product.id}`)}</td><td>${D.esc(categories.join('، '))}</td><td><b>${D.toman(product.price)}</b></td><td><span class="table-primary">${D.esc(sizes)}</span><span class="table-secondary">${D.esc(fabrics)}</span></td><td>${D.fa(product.sales||0)}</td><td>${status(product.status||'active')}</td><td><div class="table-actions"><button class="table-action edit-product" data-id="${product.id}" title="ویرایش"><svg viewBox="0 0 24 24"><path d="m4 16-1 5 5-1L19 9l-4-4L4 16ZM13 7l4 4"/></svg></button><button class="table-action clone-product" data-id="${product.id}" title="کپی"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button><button class="table-action delete-product" data-id="${product.id}" title="حذف"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></svg></button></div></td></tr>`;
 }
 function renderDashboard(){
   const orders = getOrdersForDisplay();
@@ -291,7 +292,7 @@ function renderDashboard(){
   q('#statStockChange').textContent=`${D.fa(activeProducts.length)} فعال`;
   q('#donutOrders').textContent=D.fa(orders.length);
   q('#adminRecentOrders').innerHTML=[...orders].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,5).map(order=>orderRow(order,true)).join('');
-  q('#adminTopProductsList').innerHTML=[...products].sort((a,b)=>Number(b.sales||0)-Number(a.sales||0)).slice(0,5).map((product,index)=>`<div class="list-item">${productThumb(product.title,product.image)}<span class="list-content"><strong>${D.esc(product.title)}</strong><small>${D.esc(product.category)} — ${D.esc((product.fabrics||[]).join('، '))}</small></span><span class="list-value"><strong>${D.fa(product.sales||0)} فروش</strong><small>رتبه ${D.fa(index+1)}</small></span></div>`).join('')||'<div class="empty-panel">محصولی ثبت نشده است.</div>';
+  q('#adminTopProductsList').innerHTML=[...products].sort((a,b)=>Number(b.sales||0)-Number(a.sales||0)).slice(0,5).map((product,index)=>`<div class="list-item">${productThumb(product.title,product.image)}<span class="list-content"><strong>${D.esc(product.title)}</strong><small>${D.esc((product.categories||[product.category]).join('، '))} — ${D.esc((product.fabrics||[]).join('، '))}</small></span><span class="list-value"><strong>${D.fa(product.sales||0)} فروش</strong><small>رتبه ${D.fa(index+1)}</small></span></div>`).join('')||'<div class="empty-panel">محصولی ثبت نشده است.</div>';
   monthlyChart('#adminRevenueChart');
   q('#adminNewOrders').textContent=D.fa(orders.filter(order=>['processing','design-review'].includes(order.status)).length);
   q('#adminOpenTickets').textContent=D.fa(D.get('tickets').filter(ticket=>ticket.status==='open').length);
@@ -426,11 +427,11 @@ function renderOrders() {
 function renderProducts(){
   const term=(q('#adminProductSearch')?.value||'').toLowerCase(),category=q('#adminProductCategory')?.value||'',productStatus=q('#adminProductStatus')?.value||'';
   let list=D.get('products');
-  if(term)list=list.filter(product=>`${product.title} ${product.sku} ${product.category}`.toLowerCase().includes(term));
-  if(category)list=list.filter(product=>product.category===category);
+  if(term)list=list.filter(product=>`${product.title} ${product.sku} ${(product.categories||[product.category]).join(' ')}`.toLowerCase().includes(term));
+  if(category)list=list.filter(product=>(product.categories||[product.category]).includes(category));
   if(productStatus)list=list.filter(product=>(product.status||'active')===productStatus);
   q('#adminProductsTable').innerHTML=list.map(productRow).join('')||'<tr><td colspan="8"><div class="empty-panel">محصولی پیدا نشد.</div></td></tr>';
-  const categories=[...new Set(D.get('products').map(product=>product.category))];
+  const categories=[...new Set(D.get('products').flatMap(product=>product.categories||[product.category]).filter(Boolean))];
   const select=q('#adminProductCategory'),oldValue=select?.value||'';
   if(select){select.innerHTML='<option value="">همه دسته‌ها</option>'+categories.map(item=>`<option>${D.esc(item)}</option>`).join('');select.value=oldValue;}
 }
@@ -674,7 +675,7 @@ function productModal(id=null){
   q('#productId').value=product?.id||'';
   q('#productTitle').value=product?.title||'';
   q('#productSku').value=product?.sku||generateRandomSku(product?.id);
-  ensureSelectOption(q('#productCategory'),product?.category);q('#productCategory').value=product?.category||'';
+  setChecked('.product-category-option',product?.categories||[product?.category].filter(Boolean));
   q('#productPrice').value=product?.price??'';
   q('#productHasDiscount').checked=Boolean(product?.hasDiscount);
   q('#productOldPrice').value=product?.old??'';
@@ -690,7 +691,29 @@ function productModal(id=null){
 }
 function orderModal(id){
   const order=D.get('orders').find(item=>item.id===id);if(!order)return;activeOrder=id;
-  q('#adminOrderModalBody').innerHTML=`<div class="detail-summary"><div class="detail-chip"><small>سفارش</small><strong>${D.esc(order.id)}</strong></div><div class="detail-chip"><small>مشتری</small><strong>${D.esc(order.customer)}</strong></div><div class="detail-chip"><small>مبلغ</small><strong>${D.toman(order.total)}</strong></div><div class="detail-chip"><small>پرداخت</small><strong>${labels[order.paymentStatus]||order.paymentStatus}</strong></div></div><div class="portal-grid-equal"><div><h4>اقلام سفارش</h4><div class="order-items-mini">${(order.items||[]).map(item=>`<div class="order-item-mini">${productThumb(item.title,productImage(item.id))}<span><strong>${D.esc(item.title)}</strong><small>${item.size?D.esc(item.size)+' — ':''}${item.fabric?D.esc(item.fabric)+' — ':''}تعداد ${D.fa(item.qty)}</small></span><b>${D.toman(item.price*item.qty)}</b></div>`).join('')}</div><h4 style="margin-top:16px">نشانی تحویل</h4><p style="font-size:11px;line-height:2;color:var(--portal-muted)">${D.esc(order.address)}<br>${D.esc(order.phone)} — ${D.esc(order.email||'')}</p></div><div><div class="form-grid"><div class="field full"><label>وضعیت سفارش</label><select id="modalOrderStatus"><option value="processing">در حال آماده‌سازی</option><option value="design-review">بررسی طراحی</option><option value="shipped">ارسال شده</option><option value="delivered">تحویل شده</option><option value="cancelled">لغو شده</option></select></div><div class="field full"><label>وضعیت پرداخت</label><select id="modalPaymentStatus"><option value="paid">پرداخت شده</option><option value="review">در انتظار بررسی</option><option value="refunded">مسترد شده</option></select></div><div class="field full"><label>کد رهگیری</label><input id="modalTracking" value="${D.esc(order.tracking||'')}"></div><div class="field full"><label>یادداشت داخلی</label><textarea id="modalAdminNote">${D.esc(order.adminNote||'')}</textarea></div></div></div></div>`;
+  const discount=Number(order.discount||0),shipping=Number(order.shipping||0),subtotal=Number.isFinite(Number(order.subtotal))?Number(order.subtotal):Math.max(0,Number(order.total||0)+discount-shipping);
+  q('#adminOrderModalBody').innerHTML=`
+    <div class="detail-summary">
+      <div class="detail-chip"><small>سفارش</small><strong>${D.esc(order.id)}</strong></div>
+      <div class="detail-chip"><small>مشتری</small><strong>${D.esc(order.customer)}</strong></div>
+      <div class="detail-chip"><small>مبلغ نهایی</small><strong>${D.toman(order.total)}</strong></div>
+      <div class="detail-chip"><small>پرداخت</small><strong>${labels[order.paymentStatus]||order.paymentStatus}</strong></div>
+    </div>
+    <div class="portal-grid-equal"><div>
+      <h4>اقلام سفارش</h4>
+      <div class="order-items-mini">${(order.items||[]).map(item=>`<div class="order-item-mini">${productThumb(item.title,productImage(item.id))}<span><strong>${D.esc(item.title)}</strong><small>${item.size?D.esc(item.size)+' — ':''}${item.fabric?D.esc(item.fabric)+' — ':''}تعداد ${D.fa(item.qty)}</small>${item.notes?`<small>یادداشت کالا: ${D.esc(item.notes)}</small>`:''}</span><b>${D.toman(item.price*item.qty)}</b></div>`).join('')}</div>
+      <h4 style="margin-top:16px">صورتحساب و تخفیف</h4>
+      <div class="order-payment-breakdown">
+        <div><span>جمع محصولات</span><strong>${D.toman(subtotal)}</strong></div>
+        <div><span>کد تخفیف</span><strong>${order.couponCode?D.esc(order.couponCode):'استفاده نشده'}</strong></div>
+        <div class="discount-line"><span>مبلغ کسرشده</span><strong>${discount?`− ${D.toman(discount)}`:D.toman(0)}</strong></div>
+        <div><span>هزینه ارسال</span><strong>${shipping?D.toman(shipping):'پرداخت جداگانه'}</strong></div>
+        <div class="total-line"><span>مبلغ نهایی</span><strong>${D.toman(order.total)}</strong></div>
+      </div>
+      <h4 style="margin-top:16px">یادداشت ثبت‌شده توسط کاربر</h4>
+      <p class="order-customer-note ${order.customerNote?'':'is-empty'}">${order.customerNote?D.esc(order.customerNote):'کاربر یادداشتی برای این سفارش ثبت نکرده است.'}</p>
+      <h4 style="margin-top:16px">نشانی تحویل</h4><p style="font-size:11px;line-height:2;color:var(--portal-muted)">${D.esc(order.address)}<br>${D.esc(order.phone)} — ${D.esc(order.email||'')}</p>
+    </div><div><div class="form-grid"><div class="field full"><label>وضعیت سفارش</label><select id="modalOrderStatus"><option value="processing">در حال آماده‌سازی</option><option value="design-review">بررسی طراحی</option><option value="shipped">ارسال شده</option><option value="delivered">تحویل شده</option><option value="cancelled">لغو شده</option></select></div><div class="field full"><label>وضعیت پرداخت</label><select id="modalPaymentStatus"><option value="paid">پرداخت شده</option><option value="review">در انتظار بررسی</option><option value="refunded">مسترد شده</option></select></div><div class="field full"><label>کد رهگیری</label><input id="modalTracking" value="${D.esc(order.tracking||'')}"></div><div class="field full"><label>یادداشت داخلی</label><textarea id="modalAdminNote">${D.esc(order.adminNote||'')}</textarea></div></div></div></div>`;
   q('#modalOrderStatus').value=order.status;q('#modalPaymentStatus').value=order.paymentStatus;openModal('#adminOrderModal');
 }
 function customerModal(id){
@@ -812,9 +835,15 @@ function customModal(id) {
       </div>
 
       <div class="field full">
-        <label>توضیحات مشتری</label>
+        <label>توضیحات طرح مشتری</label>
 
         <textarea disabled>${D.esc(item.notes || '')}</textarea>
+      </div>
+
+      <div class="field full">
+        <label>یادداشت تحویل سفارش</label>
+
+        <textarea disabled>${D.esc(item.deliveryNote || 'کاربر یادداشتی برای تحویل ثبت نکرده است.')}</textarea>
       </div>
 
       <div class="field full">
@@ -894,8 +923,10 @@ document.addEventListener('click',event=>{if(!event.target.closest('#adminNotifi
 
 q('#productForm')?.addEventListener('submit',async event=>{
   event.preventDefault();
+  const categories=qa('.product-category-option:checked').map(input=>input.value);
   const sizes=qa('.product-size-option:checked').map(input=>input.value);
   const fabrics=qa('.product-fabric-option:checked').map(input=>input.value);
+  if(!categories.length)return D.toast('حداقل یک دسته‌بندی را انتخاب کنید.','error');
   if(!sizes.length)return D.toast('حداقل یک سایز را انتخاب کنید.','error');
   if(!fabrics.length)return D.toast('حداقل یک جنس پارچه را انتخاب کنید.','error');
 
@@ -931,7 +962,7 @@ q('#productForm')?.addEventListener('submit',async event=>{
   const image=images[0]||D.PRODUCT_IMAGE;
 
   const data={
-    ...previous,id,title:q('#productTitle').value.trim(),sku,category:q('#productCategory').value,
+    ...previous,id,title:q('#productTitle').value.trim(),sku,category:categories[0],categories,
     price:cheapest.price,hasDiscount,old:hasDiscount?cheapest.oldPrice:null,
     variantPrices:variantPrices.map(item=>({...item,hasDiscount,oldPrice:hasDiscount?item.oldPrice:null})),
     badge:q('#productBadge').value,status:q('#productStatus').value,sizes,fabrics,
@@ -1007,8 +1038,8 @@ document.addEventListener('click',event=>{
 });
 
 function exportRows(name,rows){D.downloadCSV(`${name}-${new Date().toISOString().slice(0,10)}.csv`,rows);}
-q('#exportOrdersBtn')?.addEventListener('click',()=>exportRows('orders',D.get('orders').map(order=>({order:order.id,customer:order.customer,phone:order.phone,date:order.date,total:order.total,status:labels[order.status],payment:labels[order.paymentStatus]||order.paymentStatus}))));
-q('#exportProductsBtn')?.addEventListener('click',()=>exportRows('products',D.get('products').map(product=>({id:product.id,sku:product.sku,title:product.title,category:product.category,sizes:(product.sizes||[]).join(' | '),fabrics:(product.fabrics||[]).join(' | '),price:product.price,badge:product.badge,status:labels[product.status]}))));
+q('#exportOrdersBtn')?.addEventListener('click',()=>exportRows('orders',D.get('orders').map(order=>({order:order.id,customer:order.customer,phone:order.phone,date:order.date,subtotal:order.subtotal,coupon:order.couponCode||'',discount:order.discount,total:order.total,note:order.customerNote||'',status:labels[order.status],payment:labels[order.paymentStatus]||order.paymentStatus}))));
+q('#exportProductsBtn')?.addEventListener('click',()=>exportRows('products',D.get('products').map(product=>({id:product.id,sku:product.sku,title:product.title,category:(product.categories||[product.category]).join(' | '),sizes:(product.sizes||[]).join(' | '),fabrics:(product.fabrics||[]).join(' | '),price:product.price,badge:product.badge,status:labels[product.status]}))));
 q('#exportCustomersBtn')?.addEventListener('click',()=>exportRows('customers',D.get('users').map(user=>({id:user.id,name:user.name,phone:user.phone,email:user.email,orders:user.orders,total:user.total,role:user.role}))));
 q('#exportCustomBtn')?.addEventListener('click',()=>exportRows('custom-designs',D.get('custom')));
 q('#downloadFullReport')?.addEventListener('click',()=>exportRows('full-sales-report',D.get('orders').map(order=>({order:order.id,customer:order.customer,date:order.date,total:order.total,status:labels[order.status]}))));

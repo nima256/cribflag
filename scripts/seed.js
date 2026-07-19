@@ -8,6 +8,12 @@ const User = require('../models/User');
 
 const S=['۱۵۰ × ۹۰ سانتی‌متر','۱۰۰ × ۷۰ سانتی‌متر','۵۰ × ۷۰ سانتی‌متر'];
 const F=['ساتن آمریکایی','ساتن براق','مخمل'];
+const categorySets={
+  5:['فلگ دیواری','دکور اتاق','مینیمال','طرح آماده'],
+  6:['پرچم کشورها','طرح آماده'],
+  8:['فلگ دیواری','دکور اتاق','برندینگ','طرح آماده'],
+  9:['پرچم مناسبتی','طرح آماده']
+};
 const products=[
 [1,'فلگ دیواری طرح دلخواه','CF-1001','فلگ دیواری',680000,790000,'سفارشی',12,4.9,'active',47,S,F,'فلگ دیواری با چاپ طرح دلخواه، مناسب اتاق، دکور، هدیه و فضای شخصی.'],
 [2,'پرچم ایران مدل پریمیوم','CF-1002','پرچم ایران',420000,520000,'پرفروش',10,4.8,'active',89,S,F.slice(0,2),'پرچم ایران با چاپ شفاف و دوخت تمیز، مناسب دکور، مراسم و استفاده رسمی.'],
@@ -21,7 +27,7 @@ const products=[
 [10,'سفارش عمده فلگ با طرح اختصاصی','CF-1010','سفارش عمده',1850000,2200000,'عمده',8,4.9,'active',14,S,F,'پکیج سفارش عمده فلگ.'],
 [11,'پرچم رومیزی مدیریتی دوخت تمیز','CF-1011','پرچم رومیزی',310000,390000,'اداری',3,4.5,'active',44,[S[2]],F.slice(0,2),'پرچم رومیزی اداری.'],
 [12,'پرچم کشورهای اروپایی مدل اداری','CF-1012','پرچم کشورها',760000,910000,'برندینگ',14,4.8,'draft',19,S.slice(1),F,'چاپ فلگ با لوگو و طرح اختصاصی.']
-].map(x=>({publicId:x[0],title:x[1],sku:x[2],category:x[3],price:x[4],oldPrice:x[5],hasDiscount:x[5]>x[4],badge:x[6],sortDate:x[7],rate:x[8],status:x[9],sales:x[10],sizes:x[11],fabrics:x[12],description:x[13],stock:999,image:'assets/images/ukflag.png'}));
+].map(x=>({publicId:x[0],title:x[1],sku:x[2],category:x[3],categories:categorySets[x[0]]||[x[3]],price:x[4],oldPrice:x[5],hasDiscount:x[5]>x[4],badge:x[6],sortDate:x[7],rate:x[8],status:x[9],sales:x[10],sizes:x[11],fabrics:x[12],description:x[13],stock:999,image:'assets/images/ukflag.png'}));
 
 async function run(){
  await mongoose.connect(env.mongodbUri);

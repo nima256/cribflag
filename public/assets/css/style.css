@@ -784,7 +784,7 @@
       z-index: 2;
       padding: 7px 10px;
       border-radius: 99px;
-      background: rgba(239,68,68,.10);
+      background: #eef3fa;
       color: var(--danger);
       font-size: 12px;
       font-weight: 950;
@@ -4270,3 +4270,6 @@ button.view-all { font-family: inherit; }
 .image-lightbox:fullscreen{padding:12px;background:#040914}.image-lightbox:fullscreen .lightbox-inner{width:100%;height:100%;max-width:none;border-radius:0}
 @media(hover:none){.gallery-zoom-hint{display:none}.product-zoom-frame{cursor:pointer}.product-zoom-frame.is-zoomed img{transform:none}}
 @media(max-width:700px){.main-image{height:310px}.main-image .static-image-box{width:92%;height:88%}.gallery-nav{width:36px;height:48px;font-size:27px}.gallery-prev{right:7px}.gallery-next{left:7px}.thumb{flex-basis:66px;height:62px}.image-lightbox{padding:0}.lightbox-inner{height:100dvh;border-radius:0;padding:10px;gap:8px}.lightbox-head strong{max-width:150px}.lightbox-action{font-size:0;width:38px;padding:0}.lightbox-zoom-toggle::after{content:'⌕';font-size:18px}.lightbox-fullscreen-toggle::after{content:'⛶';font-size:18px}.lightbox-stage{grid-template-columns:36px minmax(0,1fr) 36px;gap:4px}.lightbox-nav{width:34px;height:56px;border-radius:12px;font-size:28px}.lightbox-image-wrap{border-radius:14px}.lightbox-thumb{flex-basis:58px;height:46px}}
+
+/* بازخورد روشن برای وضعیت کد تخفیف در تسویه حساب */
+.discount-feedback{margin:10px 0 4px;padding:10px 12px;border-radius:10px;background:#f5f7fb;color:#667085;font-size:12px;line-height:1.8;border:1px solid #e5e9f2}.discount-feedback.success{background:#ecfdf3;color:#087443;border-color:#a8e7c2}.discount-feedback.error{background:#fff2f3;color:#b4233d;border-color:#ffc7ce}.summary-line #checkoutDiscount,.summary-line strong#checkoutDiscount{color:#c72d4f}

@@ -35,9 +35,7 @@ function loadManagedProducts(fallback){
 }
 let products=(Array.isArray(window.__INITIAL_PRODUCTS__)&&window.__INITIAL_PRODUCTS__.length?window.__INITIAL_PRODUCTS__:loadManagedProducts(defaultProducts)).map(normalizeProductPricing);
 
-const readyDesigns = Array.isArray(window.__READY_DESIGNS__)&&window.__READY_DESIGNS__.length?window.__READY_DESIGNS__:[
-  {id:101,title:"طرح آماده مینیمال",category:"مینیمال",price:590000,description:"طراحی ساده و مدرن برای اتاق و دکور شخصی."}
-];
+const readyDesigns = Array.isArray(window.__READY_DESIGNS__)?window.__READY_DESIGNS__.map(normalizeProductPricing):[];
 
 const faqItems = [
       { q: "بعد از پرداخت امکان تغییر طرح یا برگشت هزینه وجود دارد؟", a: "حتی یک ثانیه بعد از پرداخت وجه، نه امکان تعویض طرح دارید نه برگشت هزینه؛ چون سفارش وارد فرایند چاپ می‌شود و پارچه استفاده‌شده قابل بازگشت به حالت قبل نیست." },
@@ -135,6 +133,8 @@ let cart = loadCart();
 let selectedProduct = window.__CURRENT_PRODUCT__ || products[0];
 let detailQty = 1;
 let discountAmount = 0;
+let discountFeedbackMessage = '';
+let discountFeedbackType = 'neutral';
 let shippingPrice = 0;
 const storeState = { query:"", categories:[], min:"", max:"", sort:"default" };
 let currentUser=window.__CURRENT_USER__||null;
@@ -167,7 +167,8 @@ function normalizeProductPricing(product={}) {
   const rawImages=Array.isArray(product.images)&&product.images.length?product.images:[product.image];
   const images=[...new Set(rawImages.map(image=>String(image||'').trim()).filter(Boolean))];
   if(!images.length)images.push(PRODUCT_IMAGE);
-  return {...product,price,hasDiscount,old,variantPrices,image:images[0],images};
+  const categories=[...new Set([product.category,...(Array.isArray(product.categories)?product.categories:[])].map(item=>String(item||'').trim()).filter(Boolean))];
+  return {...product,category:categories[0]||'',categories,price,hasDiscount,old,variantPrices,image:images[0],images};
 }
 function getVariantPricing(product,size,fabric) {
   const normalized=normalizeProductPricing(product);
@@ -214,12 +215,13 @@ function productCard(product) {
   return `<article class="product-card">${badge}
   <button class="product-title-btn open-product" data-id="${product.id}"><div class="product-media">${productImageBox(product.title,product.image)}</div></button>
   <div class="product-content"><button class="product-title-btn open-product" data-id="${product.id}"><h3 class="product-title">${escapeHTML(product.title)}</h3></button>
-  <div class="product-meta"><span>${escapeHTML(product.category)}</span><span class="rating">★ ${product.rate}</span></div>
+  <div class="product-meta"><span>${escapeHTML((product.categories||[product.category]).join('، '))}</span><span class="rating">★ ${product.rate}</span></div>
   <div class="price-row"><div class="price">${oldPriceMarkup(product.price,product.old,product.hasDiscount)}<strong class="new-price">${toman(product.price)}</strong></div>
   <button class="add-btn add-cart" data-id="${product.id}" aria-label="افزودن به سبد">+</button></div></div></article>`;
 }
 function readyCard(item) {
-  return `<article class="ready-card"><a class="ready-card-link" href="/product/${item.id}"><div class="ready-card-media">${productImageBox(item.title)}</div><div class="ready-card-body"><span class="ready-tag">${escapeHTML(item.category)}</span><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.description)}</p></div></a><div class="ready-meta"><strong>${toman(item.price)}</strong><button class="btn btn-primary add-ready-cart" data-id="${item.id}">افزودن به سبد</button></div></article>`;
+  const tag=(item.categories||[]).find(category=>category!=='طرح آماده')||item.category||'طرح آماده';
+  return `<article class="ready-card"><a class="ready-card-link" href="/product/${item.id}"><div class="ready-card-media">${productImageBox(item.title,item.image)}</div><div class="ready-card-body"><span class="ready-tag">${escapeHTML(tag)}</span><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.description)}</p></div></a><div class="ready-meta"><strong>${oldPriceMarkup(item.price,item.old,item.hasDiscount)}${toman(item.price)}</strong><button class="btn btn-primary add-ready-cart" data-id="${item.id}">افزودن به سبد</button></div></article>`;
 }
 function faqTemplate(item) { return `<div class="faq-item"><button class="faq-question"><b>${escapeHTML(item.q)}</b><span>+</span></button><div class="faq-answer">${escapeHTML(item.a)}</div></div>`; }
 function blogTemplate(post) { return `<article class="blog-card"><div class="blog-card-media">${imageSlot(post.title,"مجله Crib Flag")}</div><div class="blog-card-body"><span class="blog-tag">${escapeHTML(post.tag)}</span><h3>${escapeHTML(post.title)}</h3><p>${escapeHTML(post.text)}</p><div class="blog-meta"><span>${post.date}</span><button class="view-all open-blog" data-blog-id="${post.id}">${post.read} ←</button></div></div></article>`; }
@@ -246,7 +248,7 @@ function addToCartFromProduct(product,qty=1,options={}){
   renderCart();showToast("محصول به سبد خرید اضافه شد.");
 }
 
-function renderSuggestions(input){ const wrap=input.closest(".search-wrap"),box=wrap?.querySelector(".search-suggestions"),q=normalizeText(input.value); if(!box)return; if(!q){box.classList.remove("open");box.innerHTML="";return;} const res=products.filter(p=>normalizeText(`${p.title} ${p.category} ${p.description} ${(p.sizes||[]).join(" ")} ${(p.fabrics||[]).join(" ")}`).includes(q)).slice(0,6);box.classList.add("open");box.innerHTML=res.length?res.map(p=>`<a class="suggestion-item" href="/product/${p.id}"><span class="suggestion-thumb"><img src="${escapeHTML(productImageSrc(p))}" alt="${escapeHTML(p.title)}"></span><span><span class="suggestion-title">${escapeHTML(p.title)}</span><span class="suggestion-meta">${escapeHTML(p.category)} — ${escapeHTML((p.fabrics||DEFAULT_FABRICS)[0])}</span></span><span class="suggestion-price">${toman(p.price)}</span></a>`).join(""):'<div class="suggestion-empty">نتیجه‌ای پیدا نشد.</div>'; }
+function renderSuggestions(input){ const wrap=input.closest(".search-wrap"),box=wrap?.querySelector(".search-suggestions"),q=normalizeText(input.value); if(!box)return; if(!q){box.classList.remove("open");box.innerHTML="";return;} const res=products.filter(p=>normalizeText(`${p.title} ${(p.categories||[p.category]).join(' ')} ${p.description} ${(p.sizes||[]).join(" ")} ${(p.fabrics||[]).join(" ")}`).includes(q)).slice(0,6);box.classList.add("open");box.innerHTML=res.length?res.map(p=>`<a class="suggestion-item" href="/product/${p.id}"><span class="suggestion-thumb"><img src="${escapeHTML(productImageSrc(p))}" alt="${escapeHTML(p.title)}"></span><span><span class="suggestion-title">${escapeHTML(p.title)}</span><span class="suggestion-meta">${escapeHTML(p.category)} — ${escapeHTML((p.fabrics||DEFAULT_FABRICS)[0])}</span></span><span class="suggestion-price">${toman(p.price)}</span></a>`).join(""):'<div class="suggestion-empty">نتیجه‌ای پیدا نشد.</div>'; }
 
 function initHeader(){
   const current=body.dataset.page;
@@ -257,7 +259,7 @@ function initHeader(){
     const open=e.target.closest('.open-product'); if(open){e.preventDefault();window.CribLoader?.show('در حال بارگذاری محصول...');location.href=`/product/${open.dataset.id}`;}
     const blog=e.target.closest('.open-blog'); if(blog){e.preventDefault();location.href=`/blog/${blog.dataset.blogId}`;}
     const add=e.target.closest('.add-cart'); if(add){const product=products.find(x=>x.id===Number(add.dataset.id));if(product)addToCartFromProduct(product);}
-    const ready=e.target.closest('.add-ready-cart'); if(ready){const item=readyDesigns.find(x=>x.id===Number(ready.dataset.id));if(item)addToCartFromProduct({id:item.id,title:item.title,category:'طرح آماده',price:item.price,old:item.price,badge:'طرح آماده',rate:4.8,sizes:[...DEFAULT_SIZES],fabrics:[...DEFAULT_FABRICS],image:PRODUCT_IMAGE,description:item.description});}
+    const ready=e.target.closest('.add-ready-cart'); if(ready){const item=readyDesigns.find(x=>x.id===Number(ready.dataset.id));if(item)addToCartFromProduct(item);}
     const plus=e.target.closest('.cart-plus'); if(plus){const i=cart.find(x=>x.cartId===plus.dataset.id);if(i)i.qty++;renderCart();}
     const minus=e.target.closest('.cart-minus'); if(minus){const i=cart.find(x=>x.cartId===minus.dataset.id);if(i)i.qty=Math.max(1,i.qty-1);renderCart();}
     const remove=e.target.closest('.cart-remove'); if(remove){cart=cart.filter(x=>x.cartId!==remove.dataset.id);renderCart();}
@@ -325,8 +327,8 @@ function initHome(){
 
 function getFilteredProducts(){
   let r=[...products];
-  if(storeState.query){const q=normalizeText(storeState.query);r=r.filter(p=>normalizeText(`${p.title} ${p.category} ${p.description} ${(p.sizes||[]).join(" ")} ${(p.fabrics||[]).join(" ")}`).includes(q));}
-  if(storeState.categories.length)r=r.filter(p=>storeState.categories.includes(p.category));
+  if(storeState.query){const q=normalizeText(storeState.query);r=r.filter(p=>normalizeText(`${p.title} ${(p.categories||[p.category]).join(' ')} ${p.description} ${(p.sizes||[]).join(" ")} ${(p.fabrics||[]).join(" ")}`).includes(q));}
+  if(storeState.categories.length)r=r.filter(p=>storeState.categories.some(category=>(p.categories||[p.category]).includes(category)));
   if(storeState.min)r=r.filter(p=>p.price>=Number(storeState.min));if(storeState.max)r=r.filter(p=>p.price<=Number(storeState.max));
   if(storeState.sort==='cheap')r.sort((a,b)=>a.price-b.price);if(storeState.sort==='expensive')r.sort((a,b)=>b.price-a.price);if(storeState.sort==='newest')r.sort((a,b)=>b.date-a.date);if(storeState.sort==='popular')r.sort((a,b)=>b.rate-a.rate);return r;
 }
@@ -344,11 +346,11 @@ function initStore(){
 function initProduct(){
   const pathId=Number(location.pathname.split('/').filter(Boolean).pop());const id=Number(window.__CURRENT_PRODUCT__?.id||pathId||new URLSearchParams(location.search).get('id'))||1;
   const ready=readyDesigns.find(product=>product.id===id);
-  selectedProduct=normalizeProductPricing(window.__CURRENT_PRODUCT__||products.find(product=>product.id===id)||(ready?{...ready,old:null,hasDiscount:false,badge:'طرح آماده',rate:4.8,date:15,sizes:[...DEFAULT_SIZES],fabrics:[...DEFAULT_FABRICS],image:PRODUCT_IMAGE}:products[0]));
+  selectedProduct=normalizeProductPricing(window.__CURRENT_PRODUCT__||products.find(product=>product.id===id)||ready||products[0]);
   selectedProduct.sizes=Array.isArray(selectedProduct.sizes)&&selectedProduct.sizes.length?selectedProduct.sizes:[...DEFAULT_SIZES];
   selectedProduct.fabrics=Array.isArray(selectedProduct.fabrics)&&selectedProduct.fabrics.length?selectedProduct.fabrics:[...DEFAULT_FABRICS];
   detailQty=1; const set=(id,value)=>{const element=document.getElementById(id);if(element)element.textContent=value};
-  set('breadcrumbProduct',selectedProduct.title);set('detailCategory',selectedProduct.category);set('detailTitle',selectedProduct.title);set('detailDescription',selectedProduct.description);set('detailQty',toFa(detailQty));set('detailFabricSummary',selectedProduct.fabrics.join('، '));set('detailSizeSummary',selectedProduct.sizes.join('، '));
+  set('breadcrumbProduct',selectedProduct.title);set('detailCategory',(selectedProduct.categories||[selectedProduct.category]).join('، '));set('detailTitle',selectedProduct.title);set('detailDescription',selectedProduct.description);set('detailQty',toFa(detailQty));set('detailFabricSummary',selectedProduct.fabrics.join('، '));set('detailSizeSummary',selectedProduct.sizes.join('، '));
   const galleryImages=Array.isArray(selectedProduct.images)&&selectedProduct.images.length?selectedProduct.images:[selectedProduct.image||PRODUCT_IMAGE];
   const main=document.getElementById('productMainImageImg'),light=document.getElementById('lightboxProductImg');
   const mainFrame=document.getElementById('productZoomFrame'),lightFrame=document.getElementById('lightboxProductBox');
@@ -418,7 +420,7 @@ function initProduct(){
   document.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));btn.classList.add('active');document.getElementById(`tab-${btn.dataset.tab}`)?.classList.add('active');}));
 }
 function initFaq(){const box=document.getElementById('fullFaqList');if(box)box.innerHTML=faqItems.map(faqTemplate).join('');document.addEventListener('click',e=>{const q=e.target.closest('.faq-question');if(q){const item=q.closest('.faq-item');item.classList.toggle('open');q.querySelector('span').textContent=item.classList.contains('open')?'−':'+';}});}
-function initReady(){const box=document.getElementById('readyGrid');const draw=c=>{if(box)box.innerHTML=(c?readyDesigns.filter(x=>x.category===c):readyDesigns).map(readyCard).join('');};draw('');document.querySelectorAll('.ready-chip').forEach(chip=>chip.addEventListener('click',()=>{document.querySelectorAll('.ready-chip').forEach(x=>x.classList.remove('active'));chip.classList.add('active');draw(chip.dataset.readyCategory||'');}));}
+function initReady(){const box=document.getElementById('readyGrid');const draw=c=>{if(!box)return;const list=c?readyDesigns.filter(item=>(item.categories||[item.category]).includes(c)):readyDesigns;box.innerHTML=list.length?list.map(readyCard).join(''):'<div class="results-empty"><div><h3>طرح آماده‌ای پیدا نشد</h3><p>محصولات این صفحه مستقیماً از دیتابیس و دسته «طرح آماده» نمایش داده می‌شوند.</p></div></div>';};draw('');document.querySelectorAll('.ready-chip').forEach(chip=>chip.addEventListener('click',()=>{document.querySelectorAll('.ready-chip').forEach(x=>x.classList.remove('active'));chip.classList.add('active');draw(chip.dataset.readyCategory||'');}));}
 function initBlog(){const box=document.getElementById('blogGrid');if(box)box.innerHTML=blogPosts.map(blogTemplate).join('');}
 function initBlogDetail(){const id=Number(location.pathname.split('/').filter(Boolean).pop())||Number(new URLSearchParams(location.search).get('id'))||1;const p=blogPosts.find(x=>x.id===id)||blogPosts[0];const set=(id,v,html=false)=>{const e=document.getElementById(id);if(e)html?e.innerHTML=v:e.textContent=v;};set('blogDetailBreadcrumb',p.title);set('blogDetailCategory',p.tag);set('blogDetailDate',p.date);set('blogDetailTitle',p.title);set('blogDetailBody',p.body,true);const img=document.getElementById('articleCoverImg');if(img){img.src=placeholderImage(p.title,'مجله Crib Flag');img.alt=p.title;}const rel=document.getElementById('relatedPosts');if(rel)rel.innerHTML=blogPosts.filter(x=>x.id!==p.id).slice(0,3).map(x=>`<a class="related-post" href="/blog/${x.id}">${imageSlot(x.title,'مجله Crib Flag')}<span><h4>${escapeHTML(x.title)}</h4><small>${x.read}</small></span></a>`).join('');}
 
@@ -453,7 +455,8 @@ function initCustomOrder(){
 function renderCheckout(){
   const box=document.getElementById('checkoutSummaryItems');if(!box)return;const sub=cartSubtotal(),total=Math.max(0,sub-discountAmount);
   box.innerHTML=cart.length?cart.map(item=>`<div class="summary-item"><div class="summary-thumb">${item.preview?`<img src="${item.preview}" alt="${escapeHTML(item.title)}">`:productImageBox(item.title,item.image)}</div><span><h4>${escapeHTML(item.title)}</h4><small>تعداد: ${toFa(item.qty)}${item.size?` — سایز: ${escapeHTML(item.size)}`:''}${item.fabric?` — پارچه: ${escapeHTML(item.fabric)}`:''}</small></span><strong class="summary-price">${toman(item.price*item.qty)}</strong></div>`).join(''):'<div class="empty-state"><p>سبد خرید خالی است.</p></div>';
-  document.getElementById('checkoutSubtotal').textContent=toman(sub);document.getElementById('checkoutDiscount').textContent=toman(discountAmount);document.getElementById('checkoutShipping').textContent='پرداخت جداگانه';document.getElementById('checkoutTotal').textContent=toman(total);
+  document.getElementById('checkoutSubtotal').textContent=toman(sub);document.getElementById('checkoutDiscount').textContent=discountAmount?`− ${toman(discountAmount)}`:toman(0);document.getElementById('checkoutShipping').textContent='پرداخت جداگانه';document.getElementById('checkoutTotal').textContent=toman(total);
+  const feedback=document.getElementById('discountFeedback');if(feedback){const code=sessionStorage.getItem('cribFlagActiveCoupon')||'';feedback.className=`discount-feedback ${discountFeedbackType}`;feedback.textContent=discountFeedbackMessage||(code&&discountAmount?`کد ${code} اعمال شد و ${toman(discountAmount)} از مبلغ سفارش کم شد.`:'هنوز کد تخفیفی اعمال نشده است.');}
 }
 function initCheckout(){
   let current=1;
@@ -474,7 +477,7 @@ function initCheckout(){
       if(review){
         review.innerHTML=`<h3>اطلاعات تحویل</h3>
           <p><strong>${escapeHTML(get('checkoutName')?.value)}</strong> — ${escapeHTML(get('checkoutPhone')?.value)}</p>
-          <p>${escapeHTML(get('checkoutProvince')?.value)}، ${escapeHTML(get('checkoutCity')?.value)}، ${escapeHTML(get('checkoutAddress')?.value)}، ${escapeHTML(get('checkoutUnit')?.value)}</p>`;
+          <p>${escapeHTML(get('checkoutProvince')?.value)}، ${escapeHTML(get('checkoutCity')?.value)}، ${escapeHTML(get('checkoutAddress')?.value)}، ${escapeHTML(get('checkoutUnit')?.value)}</p>${get('checkoutNote')?.value.trim()?`<p><strong>یادداشت سفارش:</strong> ${escapeHTML(get('checkoutNote').value.trim())}</p>`:''}`;
       }
       renderCheckout();
     }
@@ -514,23 +517,28 @@ function initCheckout(){
     renderCheckout();
   }));
 
-  get('applyDiscountBtn')?.addEventListener('click',async()=>{
-    const code=get('discountCodeInput').value.trim();
+  const validateDiscount=async(code,{silent=false}={})=>{
+    const normalized=String(code||'').trim();
+    if(!normalized){discountAmount=0;sessionStorage.removeItem('cribFlagActiveCoupon');discountFeedbackType='error';discountFeedbackMessage='ابتدا کد تخفیف را وارد کنید.';renderCheckout();if(!silent)showToast(discountFeedbackMessage);return false;}
     try{
-      const result=await window.CribLoader.during(
-        ()=>api('/api/discounts/validate',{method:'POST',body:JSON.stringify({code,subtotal:cartSubtotal()})}),
-        'در حال بررسی کد تخفیف...'
-      );
+      const request=()=>api('/api/discounts/validate',{method:'POST',body:JSON.stringify({code:normalized,subtotal:cartSubtotal()})});
+      const result=silent?await request():await window.CribLoader.during(request,'در حال بررسی کد تخفیف...');
       discountAmount=Number(result.discount||0);
-      sessionStorage.setItem('cribFlagActiveCoupon',result.code||code);
-      showToast('کد تخفیف اعمال شد.');
+      const activeCode=result.code||normalized.toUpperCase();
+      sessionStorage.setItem('cribFlagActiveCoupon',activeCode);
+      discountFeedbackType='success';
+      discountFeedbackMessage=`کد ${activeCode} با موفقیت اعمال شد؛ ${toman(discountAmount)} از سفارش کم شد.`;
+      if(!silent)showToast(discountFeedbackMessage);
+      renderCheckout();return true;
     }catch(error){
-      discountAmount=0;
-      sessionStorage.removeItem('cribFlagActiveCoupon');
-      showToast(error.message||'کد تخفیف معتبر نیست.');
+      discountAmount=0;sessionStorage.removeItem('cribFlagActiveCoupon');
+      discountFeedbackType='error';discountFeedbackMessage=error.message||'کد تخفیف معتبر نیست یا اعمال نشد.';
+      if(!silent)showToast(discountFeedbackMessage);
+      renderCheckout();return false;
     }
-    renderCheckout();
-  });
+  };
+  get('applyDiscountBtn')?.addEventListener('click',()=>validateDiscount(get('discountCodeInput').value));
+  const savedCoupon=sessionStorage.getItem('cribFlagActiveCoupon');if(savedCoupon){get('discountCodeInput').value=savedCoupon;validateDiscount(savedCoupon,{silent:true});}
 
   get('finalPaymentBtn')?.addEventListener('click',async()=>{
     if(!currentUser){requireLogin('/checkout');return;}
@@ -557,6 +565,7 @@ function initCheckout(){
         address:`${province}، ${city}، ${addressLine}، ${unit}`,
         shippingMethod,
         paymentMethod,
+        note:get('checkoutNote')?.value.trim()||'',
         couponCode:sessionStorage.getItem('cribFlagActiveCoupon')||'',
         items:cart.map(item=>({
           id:item.id,

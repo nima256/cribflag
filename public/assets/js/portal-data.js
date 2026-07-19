@@ -24,6 +24,14 @@
     {id:12,title:'پرچم کشورهای اروپایی مدل اداری',sku:'CF-1012',category:'پرچم کشورها',price:760000,old:910000,badge:'برندینگ',date:14,rate:4.8,status:'draft',sales:19,sizes:['۱۰۰ × ۷۰ سانتی‌متر','۵۰ × ۷۰ سانتی‌متر'],fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:'چاپ فلگ با لوگو و طرح اختصاصی برای برندها و کسب‌وکارها.'}
   ];
 
+  const fallbackCategorySets={
+    5:['فلگ دیواری','دکور اتاق','مینیمال','طرح آماده'],
+    6:['پرچم کشورها','طرح آماده'],
+    8:['فلگ دیواری','دکور اتاق','برندینگ','طرح آماده'],
+    9:['پرچم مناسبتی','طرح آماده']
+  };
+  products.forEach(item=>{item.categories=fallbackCategorySets[item.id]||[item.category];item.category=item.categories[0];});
+
   const users=[
     {id:1,name:'مهدی احمدی',phone:'09121234567',email:'mehdi@example.com',joined:'۱۴۰۵/۰۳/۱۲',orders:4,total:4380000,role:'customer'},
     {id:2,name:'سارا کریمی',phone:'09351234567',email:'sara@example.com',joined:'۱۴۰۵/۰۲/۲۸',orders:7,total:7960000,role:'customer'},
@@ -102,6 +110,8 @@
       delete next.imageName;
       next.id=Number(next.id||index+1);
       next.price=Number(next.price||0);
+      next.categories=[...new Set([next.category,...(Array.isArray(next.categories)?next.categories:[])].map(category=>String(category||'').trim()).filter(Boolean))];
+      next.category=next.categories[0]||'';
       const legacyDiscount=next.hasDiscount===undefined&&Number(next.old)>next.price;
       next.hasDiscount=Boolean((next.hasDiscount||legacyDiscount)&&Number(next.old)>next.price);
       next.old=next.hasDiscount?Number(next.old):null;

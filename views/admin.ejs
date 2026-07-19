@@ -137,19 +137,22 @@
 <div class="form-grid form-grid-3">
 <div class="field full"><label>نام محصول</label><input id="productTitle" placeholder="مثلاً پرچم تشریفات پایه استیل" required=""/></div>
 <div class="field"><label>کد محصول</label><div class="sku-generator"><input id="productSku" placeholder="CF-123456" required=""/><button class="portal-btn portal-btn-soft" id="productSkuGenerate" type="button">ساخت خودکار</button></div></div>
-<div class="field"><label>دسته‌بندی</label>
-<select id="productCategory" required="">
-<option value="">انتخاب دسته‌بندی</option>
-<option>فلگ دیواری</option>
-<option>پرچم ایران</option>
-<option>پرچم تشریفات</option>
-<option>پرچم رومیزی</option>
-<option>پرچم کشورها</option>
-<option>پرچم ساحلی</option>
-<option>پرچم مناسبتی</option>
-<option>سفارش عمده</option>
-<option>طرح آماده</option>
-</select>
+<div class="field full"><label>دسته‌بندی‌ها <small class="field-help">می‌توانید چند مورد را هم‌زمان انتخاب کنید؛ اولین گزینه، دسته اصلی محصول است.</small></label>
+<div class="product-choice-grid product-category-grid" id="productCategories">
+<label class="product-choice"><input class="product-category-option" type="checkbox" value="فلگ دیواری"/><span><b>فلگ دیواری</b></span></label>
+<label class="product-choice"><input class="product-category-option" type="checkbox" value="پرچم ایران"/><span><b>پرچم ایران</b></span></label>
+<label class="product-choice"><input class="product-category-option" type="checkbox" value="پرچم کشورها"/><span><b>پرچم کشورها</b></span></label>
+<label class="product-choice"><input class="product-category-option" type="checkbox" value="پرچم تشریفات"/><span><b>پرچم تشریفات</b></span></label>
+<label class="product-choice"><input class="product-category-option" type="checkbox" value="پرچم رومیزی"/><span><b>پرچم رومیزی</b></span></label>
+<label class="product-choice"><input class="product-category-option" type="checkbox" value="پرچم ساحلی"/><span><b>پرچم ساحلی</b></span></label>
+<label class="product-choice"><input class="product-category-option" type="checkbox" value="پرچم مناسبتی"/><span><b>پرچم مناسبتی</b></span></label>
+<label class="product-choice"><input class="product-category-option" type="checkbox" value="سفارش عمده"/><span><b>سفارش عمده</b></span></label>
+<label class="product-choice"><input class="product-category-option" type="checkbox" value="دکور اتاق"/><span><b>دکور اتاق</b></span></label>
+<label class="product-choice"><input class="product-category-option" type="checkbox" value="مینیمال"/><span><b>مینیمال</b></span></label>
+<label class="product-choice"><input class="product-category-option" type="checkbox" value="باشگاهی"/><span><b>باشگاهی</b></span></label>
+<label class="product-choice"><input class="product-category-option" type="checkbox" value="برندینگ"/><span><b>برندینگ</b></span></label>
+<label class="product-choice"><input class="product-category-option" type="checkbox" value="طرح آماده"/><span><b>طرح آماده</b><small>نمایش در صفحه /ready</small></span></label>
+</div>
 </div>
 <div class="field"><label>وضعیت</label><select id="productStatus"><option value="active">فعال</option><option value="draft">پیش‌نویس</option></select></div>
 <div class="field"><label>نشان محصول</label>

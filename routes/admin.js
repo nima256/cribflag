@@ -135,7 +135,7 @@ router.post('/orders/manual',asyncHandler(async(req,res)=>{
     phone: req.body.phone || '00000000000',
     email: req.body.email || '',
     address: req.body.address || 'ثبت توسط مدیر',
-    items: [{ productId: product.publicId, title: product.title, category: product.category, price: pricing.price, qty, size, fabric }],
+    items: [{ productId: product.publicId, title: product.title, category: product.category, categories: [...new Set([product.category, ...(product.categories || [])].filter(Boolean))], price: pricing.price, qty, size, fabric }],
     subtotal,
     shipping,
     discount: 0,
@@ -163,6 +163,9 @@ router.put('/sync/:name',asyncHandler(async(req,res)=>{
 
       const sizes = Array.isArray(p.sizes) ? p.sizes.map(item => String(item).trim()).filter(Boolean) : [];
       const fabrics = Array.isArray(p.fabrics) ? p.fabrics.map(item => String(item).trim()).filter(Boolean) : [];
+      const categories = [...new Set((Array.isArray(p.categories) ? p.categories : [p.category])
+        .map(item => String(item || '').trim()).filter(Boolean))];
+      if (!categories.length) throw new AppError(400, `حداقل یک دسته‌بندی برای محصول ${p.title || id} انتخاب کنید`);
       const pricing = prepareProductPricing(p);
       pricing.variantPrices = pricing.variantPrices.filter(item => sizes.includes(item.size) && fabrics.includes(item.fabric));
       if (Array.isArray(p.variantPrices) && p.variantPrices.length && pricing.variantPrices.length !== sizes.length * fabrics.length) {
@@ -179,7 +182,8 @@ router.put('/sync/:name',asyncHandler(async(req,res)=>{
         { $set: {
           title: p.title,
           sku,
-          category: p.category,
+          category: categories[0],
+          categories,
           price: pricing.price,
           hasDiscount: pricing.hasDiscount,
           oldPrice: pricing.oldPrice,

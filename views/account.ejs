@@ -25,10 +25,8 @@
 <button class="portal-nav-btn active" data-account-view="overview" data-view-title="داشبورد من"><svg viewbox="0 0 24 24"><path d="M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"></path></svg>داشبورد</button>
 <button class="portal-nav-btn" data-account-view="orders" data-view-title="سفارش‌های من"><svg viewbox="0 0 24 24"><path d="M5 7h14l-1 13H6L5 7Zm3 0V5a4 4 0 0 1 8 0v2"></path></svg>سفارش‌های من<span class="nav-count" id="accountOrdersCount">۰</span></button>
 <button class="portal-nav-btn" data-account-view="custom" data-view-title="طرح‌های اختصاصی"><svg viewbox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"></path><path d="M14 3v6h6M8 15l2-2 2 2 3-4 3 4"></path></svg>طرح‌های اختصاصی</button>
-<button class="portal-nav-btn" data-account-view="wishlist" data-view-title="علاقه‌مندی‌ها"><svg viewbox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"></path></svg>علاقه‌مندی‌ها</button>
 <div class="portal-nav-label">پروفایل و پشتیبانی</div>
 <button class="portal-nav-btn" data-account-view="profile" data-view-title="اطلاعات حساب"><svg viewbox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>اطلاعات حساب</button>
-<button class="portal-nav-btn" data-account-view="addresses" data-view-title="آدرس‌ها"><svg viewbox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>آدرس‌ها</button>
 <button class="portal-nav-btn" data-account-view="tickets" data-view-title="پشتیبانی"><svg viewbox="0 0 24 24"><path d="M4 5h16v12H8l-4 4V5Z"></path></svg>تیکت‌های پشتیبانی<span class="nav-count" id="accountTicketCount">۰</span></button>
 <button class="portal-nav-btn" data-account-view="notifications" data-view-title="اعلان‌ها"><svg viewbox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg>اعلان‌ها</button>
 </nav>
@@ -65,7 +63,7 @@
 <div class="portal-card"><div class="table-tools"><input class="table-search" id="accountOrderSearch" placeholder="جستجو با شماره سفارش یا محصول"/><select class="table-filter" id="accountOrderStatus"><option value="">همه وضعیت‌ها</option><option value="processing">در حال آماده‌سازی</option><option value="design-review">بررسی طراحی</option><option value="shipped">ارسال شده</option><option value="delivered">تحویل شده</option><option value="cancelled">لغو شده</option></select></div><div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>سفارش</th><th>محصولات</th><th>تاریخ</th><th>مبلغ</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="accountOrdersTable"></tbody></table></div></div>
 </section>
 <section class="portal-view" data-account-section="custom">
-<div class="view-head"><div><h2>طرح‌های اختصاصی</h2><p>فایل‌ها، توضیحات اصلاح و وضعیت تأیید پیش‌نمایش</p></div><button class="portal-btn portal-btn-primary" id="newCustomRequestBtn">ارسال طرح جدید</button></div>
+<div class="view-head"><div><h2>طرح‌های اختصاصی</h2><p>فایل‌ها، توضیحات اصلاح و وضعیت تأیید پیش‌نمایش</p></div></div>
 <div class="portal-card"><div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>کد درخواست</th><th>فایل</th><th>سایز</th><th>توضیحات</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="accountCustomTable"></tbody></table></div></div>
 </section>
 <section class="portal-view" data-account-section="wishlist">

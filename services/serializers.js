@@ -28,11 +28,17 @@ const product = (p) => {
   const images = [...new Set(rawImages.map(item => String(item || '').trim()).filter(Boolean))];
   if (!images.length) images.push('assets/images/ukflag.png');
 
+  const categories = [...new Set([
+    p.category,
+    ...(Array.isArray(p.categories) ? p.categories : [])
+  ].map(item => String(item || '').trim()).filter(Boolean))];
+
   return {
     id: p.publicId,
     title: p.title,
     sku: p.sku,
-    category: p.category,
+    category: categories[0] || p.category || '',
+    categories,
     price,
     hasDiscount,
     old,
@@ -60,7 +66,8 @@ const user = (u, stats = {}) => ({
 const order = (o) => ({
   id: o.orderNumber, userId: o.user && typeof o.user === 'object' ? o.user.publicId : o.userPublicId,
   customer: o.customer, phone: o.phone, email: o.email || '', date: faDate(o.createdAt), createdAt: o.createdAt,
-  total: o.total, subtotal: o.subtotal, shipping: o.shipping, discount: o.discount, status: o.status,
+  total: o.total, subtotal: o.subtotal, shipping: o.shipping, discount: o.discount, couponCode: o.couponCode || '',
+  customerNote: o.customerNote || '', status: o.status,
   payment: o.payment, paymentStatus: o.paymentStatus, shippingMethod: o.shippingMethod, tracking: o.tracking || '',
   address: o.address, adminNote: o.adminNote || '', items: (o.items || []).map((item, index) => {
     const value = item.toObject ? item.toObject() : item;
@@ -90,6 +97,7 @@ const custom = (c) => ({
   postalCode: c.postalCode || '',
   address: c.address || '',
   shippingMethod: c.shippingMethod || '',
+  deliveryNote: c.deliveryNote || '',
   createdAt: c.createdAt,
   fileName: c.fileName,
 

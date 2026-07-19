@@ -10,7 +10,6 @@ const { requireUser } = require('../middlewares/auth');
 const { asyncHandler, ok, AppError } = require('../utils/http');
 const { orderNumber } = require('../utils/formatters');
 const env = require('../config/env');
-const readyDesigns = require('../data/readyDesigns');
 const { findVariantPricing, fallbackPricing } = require('../utils/productPricing');
 
 const router = express.Router();
@@ -27,13 +26,6 @@ async function priceItems(items) {
   for (const raw of items || []) {
     const qty = Math.max(1, Math.min(50, Number(raw.qty || 1)));
     const publicId = Number(raw.id);
-
-    if (String(raw.category) === 'طرح آماده' && readyDesigns.has(publicId)) {
-      const ready = readyDesigns.get(publicId);
-      output.push({ productId: null, title: ready.title, category: 'طرح آماده', price: ready.price, qty, size: raw.size, fabric: raw.fabric });
-      subtotal += ready.price * qty;
-      continue;
-    }
 
     if (Number.isFinite(publicId)) {
       const product = await Product.findOne({ publicId, status: 'active' });
@@ -52,7 +44,8 @@ async function priceItems(items) {
         throw new AppError(400, `برای ترکیب سایز و جنس انتخاب‌شده محصول ${product.title} قیمت ثبت نشده است`);
       }
       const pricing = variant || fallbackPricing(product);
-      output.push({ productId: publicId, title: product.title, category: product.category, price: pricing.price, qty, size, fabric });
+      const categories = [...new Set([product.category, ...(product.categories || [])].filter(Boolean))];
+      output.push({ productId: publicId, title: product.title, category: categories[0] || product.category, categories, price: pricing.price, qty, size, fabric, notes: String(raw.notes || '').trim() });
       subtotal += pricing.price * qty;
     }
   }
@@ -87,7 +80,7 @@ async function consumeCoupon(order) {
   }
 }
 
-async function updateCustomDelivery({ customItems, user, province, city, address, postalCode, shippingMethod }) {
+async function updateCustomDelivery({ customItems, user, province, city, address, postalCode, shippingMethod, deliveryNote }) {
   const publicIds = [...new Set(
     customItems
       .map(item => String(item.customRequestId || '').trim())
@@ -117,6 +110,7 @@ async function updateCustomDelivery({ customItems, user, province, city, address
         postalCode,
         address,
         shippingMethod,
+        deliveryNote,
         status: 'review'
       }
     }
@@ -157,7 +151,8 @@ router.post('/', requireUser, asyncHandler(async (req, res) => {
       city,
       address,
       postalCode,
-      shippingMethod
+      shippingMethod,
+      deliveryNote: String(req.body.note || '').trim()
     });
   }
 
@@ -202,6 +197,7 @@ router.post('/', requireUser, asyncHandler(async (req, res) => {
     discount,
     total: Math.max(0, subtotal - discount),
     couponCode: coupon?.code,
+    customerNote: String(req.body.note || '').trim(),
     status: 'processing',
     payment: paymentMethod === 'manual' ? 'کارت به کارت' : 'پرداخت آنلاین زرین‌پال',
     paymentStatus: paymentMethod === 'manual' ? 'review' : 'pending',

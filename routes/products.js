@@ -6,7 +6,12 @@ const router = express.Router();
 
 router.get('/', asyncHandler(async (req, res) => {
   const filter = { status: 'active' };
-  if (req.query.category) filter.category = req.query.category;
+  if (req.query.category) {
+    filter.$or = [
+      { category: req.query.category },
+      { categories: req.query.category }
+    ];
+  }
   const products = await Product.find(filter).sort({ publicId: 1 }).lean();
   ok(res, { products: products.map(S.product) });
 }));
