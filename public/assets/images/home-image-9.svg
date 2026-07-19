@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f8fafc"/><stop offset="1" stop-color="#e2e8f0"/></linearGradient>
+  <linearGradient id="cloth" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#3b0764"/><stop offset=".58" stop-color="#a855f7"/><stop offset="1" stop-color="#e9d5ff"/></linearGradient>
+  <filter id="shadow"><feDropShadow dx="0" dy="24" stdDeviation="25" flood-color="#0f172a" flood-opacity=".22"/></filter>
+  <clipPath id="flag"><rect x="155" y="120" width="890" height="540" rx="26"/></clipPath>
+</defs>
+<rect width="1200" height="800" fill="url(#bg)"/>
+<g filter="url(#shadow)">
+ <rect x="155" y="120" width="890" height="540" rx="26" fill="url(#cloth)"/>
+ <g clip-path="url(#flag)" fill="none" stroke="#fff" opacity=".18">
+  <path d="M90 260 C280 90 430 410 640 235 S940 130 1120 300" stroke-width="80"/>
+  <path d="M70 525 C250 350 430 690 650 500 S945 380 1140 550" stroke-width="62"/>
+ </g>
+ <path d="M165 137 C365 205 495 83 690 153 S914 220 1037 156" fill="none" stroke="#fff" stroke-width="12" opacity=".14"/>
+</g>
+<ellipse cx="600" cy="706" rx="340" ry="30" fill="#0f172a" opacity=".08"/>
+</svg>

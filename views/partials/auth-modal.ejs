@@ -1,0 +1,56 @@
+<div class="auth-modal" data-next-url="<%= nextUrl || '' %>">
+  <div class="auth-head"><h3 id="authTitle">ورود به حساب</h3><button class="close-btn auth-close" type="button">×</button></div>
+  <div class="auth-body">
+    <div class="auth-message" id="authMessage" aria-live="polite"></div>
+
+    <form class="auth-state active" data-state="login" novalidate>
+      <div class="form-group"><label>شماره موبایل</label><input class="form-control" name="mobile" placeholder="مثلاً ۰۹۱۲۱۲۳۴۵۶۷" required type="tel"><div class="field-error">شماره موبایل را درست وارد کنید.</div></div>
+      <div class="form-group"><label>رمز عبور</label><input class="form-control" name="password" placeholder="رمز عبور" required minlength="6" type="password"><div class="field-error">رمز عبور را وارد کنید.</div></div>
+      <button class="btn btn-primary" style="width:100%;min-height:50px" type="submit">ارسال کد ورود</button>
+      <div class="auth-switch">حساب ندارید؟ <button data-auth-switch="signup" type="button">ثبت‌نام</button><br><button data-auth-switch="forgot" type="button">رمز عبور را فراموش کرده‌ام</button></div>
+    </form>
+
+    <form class="auth-state" data-state="login-otp" novalidate>
+      <p class="auth-help">کد ۵ رقمی ارسال‌شده به <strong data-auth-mobile></strong> را وارد کنید.</p>
+      <div class="form-group"><label>کد ورود</label><input autocomplete="one-time-code" class="form-control auth-otp-input" inputmode="numeric" maxlength="5" name="otp" placeholder="کد ۵ رقمی" required><div class="field-error">کد پیامک‌شده را وارد کنید.</div></div>
+      <button class="btn btn-primary" style="width:100%;min-height:50px" type="submit">تأیید و ورود</button>
+      <div class="auth-switch"><button data-auth-resend="login" type="button">ارسال مجدد کد</button> · <button data-auth-switch="login" type="button">ویرایش اطلاعات</button></div>
+    </form>
+
+    <form class="auth-state" data-state="signup" novalidate>
+      <div class="form-group"><label>نام و نام خانوادگی</label><input class="form-control" name="fullName" placeholder="نام شما" required type="text"><div class="field-error">نام را وارد کنید.</div></div>
+      <div class="form-group"><label>شماره موبایل</label><input class="form-control" name="mobile" placeholder="۰۹۱۲۱۲۳۴۵۶۷" required type="tel"><div class="field-error">شماره موبایل معتبر نیست.</div></div>
+      <div class="form-group"><label>ایمیل (اختیاری)</label><input class="form-control" name="email" placeholder="example@email.com" type="email"></div>
+      <div class="form-group"><label>رمز عبور</label><input class="form-control" name="password" placeholder="حداقل ۶ کاراکتر" required minlength="6" type="password"><div class="field-error">رمز عبور کوتاه است.</div></div>
+      <div class="form-group"><label>تکرار رمز عبور</label><input class="form-control" name="confirmPassword" placeholder="تکرار رمز عبور" required minlength="6" type="password"><div class="field-error">تکرار رمز را وارد کنید.</div></div>
+      <button class="btn btn-primary" style="width:100%;min-height:50px" type="submit">ارسال کد ثبت‌نام</button>
+      <div class="auth-switch">قبلاً ثبت‌نام کرده‌اید؟ <button data-auth-switch="login" type="button">ورود</button></div>
+    </form>
+
+    <form class="auth-state" data-state="signup-otp" novalidate>
+      <p class="auth-help">کد تأیید به <strong data-auth-mobile></strong> پیامک شد.</p>
+      <div class="form-group"><label>کد تأیید</label><input autocomplete="one-time-code" class="form-control auth-otp-input" inputmode="numeric" maxlength="5" name="otp" placeholder="کد ۵ رقمی" required><div class="field-error">کد پیامک‌شده را وارد کنید.</div></div>
+      <button class="btn btn-primary" style="width:100%;min-height:50px" type="submit">تأیید و ساخت حساب</button>
+      <div class="auth-switch"><button data-auth-resend="signup" type="button">ارسال مجدد کد</button> · <button data-auth-switch="signup" type="button">ویرایش اطلاعات</button></div>
+    </form>
+
+    <form class="auth-state" data-state="forgot" novalidate>
+      <div class="form-group"><label>شماره موبایل</label><input class="form-control" name="mobile" placeholder="شماره موبایل حساب کاربری" required type="tel"><div class="field-error">شماره موبایل را وارد کنید.</div></div>
+      <button class="btn btn-primary" style="width:100%;min-height:50px" type="submit">ارسال کد بازیابی</button>
+      <div class="auth-switch">بازگشت به <button data-auth-switch="login" type="button">ورود</button></div>
+    </form>
+
+    <form class="auth-state" data-state="forgot-otp" novalidate>
+      <p class="auth-help">کد بازیابی به <strong data-auth-mobile></strong> پیامک شد.</p>
+      <div class="form-group"><label>کد بازیابی</label><input autocomplete="one-time-code" class="form-control auth-otp-input" inputmode="numeric" maxlength="5" name="otp" placeholder="کد ۵ رقمی" required></div>
+      <button class="btn btn-primary" style="width:100%;min-height:50px" type="submit">تأیید کد</button>
+      <div class="auth-switch"><button data-auth-resend="forgot" type="button">ارسال مجدد کد</button> · <button data-auth-switch="forgot" type="button">ویرایش شماره</button></div>
+    </form>
+
+    <form class="auth-state" data-state="reset-password" novalidate>
+      <div class="form-group"><label>رمز عبور جدید</label><input class="form-control" name="password" minlength="6" placeholder="حداقل ۶ کاراکتر" required type="password"></div>
+      <div class="form-group"><label>تکرار رمز عبور جدید</label><input class="form-control" name="confirmPassword" minlength="6" placeholder="تکرار رمز عبور" required type="password"></div>
+      <button class="btn btn-primary" style="width:100%;min-height:50px" type="submit">ذخیره رمز جدید</button>
+    </form>
+  </div>
+</div>

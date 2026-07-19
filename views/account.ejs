@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="fa">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="پنل کاربری مشتریان Crib Flag" name="description"/>
+<title>پنل کاربری | Crib Flag</title>
+<link href="/assets/css/dashboard.css" rel="stylesheet"/>
+<link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
+<style>
+    * {
+      font-family: "Vazirmatn", system-ui, sans-serif;
+    }
+</style>
+</head>
+<body class="portal-body" data-portal="account">
+<div class="mobile-side-overlay" id="accountSideOverlay"></div>
+<div class="portal-shell">
+<aside class="portal-sidebar" id="accountSidebar">
+<a class="portal-brand" href="/"><img alt="Crib Flag" src="/assets/images/logo.png"/><span><strong>Crib Flag</strong><small>پنل مشتریان</small></span></a>
+<div class="portal-user-card"><div class="portal-avatar" id="sideAvatar"><%= (currentUser.name || "ک").trim().charAt(0) %></div><div><strong id="sideUserName"><%= currentUser.name %></strong><small>مشتری وفادار</small></div></div>
+<nav class="portal-nav">
+<div class="portal-nav-label">حساب کاربری</div>
+<button class="portal-nav-btn active" data-account-view="overview" data-view-title="داشبورد من"><svg viewbox="0 0 24 24"><path d="M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"></path></svg>داشبورد</button>
+<button class="portal-nav-btn" data-account-view="orders" data-view-title="سفارش‌های من"><svg viewbox="0 0 24 24"><path d="M5 7h14l-1 13H6L5 7Zm3 0V5a4 4 0 0 1 8 0v2"></path></svg>سفارش‌های من<span class="nav-count" id="accountOrdersCount">۰</span></button>
+<button class="portal-nav-btn" data-account-view="custom" data-view-title="طرح‌های اختصاصی"><svg viewbox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"></path><path d="M14 3v6h6M8 15l2-2 2 2 3-4 3 4"></path></svg>طرح‌های اختصاصی</button>
+<button class="portal-nav-btn" data-account-view="wishlist" data-view-title="علاقه‌مندی‌ها"><svg viewbox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"></path></svg>علاقه‌مندی‌ها</button>
+<div class="portal-nav-label">پروفایل و پشتیبانی</div>
+<button class="portal-nav-btn" data-account-view="profile" data-view-title="اطلاعات حساب"><svg viewbox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>اطلاعات حساب</button>
+<button class="portal-nav-btn" data-account-view="addresses" data-view-title="آدرس‌ها"><svg viewbox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>آدرس‌ها</button>
+<button class="portal-nav-btn" data-account-view="tickets" data-view-title="پشتیبانی"><svg viewbox="0 0 24 24"><path d="M4 5h16v12H8l-4 4V5Z"></path></svg>تیکت‌های پشتیبانی<span class="nav-count" id="accountTicketCount">۰</span></button>
+<button class="portal-nav-btn" data-account-view="notifications" data-view-title="اعلان‌ها"><svg viewbox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg>اعلان‌ها</button>
+</nav>
+<div class="portal-side-footer">
+<a class="portal-nav-btn" href="/store"><svg viewbox="0 0 24 24"><path d="M3 9h18M5 9l1-5h12l1 5v11H5V9Zm4 11v-6h6v6"></path></svg>بازگشت به فروشگاه</a>
+<button class="portal-nav-btn" id="accountLogout"><svg viewbox="0 0 24 24"><path d="M10 17l5-5-5-5M15 12H3M21 3v18h-6"></path></svg>خروج از حساب</button>
+</div>
+</aside>
+<main class="portal-main">
+<header class="portal-topbar">
+<button aria-label="منو" class="portal-menu-toggle" id="accountMenuToggle">☰</button>
+<div class="portal-topbar-title"><h1 id="accountViewTitle">داشبورد من</h1><p>مدیریت سفارش‌ها، طرح‌ها و اطلاعات حساب</p></div>
+<div class="portal-top-actions">
+<a class="portal-btn portal-btn-light" href="/store">ادامه خرید</a>
+<button aria-label="اعلان‌ها" class="portal-icon-btn" id="accountNotificationBtn"><span class="notification-dot" id="accountNotificationDot"></span><svg viewbox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg></button>
+</div>
+</header>
+<div class="portal-content">
+<section class="portal-view active" data-account-section="overview">
+<div class="profile-hero"><div class="portal-avatar" id="heroAvatar"><%= (currentUser.name || "ک").trim().charAt(0) %></div><div><h2 id="heroUserName"><%= currentUser.name %></h2><p>خوش آمدید؛ وضعیت سفارش‌ها و درخواست‌های شما از اینجا قابل پیگیری است.</p></div><div class="profile-hero-actions"><button class="portal-btn portal-btn-light" data-open-account-view="profile">ویرایش پروفایل</button></div></div>
+<div class="account-quick-grid">
+<button class="account-quick" data-open-account-view="orders"><span class="stat-icon"><svg viewbox="0 0 24 24"><path d="M5 7h14l-1 13H6L5 7Zm3 0V5a4 4 0 0 1 8 0v2"></path></svg></span><span><strong id="quickOrders">۰ سفارش</strong><small>مشاهده و پیگیری سفارش‌ها</small></span></button>
+<button class="account-quick" data-open-account-view="custom"><span class="stat-icon"><svg viewbox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"></path></svg></span><span><strong id="quickCustom">۰ طرح</strong><small>بررسی پیش‌نمایش طراحی</small></span></button>
+<button class="account-quick" data-open-account-view="wishlist"><span class="stat-icon"><svg viewbox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"></path></svg></span><span><strong id="quickWishlist">۰ محصول</strong><small>محصولات ذخیره‌شده</small></span></button>
+<button class="account-quick" data-open-account-view="tickets"><span class="stat-icon"><svg viewbox="0 0 24 24"><path d="M4 5h16v12H8l-4 4V5Z"></path></svg></span><span><strong id="quickTickets">۰ تیکت</strong><small>گفت‌وگو با پشتیبانی</small></span></button>
+</div>
+<div class="portal-grid-2">
+<div class="portal-card"><div class="portal-card-head"><div><h3>آخرین سفارش‌ها</h3><p>وضعیت سفارش‌های اخیر شما</p></div><button class="portal-btn portal-btn-soft" data-open-account-view="orders">مشاهده همه</button></div><div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>شماره سفارش</th><th>تاریخ</th><th>مبلغ</th><th>وضعیت</th><th></th></tr></thead><tbody id="accountRecentOrders"></tbody></table></div></div>
+<div class="portal-card"><div class="portal-card-head"><div><h3>اعلان‌های اخیر</h3><p>آخرین تغییرات حساب شما</p></div><button class="portal-btn portal-btn-soft" data-open-account-view="notifications">همه اعلان‌ها</button></div><div class="portal-card-body"><div class="list-stack" id="accountRecentNotifications"></div></div></div>
+</div>
+</section>
+<section class="portal-view" data-account-section="orders">
+<div class="view-head"><div><h2>سفارش‌های من</h2><p>جزئیات، وضعیت آماده‌سازی و کد رهگیری سفارش‌ها</p></div><div class="view-actions"><a class="portal-btn portal-btn-primary" href="/store">ثبت سفارش جدید</a></div></div>
+<div class="portal-card"><div class="table-tools"><input class="table-search" id="accountOrderSearch" placeholder="جستجو با شماره سفارش یا محصول"/><select class="table-filter" id="accountOrderStatus"><option value="">همه وضعیت‌ها</option><option value="processing">در حال آماده‌سازی</option><option value="design-review">بررسی طراحی</option><option value="shipped">ارسال شده</option><option value="delivered">تحویل شده</option><option value="cancelled">لغو شده</option></select></div><div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>سفارش</th><th>محصولات</th><th>تاریخ</th><th>مبلغ</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="accountOrdersTable"></tbody></table></div></div>
+</section>
+<section class="portal-view" data-account-section="custom">
+<div class="view-head"><div><h2>طرح‌های اختصاصی</h2><p>فایل‌ها، توضیحات اصلاح و وضعیت تأیید پیش‌نمایش</p></div><button class="portal-btn portal-btn-primary" id="newCustomRequestBtn">ارسال طرح جدید</button></div>
+<div class="portal-card"><div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>کد درخواست</th><th>فایل</th><th>سایز</th><th>توضیحات</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="accountCustomTable"></tbody></table></div></div>
+</section>
+<section class="portal-view" data-account-section="wishlist">
+<div class="view-head"><div><h2>علاقه‌مندی‌ها</h2><p>محصولاتی که برای خرید بعدی ذخیره کرده‌اید</p></div><a class="portal-btn portal-btn-light" href="/store">مشاهده فروشگاه</a></div>
+<div class="wishlist-grid" id="accountWishlistGrid"></div>
+</section>
+<section class="portal-view" data-account-section="profile">
+<div class="view-head"><div><h2>اطلاعات حساب</h2><p>اطلاعات تماس و مشخصات حساب کاربری</p></div></div>
+<div class="portal-grid-2"><div class="portal-card"><div class="portal-card-head"><h3>مشخصات فردی</h3></div><div class="portal-card-body"><form class="form-grid" id="accountProfileForm"><div class="field"><label>نام و نام خانوادگی</label><input id="profileName" required=""/></div><div class="field"><label>شماره موبایل</label><input id="profilePhone" inputmode="numeric" required=""/></div><div class="field"><label>ایمیل</label><input id="profileEmail" type="email"/></div><div class="field"><label>تاریخ عضویت</label><input disabled="" id="profileJoined"/></div><div class="field full"><button class="portal-btn portal-btn-primary" type="submit">ذخیره تغییرات</button></div></form></div></div><div class="portal-card"><div class="portal-card-head"><h3>امنیت حساب</h3></div><div class="portal-card-body"><form class="form-grid" id="accountPasswordForm"><div class="field full"><label>رمز عبور فعلی</label><input required="" type="password"/></div><div class="field"><label>رمز عبور جدید</label><input minlength="6" required="" type="password"/></div><div class="field"><label>تکرار رمز عبور</label><input minlength="6" required="" type="password"/></div><div class="field full"><button class="portal-btn portal-btn-light" type="submit">تغییر رمز عبور</button></div></form></div></div></div>
+</section>
+<section class="portal-view" data-account-section="addresses">
+<div class="view-head"><div><h2>آدرس‌های من</h2><p>مدیریت آدرس‌های تحویل سفارش</p></div><button class="portal-btn portal-btn-primary" id="addAddressBtn">افزودن آدرس</button></div>
+<div class="address-grid" id="accountAddressGrid"></div>
+</section>
+<section class="portal-view" data-account-section="tickets">
+<div class="view-head"><div><h2>پشتیبانی</h2><p>ثبت و پیگیری درخواست‌های پشتیبانی</p></div><button class="portal-btn portal-btn-primary" id="newTicketBtn">تیکت جدید</button></div>
+<div class="portal-card"><div class="table-tools"><input class="table-search" id="accountTicketSearch" placeholder="جستجو در تیکت‌ها"/><select class="table-filter" id="accountTicketStatus"><option value="">همه وضعیت‌ها</option><option value="open">باز</option><option value="answered">پاسخ داده شده</option><option value="closed">بسته</option></select></div><div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>کد تیکت</th><th>موضوع</th><th>بخش</th><th>تاریخ</th><th>وضعیت</th><th></th></tr></thead><tbody id="accountTicketsTable"></tbody></table></div></div>
+</section>
+<section class="portal-view" data-account-section="notifications">
+<div class="view-head"><div><h2>اعلان‌ها</h2><p>پیام‌های مرتبط با سفارش، طراحی و پشتیبانی</p></div><button class="portal-btn portal-btn-light" id="markAllReadBtn">خواندن همه</button></div>
+<div class="portal-card"><div class="portal-card-body"><div class="list-stack" id="accountNotificationsFull"></div></div></div>
+</section>
+</div>
+</main>
+</div>
+<div class="notification-panel" id="accountNotificationPanel"><div class="notification-head"><h3>اعلان‌های جدید</h3><button class="portal-btn portal-btn-soft" id="panelMarkRead">خواندن همه</button></div><div class="notification-list" id="accountNotificationList"></div></div>
+<div class="portal-modal-backdrop" id="accountOrderModal"><div class="portal-modal wide"><div class="portal-modal-head"><h3>جزئیات سفارش</h3><button class="portal-modal-close" data-close-modal="">×</button></div><div class="portal-modal-body" id="accountOrderModalBody"></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="">بستن</button><button class="portal-btn portal-btn-soft" id="repeatOrderBtn">تکرار سفارش</button></div></div></div>
+<div class="portal-modal-backdrop" id="addressModal"><div class="portal-modal"><div class="portal-modal-head"><h3 id="addressModalTitle">افزودن آدرس</h3><button class="portal-modal-close" data-close-modal="">×</button></div><form id="addressForm"><div class="portal-modal-body"><input id="addressId" type="hidden"/><div class="form-grid"><div class="field"><label>عنوان آدرس</label><input id="addressTitle" placeholder="خانه یا محل کار" required=""/></div><div class="field"><label>نام تحویل‌گیرنده</label><input id="addressReceiver" required=""/></div><div class="field"><label>شماره تماس</label><input id="addressPhone" required=""/></div><div class="field"><label>کد پستی</label><input id="addressPostal" required=""/></div><div class="field"><label>استان</label><input id="addressProvince" required=""/></div><div class="field"><label>شهر</label><input id="addressCity" required=""/></div><div class="field full"><label>نشانی کامل</label><textarea id="addressText" required=""></textarea></div><div class="field full"><label><input id="addressDefault" type="checkbox"/> آدرس پیش‌فرض باشد</label></div></div></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="" type="button">انصراف</button><button class="portal-btn portal-btn-primary" type="submit">ذخیره آدرس</button></div></form></div></div>
+<div class="portal-modal-backdrop" id="ticketModal"><div class="portal-modal"><div class="portal-modal-head"><h3>تیکت پشتیبانی</h3><button class="portal-modal-close" data-close-modal="">×</button></div><div class="portal-modal-body" id="ticketModalBody"></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="">بستن</button></div></div></div>
+<div class="portal-modal-backdrop" id="newTicketModal"><div class="portal-modal"><div class="portal-modal-head"><h3>ثبت تیکت جدید</h3><button class="portal-modal-close" data-close-modal="">×</button></div><form id="newTicketForm"><div class="portal-modal-body"><div class="form-grid"><div class="field full"><label>موضوع</label><input id="newTicketSubject" required=""/></div><div class="field"><label>بخش مرتبط</label><select id="newTicketDepartment"><option>سفارش‌ها</option><option>طراحی</option><option>ارسال</option><option>مالی</option><option>سایر</option></select></div><div class="field"><label>اولویت</label><select id="newTicketPriority"><option value="normal">عادی</option><option value="high">فوری</option></select></div><div class="field full"><label>متن درخواست</label><textarea id="newTicketMessage" required=""></textarea></div></div></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="" type="button">انصراف</button><button class="portal-btn portal-btn-primary" type="submit">ارسال تیکت</button></div></form></div></div>
+<div class="portal-modal-backdrop" id="customRequestModal"><div class="portal-modal"><div class="portal-modal-head"><h3>ارسال طرح اختصاصی</h3><button class="portal-modal-close" data-close-modal="">×</button></div><form id="customRequestForm"><div class="portal-modal-body"><label class="upload-zone"><input accept="image/*,.pdf" id="accountCustomFile" required="" type="file"/><strong id="accountCustomFileLabel">انتخاب فایل طرح</strong><p>PNG، JPG یا PDF تا حجم ۲۰ مگابایت</p></label><div class="form-grid" style="margin-top:15px"><div class="field"><label>سایز</label><select id="accountCustomSize"><option value="150 × 90 سانتی‌متر">۱۵۰ × ۹۰ پیشنهادی</option><option value="100 × 70 سانتی‌متر">۱۰۰ × ۷۰ پیشنهادی</option><option value="50 × 70 سانتی‌متر">۵۰ × ۷۰</option></select></div><div class="field"><label>جنس پارچه</label><select id="accountCustomFabric"><option>ساتن آمریکایی</option><option>ساتن براق</option><option>مخمل</option></select></div><div class="field"><label>نوع درخواست</label><select id="accountCustomType"><option>چاپ مستقیم</option><option>نیازمند اصلاح طراحی</option></select></div><div class="field full"><label>توضیحات تغییرات</label><textarea id="accountCustomNotes" placeholder="برش، جای لوگو یا هر تغییر موردنیاز را بنویسید."></textarea></div></div></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="" type="button">انصراف</button><button class="portal-btn portal-btn-primary" type="submit">ثبت درخواست</button></div></form></div></div>
+<script src="/assets/js/api.js"></script>
+<script src="/assets/js/portal-data.js"></script>
+<script src="/assets/js/account.js"></script>
+</body>
+</html>

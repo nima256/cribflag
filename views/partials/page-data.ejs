@@ -1,0 +1,80 @@
+<script>
+window.__INITIAL_PRODUCTS__ = <%- safeJson(products || []) %>;
+window.__READY_DESIGNS__ = <%- safeJson(readyDesigns || []) %>;
+window.__CURRENT_USER__ = <%- safeJson(currentUser || null) %>;
+window.__CURRENT_PRODUCT__ = <%- safeJson(product || null) %>;
+window.__PAYMENT_FAILED__ = <%- safeJson(typeof paymentFailed === "boolean" ? paymentFailed : false) %>;
+</script>
+<div
+  class="app-loading"
+  id="appLoading"
+  role="status"
+  aria-live="polite"
+  aria-hidden="true"
+>
+  <div class="app-loading-box">
+    <span class="app-loading-spinner"></span>
+
+    <strong id="appLoadingText">
+      در حال بارگذاری...
+    </strong>
+  </div>
+</div>
+<style>
+    .app-loading {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(15, 23, 42, 0.38);
+    backdrop-filter: blur(5px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition:
+        opacity 180ms ease,
+        visibility 180ms ease;
+    }
+
+    .app-loading.is-active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: all;
+    }
+
+    .app-loading-box {
+    min-width: 210px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 17px 22px;
+    border-radius: 18px;
+    background: #fff;
+    color: #172033;
+    box-shadow: 0 22px 70px rgba(15, 23, 42, 0.25);
+    font-size: 14px;
+    }
+
+    .app-loading-spinner {
+    width: 23px;
+    height: 23px;
+    flex: 0 0 23px;
+    border: 3px solid #dce5f5;
+    border-top-color: #3157d5;
+    border-radius: 50%;
+    animation: appLoadingSpin 700ms linear infinite;
+    }
+
+    @keyframes appLoadingSpin {
+    to {
+        transform: rotate(360deg);
+    }
+    }
+
+    body.has-app-loading {
+    overflow: hidden;
+    }
+</style>

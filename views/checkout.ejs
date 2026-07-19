@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="fa">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<meta content="Crib Flag؛ فروشگاه تخصصی فلگ و پرچم" name="description"/>
+<title>تسویه حساب | Crib Flag</title>
+<link href="/assets/css/style.css" rel="stylesheet"/>
+<link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
+<style>
+.checkout-field input[readonly] {
+  cursor: default;
+  user-select: text;
+  background: #f3f5f9;
+  color: #475569;
+  border-color: #dbe1ea;
+}
+
+.checkout-field input[readonly]:focus {
+  background: #f3f5f9;
+  border-color: #dbe1ea;
+  box-shadow: none;
+}
+</style>
+</head>
+<body data-page="checkout">
+<div class="top-banner">
+    خرید قسطی فعال شد <span> از درگاه اسنپ پی </span>
+</div>
+<header class="site-header">
+<div class="container">
+<div class="desktop-main-nav">
+<a aria-label="صفحه اصلی" class="logo" data-page-link="home" href="/">
+<span class="logo-mark">
+<img alt="Crib Flag" src="/assets/images/logo.png"/>
+</span>
+<strong>Crib Flag </strong>
+<!-- <small>فروشگاه تخصصی فلگ و پرچم</small> -->
+</a>
+<div class="search-wrap">
+<form action="/store" class="search-box search-form" method="get">
+<svg fill="none" height="22" viewbox="0 0 24 24" width="22">
+<path d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
+</svg>
+<input autocomplete="off" class="global-search" name="q" placeholder="پرچم" type="search"/>
+<button class="search-submit" type="submit">جستجو</button>
+</form>
+<div class="search-suggestions"></div>
+</div>
+<div class="nav-actions">
+<button aria-label="حساب کاربری" class="icon-btn auth-open">
+<svg fill="none" height="22" viewbox="0 0 24 24" width="22">
+<path d="M20 21a8 8 0 10-16 0M12 13a5 5 0 100-10 5 5 0 000 10z" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
+</svg>
+</button>
+<button aria-label="سبد خرید" class="icon-btn cart-open">
+<span class="cart-count">۰</span>
+<svg fill="none" height="22" viewbox="0 0 24 24" width="22">
+<path d="M6 6h15l-2 8H8L6 6zm0 0L5 3H2m6 17a1 1 0 100-2 1 1 0 000 2zm11 0a1 1 0 100-2 1 1 0 000 2z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+</div>
+<div class="mobile-top-nav">
+<button aria-label="باز کردن منو" class="hamburger mobile-menu-open"><span></span></button>
+<a class="logo" data-page-link="home" href="/">
+<span class="logo-mark">
+<img alt="Crib Flag" src="/assets/images/logo.png"/>
+</span>
+<span class="logo-text">
+<strong>
+</strong>
+<small>فروشگاه تخصصی پرچم</small>
+</span>
+</a>
+<button aria-label="سبد خرید" class="icon-btn cart-open">
+<span class="cart-count">۰</span>
+<svg fill="none" height="21" viewbox="0 0 24 24" width="21">
+<path d="M6 6h15l-2 8H8L6 6zm0 0L5 3H2m6 17a1 1 0 100-2 1 1 0 000 2zm11 0a1 1 0 100-2 1 1 0 000 2z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+</div>
+<%- include("partials/nav") %>
+</header>
+<main class="main"><section class="page active" id="page-checkout"><div class="container">
+<div class="page-hero checkout-hero"><span class="eyebrow">ثبت نهایی سفارش</span><h1>تسویه حساب مرحله‌ای</h1><p>ابتدا اطلاعات تحویل، سپس روش ارسال و پرداخت، و در پایان خلاصه سبد را بررسی کنید.</p></div>
+<div aria-label="مراحل تسویه" class="checkout-stepper"><div class="checkout-step-indicator active" data-indicator="1"><b>۱</b><span>اطلاعات</span></div><i></i><div class="checkout-step-indicator" data-indicator="2"><b>۲</b><span>ارسال و پرداخت</span></div><i></i><div class="checkout-step-indicator" data-indicator="3"><b>۳</b><span>بازبینی سفارش</span></div></div>
+<form id="checkoutForm" novalidate="">
+<section class="checkout-step active" data-step="1">
+  <div class="checkout-stage-card">
+    <div class="stage-heading">
+      <span>مرحله اول</span>
+      <h2>اطلاعات گیرنده و آدرس</h2>
+    </div>
+
+    <div class="checkout-grid">
+      <div class="checkout-field">
+        <label for="checkoutName">نام و نام خانوادگی</label>
+        <input
+          id="checkoutName"
+          name="customer"
+          value="<%= user?.fullName || '' %>"
+          readonly
+          aria-readonly="true"
+          required
+        />
+      </div>
+
+      <div class="checkout-field">
+        <label for="checkoutPhone">شماره موبایل</label>
+        <input
+          id="checkoutPhone"
+          name="phone"
+          value="<%= user?.mobile || '' %>"
+          inputmode="tel"
+          dir="ltr"
+          readonly
+          aria-readonly="true"
+          required
+        />
+      </div>
+
+      <div class="checkout-field full">
+        <label for="checkoutEmail">ایمیل</label>
+        <input
+          id="checkoutEmail"
+          name="email"
+          type="email"
+          value="<%= user?.email || '' %>"
+          dir="ltr"
+          readonly
+          aria-readonly="true"
+        />
+      </div>
+
+      <div class="checkout-field">
+        <label for="checkoutProvince">استان</label>
+        <select id="checkoutProvince" name="province" required>
+          <option value="">انتخاب استان</option>
+          <% (provinces || []).forEach(province => { %>
+            <option
+              value="<%= province.name %>"
+              data-cities='<%- safeJson(province.cities || []) %>'
+            ><%= province.name %></option>
+          <% }) %>
+        </select>
+      </div>
+
+      <div class="checkout-field">
+        <label for="checkoutCity">شهر</label>
+        <select id="checkoutCity" name="city" required disabled>
+          <option value="">ابتدا استان را انتخاب کنید</option>
+        </select>
+      </div>
+
+      <div class="checkout-field">
+        <label for="checkoutPostal">کد پستی</label>
+        <input
+          id="checkoutPostal"
+          name="postalCode"
+          inputmode="numeric"
+          maxlength="10"
+          placeholder="کد پستی ۱۰ رقمی"
+          required
+        />
+      </div>
+
+      <div class="checkout-field">
+        <label for="checkoutUnit">پلاک / واحد</label>
+        <input id="checkoutUnit" name="unit" placeholder="پلاک و واحد" required />
+      </div>
+
+      <div class="checkout-field full">
+        <label for="checkoutAddress">آدرس دقیق</label>
+        <textarea
+          id="checkoutAddress"
+          name="addressLine"
+          placeholder="محله، خیابان، کوچه، پلاک، طبقه و واحد"
+          minlength="10"
+          required
+        ></textarea>
+      </div>
+
+      <div class="checkout-field full">
+        <label for="checkoutNote">توضیحات سفارش (اختیاری)</label>
+        <textarea id="checkoutNote" name="note" placeholder="نکته‌ای درباره تحویل یا سفارش دارید؟"></textarea>
+      </div>
+    </div>
+
+    <div class="checkout-actions">
+      <a class="btn btn-ghost" href="/cart">بازگشت به سبد</a>
+      <button class="btn btn-primary checkout-next" data-next="2" type="button">ادامه به ارسال و پرداخت</button>
+    </div>
+  </div>
+</section>
+<section class="checkout-step" data-step="2"><div class="checkout-stage-card"><div class="stage-heading"><span>مرحله دوم</span><h2>روش ارسال و پرداخت</h2></div><h3 class="choice-title">روش ارسال</h3><div class="shipping-options"><label class="option-card"><input checked="" data-shipping-price="0" name="shipping" type="radio" value="tipax"/><span><strong>ارسال با تیپاکس</strong><small>ارسال به سراسر ایران؛ هزینه هنگام تحویل دریافت می‌شود</small></span><b>پس‌کرایه</b></label><label class="option-card"><input data-shipping-price="0" name="shipping" type="radio" value="snapp"/><span><strong>ارسال فوری از کرج</strong><small>هزینه ارسال مستقیماً توسط مشتری پرداخت می‌شود</small></span><b>پرداخت جداگانه</b></label></div><h3 class="choice-title">روش پرداخت</h3><div class="payment-options"><label class="option-card"><input checked="" name="payment" type="radio" value="zarinpal"/><span><strong>پرداخت آنلاین</strong><small>اتصال به درگاه بانکی امن</small></span><b>پیشنهادی</b></label><label class="option-card"><input name="payment" type="radio" value="manual"/><span><strong>کارت به کارت</strong><small>مناسب سفارش‌های عمده با هماهنگی</small></span><b>هماهنگی</b></label></div><div class="checkout-actions"><button class="btn btn-ghost checkout-back" data-back="1" type="button">مرحله قبل</button><button class="btn btn-primary checkout-next" data-next="3" type="button">مشاهده و بازبینی سفارش</button></div></div></section>
+<section class="checkout-step" data-step="3"><div class="checkout-review-layout"><div class="checkout-stage-card"><div class="stage-heading"><span>مرحله سوم</span><h2>سبد خرید و اطلاعات سفارش</h2></div><div class="checkout-review-items" id="checkoutSummaryItems"></div><div class="review-customer" id="checkoutCustomerReview"></div><div class="checkout-actions"><button class="btn btn-ghost checkout-back" data-back="2" type="button">مرحله قبل</button></div></div><aside class="checkout-summary final-summary"><h3>جمع سفارش</h3><div class="discount-row"><input id="discountCodeInput" placeholder="کد تخفیف"/><button id="applyDiscountBtn" type="button">اعمال</button></div><div class="summary-line"><span>جمع محصولات</span><strong id="checkoutSubtotal">۰ تومان</strong></div><div class="summary-line"><span>تخفیف</span><strong id="checkoutDiscount">۰ تومان</strong></div><div class="summary-line"><span>هزینه ارسال</span><strong id="checkoutShipping">پرداخت جداگانه</strong></div><div class="summary-line total"><span>مبلغ نهایی</span><strong id="checkoutTotal">۰ تومان</strong></div><button class="btn btn-primary" id="finalPaymentBtn" type="button">تأیید و پرداخت نهایی</button><small class="secure-note">با ثبت پرداخت، سفارش برای بررسی و چاپ ارسال می‌شود.</small></aside></div></section>
+</form></div></section></main>
+<%- include("partials/footer") %>
+<nav aria-label="منوی پایین موبایل" class="mobile-bottom-nav">
+<div class="bottom-nav-inner">
+<button class="bottom-link active" data-page-link="home">⌂<span>خانه</span></button>
+<button class="bottom-link mobile-search-focus">⌕<span>جستجو</span></button>
+<button class="bottom-link cart-open">🛒<span>سبد خرید</span></button>
+<button class="bottom-link" data-page-link="store">▦<span>دسته‌بندی</span></button>
+<button class="bottom-link auth-open">👤<span>حساب</span></button>
+</div>
+</nav>
+<aside class="mobile-menu">
+<div class="mobile-menu-head">
+<a class="logo" data-page-link="home" href="/">
+<span class="logo-mark">
+<img alt="Crib Flag" src="/assets/images/logo.png">
+</img></span>
+<span class="logo-text">
+<strong> Crib Flag</strong>
+<!-- <small>فروشگاه تخصصی فلگ</small> -->
+</span>
+</a>
+<button class="close-btn mobile-menu-close">×</button>
+</div>
+<div class="mobile-menu-body">
+<div class="search-wrap">
+<form class="search-box mobile-search search-form">
+<svg fill="none" height="22" viewbox="0 0 24 24" width="22">
+<path d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
+</svg>
+<input autocomplete="off" class="global-search" placeholder="جستجو در محصولات..." type="search">
+<button class="search-submit" type="submit">برو</button>
+</input></form>
+<div class="search-suggestions"></div>
+</div>
+<button class="mobile-accordion-btn">فروشگاه <span>+</span></button>
+<div class="mobile-submenu">
+<a class="mobile-sub-link store-category-link" data-category="پرچم ایران" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%A7%DB%8C%D8%B1%D8%A7%D9%86">پرچم ایران</a>
+<a class="mobile-sub-link store-category-link" data-category="پرچم کشورها" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%DA%A9%D8%B4%D9%88%D8%B1%D9%87%D8%A7">پرچم کشورهای جهان</a>
+<a class="mobile-sub-link store-category-link" data-category="پرچم تشریفات" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%AA%D8%B4%D8%B1%DB%8C%D9%81%D8%A7%D8%AA">پرچم تشریفات</a>
+<a class="mobile-sub-link store-category-link" data-category="پرچم رومیزی" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%B1%D9%88%D9%85%DB%8C%D8%B2%DB%8C">پرچم رومیزی</a>
+<a class="mobile-sub-link store-category-link" data-category="پرچم ساحلی" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%B3%D8%A7%D8%AD%D9%84%DB%8C">پرچم ساحلی</a>
+</div>
+<a class="mobile-link" data-page-link="custom" href="/custom">طرح دلخواه</a>
+<a class="mobile-link" data-page-link="ready" href="/ready">طرح‌های آماده</a>
+<a class="mobile-link" data-page-link="faq" href="/faq">سوالات متداول</a>
+<a class="mobile-link" data-page-link="blog" href="/blog">مجله Crib Flag</a>
+<button class="mobile-link auth-open">ورود / حساب کاربری</button>
+</div>
+</aside>
+<aside class="cart-drawer">
+<div class="cart-head">
+<h3>سبد خرید</h3>
+<button class="close-btn cart-close">×</button>
+</div>
+<div class="cart-body" id="cartBody"></div>
+<div class="cart-foot">
+<div class="total-row">
+<span>مجموع</span>
+<strong id="cartTotal">۰ تومان</strong>
+</div>
+<button class="btn btn-primary" id="continueCheckoutBtn">ادامه تسویه حساب</button>
+<button class="btn btn-ghost cart-close">ادامه خرید</button>
+</div>
+</aside>
+<div class="filter-drawer">
+<aside class="filter-sidebar">
+<div class="filter-head">
+<h3>فیلتر محصولات</h3>
+<button class="close-btn filter-close">×</button>
+</div>
+<div class="filter-block">
+<h4>محدوده قیمت</h4>
+<div class="range-row">
+<input class="price-min-mobile" inputmode="numeric" placeholder="از">
+<input class="price-max-mobile" inputmode="numeric" placeholder="تا">
+</input></input></div>
+</div>
+<div class="filter-block">
+<h4>دسته‌بندی</h4>
+<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="فلگ دیواری"> فلگ دیواری</input></label>
+<!-- <label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم ایران" /> پرچم ایران</label> -->
+<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم تشریفات"> پرچم تشریفات</input></label>
+<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم رومیزی"> پرچم رومیزی</input></label>
+<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم کشورها"> پرچم کشورها</input></label>
+<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم ساحلی"> پرچم ساحلی</input></label>
+</div>
+
+<button class="btn btn-primary apply-mobile-filters" style="width:100%;margin-top:12px;">اعمال فیلتر</button>
+</aside>
+</div>
+<%- include("partials/auth-modal", { nextUrl }) %>
+<div class="image-lightbox">
+<div class="lightbox-inner">
+<button class="lightbox-close">×</button>
+<div class="static-image-box" id="lightboxProductBox">
+<img alt="نمای بزرگ محصول" id="lightboxProductImg" src="/assets/images/ukflag.png"/>
+</div>
+</div>
+</div>
+<div class="custom-preview-overlay" id="customPreviewOverlay">
+<div class="custom-preview-box">
+<div class="preview-head">
+<h3 id="customPreviewTitle">پیش‌نمایش طرح</h3>
+<div class="editor-top-group">
+<button class="editor-action" id="toggleMockupInsidePreview">تغییر حالت موکاپ</button>
+<button class="editor-action" id="downloadFromPreview">دانلود</button>
+<button class="close-btn" id="closeCustomPreview">×</button>
+</div>
+</div>
+<div class="custom-preview-frame" id="customPreviewFrame"></div>
+</div>
+</div>
+<div class="overlay"></div>
+<div class="toast" id="toast">محصول به سبد خرید اضافه شد.</div>
+<%- include("partials/page-data") %>
+<script src="/assets/js/api.js"></script>
+<script src="/assets/js/portal-data.js"></script>
+<script src="/assets/js/app.js"></script>
+<script>
+(() => {
+  const provinceSelect = document.getElementById('checkoutProvince');
+  const citySelect = document.getElementById('checkoutCity');
+
+  if (!provinceSelect || !citySelect) return;
+
+  provinceSelect.addEventListener('change', () => {
+    const selected = provinceSelect.options[provinceSelect.selectedIndex];
+    let cities = [];
+
+    try {
+      cities = JSON.parse(selected?.dataset?.cities || '[]');
+    } catch {
+      cities = [];
+    }
+
+    citySelect.innerHTML = '<option value="">انتخاب شهر</option>';
+
+    cities.forEach(city => {
+      const option = document.createElement('option');
+      option.value = city;
+      option.textContent = city;
+      citySelect.appendChild(option);
+    });
+
+    citySelect.disabled = cities.length === 0;
+  });
+})();
+</script>
+</body>
+</html>

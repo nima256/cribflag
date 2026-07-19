@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="fa">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<meta content="Crib Flag؛ فروشگاه تخصصی فلگ و پرچم" name="description"/>
+<title>طراحی فلگ اختصاصی | Crib Flag</title>
+<link href="/assets/css/style.css" rel="stylesheet"/>
+<link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
+</head>
+<body data-page="custom">
+<div class="top-banner">
+    خرید قسطی فعال شد <span> از درگاه اسنپ پی </span>
+</div>
+<header class="site-header">
+<div class="container">
+<div class="desktop-main-nav">
+<a aria-label="صفحه اصلی" class="logo" data-page-link="home" href="/">
+<span class="logo-mark">
+<img alt="Crib Flag" src="/assets/images/logo.png"/>
+</span>
+<strong>Crib Flag </strong>
+<!-- <small>فروشگاه تخصصی فلگ و پرچم</small> -->
+</a>
+<div class="search-wrap">
+<form action="/store" class="search-box search-form" method="get">
+<svg fill="none" height="22" viewbox="0 0 24 24" width="22">
+<path d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
+</svg>
+<input autocomplete="off" class="global-search" name="q" placeholder="پرچم" type="search"/>
+<button class="search-submit" type="submit">جستجو</button>
+</form>
+<div class="search-suggestions"></div>
+</div>
+<div class="nav-actions">
+<button aria-label="حساب کاربری" class="icon-btn auth-open">
+<svg fill="none" height="22" viewbox="0 0 24 24" width="22">
+<path d="M20 21a8 8 0 10-16 0M12 13a5 5 0 100-10 5 5 0 000 10z" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
+</svg>
+</button>
+<button aria-label="سبد خرید" class="icon-btn cart-open">
+<span class="cart-count">۰</span>
+<svg fill="none" height="22" viewbox="0 0 24 24" width="22">
+<path d="M6 6h15l-2 8H8L6 6zm0 0L5 3H2m6 17a1 1 0 100-2 1 1 0 000 2zm11 0a1 1 0 100-2 1 1 0 000 2z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+</div>
+<div class="mobile-top-nav">
+<button aria-label="باز کردن منو" class="hamburger mobile-menu-open"><span></span></button>
+<a class="logo" data-page-link="home" href="/">
+<span class="logo-mark">
+<img alt="Crib Flag" src="/assets/images/logo.png"/>
+</span>
+<span class="logo-text">
+<strong>
+</strong>
+<small>فروشگاه تخصصی پرچم</small>
+</span>
+</a>
+<button aria-label="سبد خرید" class="icon-btn cart-open">
+<span class="cart-count">۰</span>
+<svg fill="none" height="21" viewbox="0 0 24 24" width="21">
+<path d="M6 6h15l-2 8H8L6 6zm0 0L5 3H2m6 17a1 1 0 100-2 1 1 0 000 2zm11 0a1 1 0 100-2 1 1 0 000 2z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+</div>
+<%- include("partials/nav") %>
+</header>
+<main class="main"><section class="page active" id="page-custom"><div class="container">
+<div class="page-hero"><span class="eyebrow">سفارش چاپ اختصاصی</span><h1>طرح خودت را آپلود کن</h1><p>فایل طرح را بفرست، سایز را انتخاب کن و هر تغییری که لازم داری برای طراح توضیح بده.</p></div>
+<div class="custom-order-layout">
+<section class="custom-upload-card"><div class="custom-section-title"><span>۱</span><div><h2>آپلود فایل طرح</h2><p>فرمت‌های JPG، PNG، WEBP و PDF تا سقف ۲۰ مگابایت</p></div></div>
+<label class="upload-dropzone" for="customFileInput"><input accept="image/jpeg,image/png,image/webp,application/pdf" id="customFileInput" type="file"/><div class="upload-preview" id="customUploadPreview"><div class="upload-placeholder"><span class="upload-icon">↑</span><strong>فایل را انتخاب کنید</strong><small>یا آن را داخل این کادر رها کنید</small></div></div></label><div class="upload-file-meta" id="customFileName">هنوز فایلی انتخاب نشده است.</div></section>
+<section class="custom-config-card"><div class="custom-section-title"><span>۲</span><div><h2>انتخاب سایز</h2><p>دو سایز پیشنهادی برای بیشتر سفارش‌ها مشخص شده‌اند.</p></div></div>
+<div class="order-size-grid">
+<label class="order-size-option recommended"><input data-price="890000" name="customOrderSize" type="radio" value="150x90"/><span class="recommend-badge">پیشنهادی</span><strong>۱۵۰ × ۹۰</strong><small>بزرگ و چشمگیر</small></label>
+<label class="order-size-option recommended"><input checked="" data-price="720000" name="customOrderSize" type="radio" value="100x70"/><span class="recommend-badge">پیشنهادی</span><strong>۱۰۰ × ۷۰</strong><small>متعادل و پرکاربرد</small></label>
+<label class="order-size-option"><input data-price="490000" name="customOrderSize" type="radio" value="50x70"/><strong>۵۰ × ۷۰</strong><small>جمع‌وجور و عمودی</small></label>
+<label class="order-size-option"><input data-price="0" name="customOrderSize" type="radio" value="custom"/><strong>سایز دلخواه</strong><small>ابعاد را وارد کنید</small></label>
+</div><div class="custom-dimension-fields" id="customDimensionFields"><label>عرض (سانتی‌متر)<input id="customOrderWidth" max="150" min="30" placeholder="مثلاً ۱۲۰" type="number"/></label><label>ارتفاع (سانتی‌متر)<input id="customOrderHeight" max="200" min="30" placeholder="مثلاً ۸۰" type="number"/></label></div>
+<div class="custom-section-title fabric-title"><span>۳</span><div><h2>انتخاب جنس پارچه</h2><p>جنس مناسب سفارش خود را انتخاب کنید.</p></div></div><div class="custom-fabric-field"><label for="customOrderFabric">جنس پارچه</label><select id="customOrderFabric"><option value="ساتن آمریکایی">ساتن آمریکایی</option><option value="ساتن براق">ساتن براق</option><option value="مخمل">مخمل</option></select></div><div class="custom-section-title notes-title"><span>۴</span><div><h2>توضیحات تغییرات</h2><p>نوشته، حذف پس‌زمینه یا هر نکته‌ای که طراح باید بداند.</p></div></div><textarea class="custom-order-notes" id="customOrderNotes" placeholder="مثلاً پس‌زمینه حذف شود، نوشته پایین تصویر سفید باشد و لوگو کمی بزرگ‌تر شود..."></textarea>
+<div class="custom-order-summary"><div><small>قیمت حدودی</small><strong id="customOrderPrice">۷۲۰٬۰۰۰ تومان</strong></div><button class="btn btn-primary" id="addCustomOrder" type="button">افزودن سفارش به سبد خرید</button></div><p class="form-hint">قیمت نهایی پس از بررسی کیفیت فایل و جزئیات تغییرات تأیید می‌شود.</p></section>
+</div></div></section></main>
+<%- include("partials/footer") %>
+<nav aria-label="منوی پایین موبایل" class="mobile-bottom-nav">
+<div class="bottom-nav-inner">
+<button class="bottom-link active" data-page-link="home">⌂<span>خانه</span></button>
+<button class="bottom-link mobile-search-focus">⌕<span>جستجو</span></button>
+<button class="bottom-link cart-open">🛒<span>سبد خرید</span></button>
+<button class="bottom-link" data-page-link="store">▦<span>دسته‌بندی</span></button>
+<button class="bottom-link auth-open">👤<span>حساب</span></button>
+</div>
+</nav>
+<aside class="mobile-menu">
+<div class="mobile-menu-head">
+<a class="logo" data-page-link="home" href="/">
+<span class="logo-mark">
+<img alt="Crib Flag" src="/assets/images/logo.png"/>
+</span>
+<span class="logo-text">
+<strong> Crib Flag</strong>
+<!-- <small>فروشگاه تخصصی فلگ</small> -->
+</span>
+</a>
+<button class="close-btn mobile-menu-close">×</button>
+</div>
+<div class="mobile-menu-body">
+<div class="search-wrap">
+<form class="search-box mobile-search search-form">
+<svg fill="none" height="22" viewbox="0 0 24 24" width="22">
+<path d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z" stroke="currentColor" stroke-linecap="round" stroke-width="2"></path>
+</svg>
+<input autocomplete="off" class="global-search" placeholder="جستجو در محصولات..." type="search"/>
+<button class="search-submit" type="submit">برو</button>
+</form>
+<div class="search-suggestions"></div>
+</div>
+<button class="mobile-accordion-btn">فروشگاه <span>+</span></button>
+<div class="mobile-submenu">
+<a class="mobile-sub-link store-category-link" data-category="پرچم ایران" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%A7%DB%8C%D8%B1%D8%A7%D9%86">پرچم ایران</a>
+<a class="mobile-sub-link store-category-link" data-category="پرچم کشورها" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%DA%A9%D8%B4%D9%88%D8%B1%D9%87%D8%A7">پرچم کشورهای جهان</a>
+<a class="mobile-sub-link store-category-link" data-category="پرچم تشریفات" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%AA%D8%B4%D8%B1%DB%8C%D9%81%D8%A7%D8%AA">پرچم تشریفات</a>
+<a class="mobile-sub-link store-category-link" data-category="پرچم رومیزی" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%B1%D9%88%D9%85%DB%8C%D8%B2%DB%8C">پرچم رومیزی</a>
+<a class="mobile-sub-link store-category-link" data-category="پرچم ساحلی" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%B3%D8%A7%D8%AD%D9%84%DB%8C">پرچم ساحلی</a>
+</div>
+<a class="mobile-link" data-page-link="custom" href="/custom">طرح دلخواه</a>
+<a class="mobile-link" data-page-link="ready" href="/ready">طرح‌های آماده</a>
+<a class="mobile-link" data-page-link="faq" href="/faq">سوالات متداول</a>
+<a class="mobile-link" data-page-link="blog" href="/blog">مجله Crib Flag</a>
+<button class="mobile-link auth-open">ورود / حساب کاربری</button>
+</div>
+</aside>
+<aside class="cart-drawer">
+<div class="cart-head">
+<h3>سبد خرید</h3>
+<button class="close-btn cart-close">×</button>
+</div>
+<div class="cart-body" id="cartBody"></div>
+<div class="cart-foot">
+<div class="total-row">
+<span>مجموع</span>
+<strong id="cartTotal">۰ تومان</strong>
+</div>
+<button class="btn btn-primary" id="continueCheckoutBtn">ادامه تسویه حساب</button>
+<button class="btn btn-ghost cart-close">ادامه خرید</button>
+</div>
+</aside>
+<div class="filter-drawer">
+<aside class="filter-sidebar">
+<div class="filter-head">
+<h3>فیلتر محصولات</h3>
+<button class="close-btn filter-close">×</button>
+</div>
+<div class="filter-block">
+<h4>محدوده قیمت</h4>
+<div class="range-row">
+<input class="price-min-mobile" inputmode="numeric" placeholder="از"/>
+<input class="price-max-mobile" inputmode="numeric" placeholder="تا"/>
+</div>
+</div>
+<div class="filter-block">
+<h4>دسته‌بندی</h4>
+<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="فلگ دیواری"/> فلگ دیواری</label>
+<!-- <label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم ایران" /> پرچم ایران</label> -->
+<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم تشریفات"/> پرچم تشریفات</label>
+<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم رومیزی"/> پرچم رومیزی</label>
+<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم کشورها"/> پرچم کشورها</label>
+<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم ساحلی"/> پرچم ساحلی</label>
+</div>
+<button class="btn btn-primary apply-mobile-filters" style="width:100%;margin-top:12px;">اعمال فیلتر</button>
+</aside>
+</div>
+<%- include("partials/auth-modal", { nextUrl }) %>
+<div class="image-lightbox">
+<div class="lightbox-inner">
+<button class="lightbox-close">×</button>
+<div class="static-image-box" id="lightboxProductBox">
+<img alt="نمای بزرگ محصول" id="lightboxProductImg" src="/assets/images/ukflag.png"/>
+</div>
+</div>
+</div>
+<div class="custom-preview-overlay" id="customPreviewOverlay">
+<div class="custom-preview-box">
+<div class="preview-head">
+<h3 id="customPreviewTitle">پیش‌نمایش طرح</h3>
+<div class="editor-top-group">
+<button class="editor-action" id="toggleMockupInsidePreview">تغییر حالت موکاپ</button>
+<button class="editor-action" id="downloadFromPreview">دانلود</button>
+<button class="close-btn" id="closeCustomPreview">×</button>
+</div>
+</div>
+<div class="custom-preview-frame" id="customPreviewFrame"></div>
+</div>
+</div>
+<div class="overlay"></div>
+<div class="toast" id="toast">محصول به سبد خرید اضافه شد.</div>
+<%- include("partials/page-data") %>
+<script src="/assets/js/api.js"></script>
+<script src="/assets/js/portal-data.js"></script>
+<script src="/assets/js/app.js"></script>
+</body>
+</html>

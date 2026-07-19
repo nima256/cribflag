@@ -1,0 +1,14 @@
+<article class="product-card">
+  <% if (product.badge) { %><span class="badge"><%= product.badge %></span><% } %>
+  <a class="product-title-btn open-product" data-id="<%= product.id %>" href="/product/<%= product.id %>">
+    <div class="product-media"><div class="static-image-box"><img src="<%= product.image || '/assets/images/ukflag.png' %>" alt="<%= product.title %>"></div></div>
+  </a>
+  <div class="product-content">
+    <a class="product-title-btn open-product" data-id="<%= product.id %>" href="/product/<%= product.id %>"><h3 class="product-title"><%= product.title %></h3></a>
+    <div class="product-meta"><span><%= product.category %></span><span class="rating">★ <%= product.rate %></span></div>
+    <div class="price-row">
+      <div class="price"><% if (product.hasDiscount && product.old && product.old > product.price) { %><span class="old-price"><%= toman(product.old) %></span><% } %><strong class="new-price"><%= toman(product.price) %></strong></div>
+      <button class="add-btn add-cart" data-id="<%= product.id %>" aria-label="افزودن به سبد">+</button>
+    </div>
+  </div>
+</article>

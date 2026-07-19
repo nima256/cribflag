@@ -1,0 +1,40 @@
+{
+  "name": "cribflag-local-fullstack",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Crib Flag storefront, account portal and admin backend",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "seed": "node scripts/seed.js",
+    "check": "node scripts/check.js",
+    "smoke": "node scripts/smoke.js",
+    "test": "npm run check && npm run smoke"
+  },
+  "engines": {
+    "node": ">=18.18.0",
+    "npm": ">=9"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "compression": "^1.8.1",
+    "connect-mongo": "^5.1.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "express-session": "^1.18.1",
+    "express-validator": "^7.2.1",
+    "helmet": "^8.0.0",
+    "iran-city": "^1.2.2",
+    "mongoose": "^8.9.5",
+    "multer": "^2.0.2",
+    "zarinpal-checkout": "^0.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9",
+    "supertest": "^7.2.2"
+  }
+}
