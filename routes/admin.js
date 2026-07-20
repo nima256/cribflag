@@ -17,6 +17,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { prepareProductPricing, findVariantPricing, fallbackPricing } = require('../utils/productPricing');
 const upload = require('../middlewares/upload');
+const { buildAnalytics, isPaidSale } = require('../services/analytics');
 
 
 async function generateUniqueSku() {
@@ -108,10 +109,35 @@ router.get(
   })
 );
 
-async function getBootstrap(){
-  const [products,orders,users,coupons,tickets,custom]=await Promise.all([Product.find().sort({publicId:1}).lean(),Order.find().populate('user').sort({createdAt:-1}).lean(),User.find().sort({publicId:1}).lean(),Coupon.find().sort({publicId:1}).lean(),Ticket.find().populate('user').sort({createdAt:-1}).lean(),CustomRequest.find().populate('user').sort({createdAt:-1}).lean()]);
-  const userStats={};for(const o of orders){const id=o.user?.publicId;if(id){userStats[id]??={orders:0,total:0};userStats[id].orders++;if(o.status!=='cancelled')userStats[id].total+=Number(o.total||0);}}
-  return {products:products.map(S.product),orders:orders.map(S.order),users:users.map(u=>S.user(u,userStats[u.publicId]||{})),coupons:coupons.map(S.coupon),tickets:tickets.map(S.ticket),custom:custom.map(S.custom),notifications:[]};
+async function getBootstrap() {
+  const [products, orders, users, coupons, tickets, custom] = await Promise.all([
+    Product.find().sort({ publicId: 1 }).lean(),
+    Order.find().populate('user').sort({ createdAt: -1 }).lean(),
+    User.find().sort({ publicId: 1 }).lean(),
+    Coupon.find().sort({ publicId: 1 }).lean(),
+    Ticket.find().populate('user').sort({ createdAt: -1 }).lean(),
+    CustomRequest.find().populate('user').sort({ createdAt: -1 }).lean()
+  ]);
+
+  const userStats = {};
+  for (const order of orders) {
+    const id = order.user?.publicId;
+    if (!id) continue;
+    userStats[id] ??= { orders: 0, total: 0 };
+    userStats[id].orders += 1;
+    if (isPaidSale(order)) userStats[id].total += Number(order.total || 0);
+  }
+
+  return {
+    products: products.map(S.product),
+    orders: orders.map(S.order),
+    users: users.map(user => S.user(user, userStats[user.publicId] || {})),
+    coupons: coupons.map(S.coupon),
+    tickets: tickets.map(S.ticket),
+    custom: custom.map(S.custom),
+    notifications: [],
+    analytics: buildAnalytics({ orders, products, users })
+  };
 }
 router.get('/bootstrap',asyncHandler(async(_req,res)=>ok(res,await getBootstrap())));
 router.post('/orders/manual',asyncHandler(async(req,res)=>{

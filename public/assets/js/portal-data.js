@@ -6,7 +6,7 @@
   const DEFAULT_FABRICS=['ساتن آمریکایی','ساتن براق','مخمل'];
   const KEYS={
     products:'cribFlagProducts',orders:'cribFlagOrders',users:'cribFlagUsers',coupons:'cribFlagCoupons',tickets:'cribFlagTickets',
-    addresses:'cribFlagAddresses',notifications:'cribFlagNotifications',custom:'cribFlagCustomRequests',wishlist:'cribFlagWishlist',session:'cribFlagSession'
+    addresses:'cribFlagAddresses',notifications:'cribFlagNotifications',custom:'cribFlagCustomRequests',wishlist:'cribFlagWishlist',session:'cribFlagSession',analytics:'cribFlagAnalytics'
   };
 
   const products=[
@@ -142,6 +142,7 @@
     if(!localStorage.getItem(KEYS.custom))write(KEYS.custom,custom);
     if(!localStorage.getItem(KEYS.wishlist))write(KEYS.wishlist,[2,5,7]);
     if(!localStorage.getItem(KEYS.session))write(KEYS.session,{userId:null,name:'',loggedIn:false});
+    if(!localStorage.getItem(KEYS.analytics))write(KEYS.analytics,{});
     localStorage.removeItem('cribFlagSettings');
   }
   function uid(prefix='ID'){return `${prefix}-${Math.floor(10000+Math.random()*89999)}`;}
@@ -153,7 +154,7 @@
     if(name==='products')value=normalizeProducts(value);
     if(name==='users')value=normalizeUsers(value);
     const result=write(KEYS[name],value);
-    persist(name,result);
+    if(name!=='analytics')persist(name,result);
     return result;
   }
   function toast(message,type='success'){
@@ -172,6 +173,6 @@
   window.CribData={
     KEYS,read,write,get,set,ensure,syncFromApi,persist,uid,fa,toman,esc,toast,downloadCSV,
     PRODUCT_IMAGE,DEFAULT_SIZES,DEFAULT_FABRICS,
-    defaults:{products,orders,users,coupons,tickets,addresses,notifications,custom}
+    defaults:{products,orders,users,coupons,tickets,addresses,notifications,custom,analytics:{}}
   };
 })();

@@ -5,15 +5,24 @@ const PERSIAN_MONTHS = [
   'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
 ];
 
+const ORDER_STATUSES = ['processing', 'design-review', 'shipped', 'delivered', 'cancelled'];
+const ANALYTICS_TIME_ZONE = 'Asia/Tehran';
+
 const faToEn = value => String(value || '')
   .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
   .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
 
 const persianFormatter = new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+  timeZone: ANALYTICS_TIME_ZONE,
   year: 'numeric',
   month: 'numeric',
   day: 'numeric'
 });
+
+function safeNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
 
 function persianYearMonth(dateValue) {
   const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
@@ -21,16 +30,18 @@ function persianYearMonth(dateValue) {
   const parts = persianFormatter.formatToParts(date);
   const year = Number(faToEn(parts.find(part => part.type === 'year')?.value));
   const month = Number(faToEn(parts.find(part => part.type === 'month')?.value));
-  if (!Number.isInteger(year) || !Number.isInteger(month)) return null;
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null;
   return { year, month, key: `${year}-${String(month).padStart(2, '0')}` };
 }
 
 function lastPersianMonths(count = 7, now = new Date()) {
+  const normalizedCount = Math.max(1, Math.min(24, Number(count) || 7));
   const current = persianYearMonth(now) || { year: 1400, month: 1 };
   const buckets = [];
   let year = current.year;
   let month = current.month;
-  for (let index = 0; index < count; index += 1) {
+
+  for (let index = 0; index < normalizedCount; index += 1) {
     buckets.unshift({
       year,
       month,
@@ -44,14 +55,17 @@ function lastPersianMonths(count = 7, now = new Date()) {
       year -= 1;
     }
   }
+
   return buckets;
 }
 
 function isPaidSale(order) {
-  return order &&
+  return Boolean(
+    order &&
     order.status !== 'cancelled' &&
     order.paymentStatus === 'paid' &&
-    Number(order.total || 0) > 0;
+    safeNumber(order.total) > 0
+  );
 }
 
 function customerKey(order) {
@@ -63,16 +77,18 @@ function customerKey(order) {
     order.phone ||
     order.email ||
     order.customer ||
-    order.orderNumber
+    order.orderNumber ||
+    'unknown'
   );
 }
 
 function buildAnalytics({ orders = [], products = [], users = [], now = new Date() } = {}) {
   const allOrders = Array.isArray(orders) ? orders : [];
+  const allProducts = Array.isArray(products) ? products : [];
+  const allUsers = Array.isArray(users) ? users : [];
   const paidOrders = allOrders.filter(isPaidSale);
   const monthly = lastPersianMonths(7, now).map(bucket => ({ ...bucket, revenue: 0, orders: 0 }));
   const monthlyByKey = new Map(monthly.map(bucket => [bucket.key, bucket]));
-
   const topProductMap = new Map();
   const topCustomerMap = new Map();
 
@@ -80,22 +96,22 @@ function buildAnalytics({ orders = [], products = [], users = [], now = new Date
     const dateParts = persianYearMonth(order.createdAt);
     const bucket = dateParts ? monthlyByKey.get(dateParts.key) : null;
     if (bucket) {
-      bucket.revenue += Number(order.total || 0);
+      bucket.revenue += safeNumber(order.total);
       bucket.orders += 1;
     }
 
     for (const item of order.items || []) {
       const key = String(item.productId ?? item.title ?? 'unknown');
-      const qty = Math.max(0, Number(item.qty || 0));
-      const revenue = Math.max(0, Number(item.price || 0)) * qty;
+      const quantity = Math.max(0, safeNumber(item.qty ?? 1));
+      const lineRevenue = Math.max(0, safeNumber(item.price)) * quantity;
       const current = topProductMap.get(key) || {
         id: item.productId ?? key,
         title: item.title || 'محصول بدون نام',
         quantity: 0,
         revenue: 0
       };
-      current.quantity += qty;
-      current.revenue += revenue;
+      current.quantity += quantity;
+      current.revenue += lineRevenue;
       topProductMap.set(key, current);
     }
 
@@ -109,13 +125,13 @@ function buildAnalytics({ orders = [], products = [], users = [], now = new Date
       total: 0
     };
     currentCustomer.orders += 1;
-    currentCustomer.total += Number(order.total || 0);
+    currentCustomer.total += safeNumber(order.total);
     topCustomerMap.set(key, currentCustomer);
   }
 
-  const totalRevenue = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const totalRevenue = paidOrders.reduce((sum, order) => sum + safeNumber(order.total), 0);
   const nonCancelled = allOrders.filter(order => order.status !== 'cancelled');
-  const deliveredCount = allOrders.filter(order => order.status === 'delivered').length;
+  const deliveredCount = nonCancelled.filter(order => order.status === 'delivered').length;
   const currentRevenue = monthly.at(-1)?.revenue || 0;
   const previousRevenue = monthly.at(-2)?.revenue || 0;
   const revenueGrowth = previousRevenue > 0
@@ -123,28 +139,24 @@ function buildAnalytics({ orders = [], products = [], users = [], now = new Date
     : currentRevenue > 0 ? 100 : 0;
 
   const currentMonthKey = monthly.at(-1)?.key;
-  const newCustomers = users.filter(user => persianYearMonth(user.createdAt)?.key === currentMonthKey).length;
-  const statusCounts = {
-    processing: 0,
-    'design-review': 0,
-    shipped: 0,
-    delivered: 0,
-    cancelled: 0
-  };
+  const newCustomers = allUsers.filter(user => persianYearMonth(user.createdAt)?.key === currentMonthKey).length;
+  const statusCounts = Object.fromEntries(ORDER_STATUSES.map(status => [status, 0]));
   for (const order of allOrders) {
-    if (Object.prototype.hasOwnProperty.call(statusCounts, order.status)) statusCounts[order.status] += 1;
+    if (Object.prototype.hasOwnProperty.call(statusCounts, order.status)) {
+      statusCounts[order.status] += 1;
+    }
   }
 
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt: new Date(now).toISOString(),
     salesBasis: 'paid',
     totals: {
       revenue: totalRevenue,
       orders: allOrders.length,
       paidOrders: paidOrders.length,
-      customers: users.length,
-      products: products.length,
-      activeProducts: products.filter(product => (product.status || 'active') === 'active').length,
+      customers: allUsers.length,
+      products: allProducts.length,
+      activeProducts: allProducts.filter(product => (product.status || 'active') === 'active').length,
       averageOrderValue: paidOrders.length ? Math.round(totalRevenue / paidOrders.length) : 0,
       completionRate: nonCancelled.length ? Math.round((deliveredCount / nonCancelled.length) * 100) : 0,
       newCustomers,
@@ -171,6 +183,8 @@ function buildAnalytics({ orders = [], products = [], users = [], now = new Date
 
 module.exports = {
   PERSIAN_MONTHS,
+  ORDER_STATUSES,
+  ANALYTICS_TIME_ZONE,
   persianYearMonth,
   lastPersianMonths,
   isPaidSale,

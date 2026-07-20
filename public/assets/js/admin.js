@@ -11,6 +11,13 @@ const labels={
   active:'فعال',draft:'پیش‌نویس',expired:'منقضی',open:'باز',answered:'پاسخ داده شده',closed:'بسته',review:'در حال بررسی',
   'preview-ready':'پیش‌نمایش آماده',approved:'تأیید شده',paid:'پرداخت شده',refunded:'مسترد شده'
 };
+const ORDER_STATUS_CHART=[
+  {key:'processing',label:'در حال آماده‌سازی',color:'#f2a51a'},
+  {key:'design-review',label:'بررسی طراحی',color:'#8b5cf6'},
+  {key:'shipped',label:'ارسال شده',color:'#3157d5'},
+  {key:'delivered',label:'تحویل شده',color:'#22a881'},
+  {key:'cancelled',label:'لغو شده',color:'#e95b70'}
+];
 let activeOrder=null,activeCustomer=null,activeTicket=null,activeCustom=null;
 let productImageItems=[];
 const PRODUCT_IMAGE_LIMIT=12;
@@ -118,9 +125,52 @@ function showView(view){
   q('#adminSideOverlay')?.classList.remove('open');
   window.scrollTo({top:0,behavior:'smooth'});
 }
-function monthlyChart(selector){
-  const data=[18,25,22,34,31,43,51],months=['دی','بهمن','اسفند','فروردین','اردیبهشت','خرداد','تیر'],max=Math.max(...data),el=q(selector);
-  if(el)el.innerHTML=data.map((value,index)=>`<div class="chart-col"><div class="chart-bar" style="height:${Math.round(value/max*88)}%" data-value="${D.fa(value*1000000)} تومان"></div><span class="chart-label">${months[index]}</span></div>`).join('');
+function getAnalytics(){
+  const value=D.get('analytics');
+  return value&&typeof value==='object'&&!Array.isArray(value)?value:{};
+}
+function monthlyChart(selector,rows=[]){
+  const el=q(selector);
+  if(!el)return;
+  const data=Array.isArray(rows)?rows:[];
+  if(!data.length){
+    el.innerHTML='<div class="empty-panel" style="width:100%;align-self:center">داده ماهانه‌ای برای نمایش وجود ندارد.</div>';
+    return;
+  }
+  const max=Math.max(0,...data.map(item=>Number(item.revenue||0)));
+  el.innerHTML=data.map(item=>{
+    const revenue=Math.max(0,Number(item.revenue||0));
+    const orderCount=Math.max(0,Number(item.orders||0));
+    const height=max>0&&revenue>0?Math.max(6,Math.round(revenue/max*88)):0;
+    const tooltip=`${D.toman(revenue)} · ${D.fa(orderCount)} سفارش`;
+    return `<div class="chart-col" title="${D.esc(item.label||item.shortLabel||'')}"><div class="chart-bar" style="height:${height}%;min-height:${revenue>0?'12px':'0'}" data-value="${D.esc(tooltip)}"></div><span class="chart-label">${D.esc(item.shortLabel||item.label||'—')}</span></div>`;
+  }).join('');
+}
+function renderOrderDonut(statusCounts={}){
+  const donut=q('#adminOrderDonut');
+  const legend=q('#adminOrderStatusLegend');
+  const counts=ORDER_STATUS_CHART.map(item=>({...item,count:Math.max(0,Number(statusCounts[item.key]||0))}));
+  const total=counts.reduce((sum,item)=>sum+item.count,0);
+  if(donut){
+    if(!total){
+      donut.style.background='#edf0f6';
+    }else{
+      let cursor=0;
+      const segments=[];
+      for(const item of counts){
+        if(!item.count)continue;
+        const start=cursor;
+        cursor+=item.count/total*100;
+        segments.push(`${item.color} ${start.toFixed(3)}% ${cursor.toFixed(3)}%`);
+      }
+      donut.style.background=`conic-gradient(${segments.join(',')})`;
+    }
+  }
+  if(legend){
+    legend.innerHTML=counts.map(item=>`<div><i style="background:${item.color}"></i>${D.esc(item.label)} <b>${D.fa(item.count)}</b></div>`).join('');
+  }
+  const totalEl=q('#donutOrders');
+  if(totalEl)totalEl.textContent=D.fa(total);
 }
 function orderRow(order, compact = false) {
   const isCustom = order.displayType === 'custom';
@@ -280,23 +330,47 @@ function productRow(product){
   return `<tr><td><div class="table-product">${productThumb(product.title,product.image)}<span><b>${D.esc(product.title)}</b><small class="table-secondary">${D.esc(product.badge||'بدون نشان')}</small></span></div></td><td>${D.esc(product.sku||`CF-${product.id}`)}</td><td>${D.esc(categories.join('، '))}</td><td><b>${D.toman(product.price)}</b></td><td><span class="table-primary">${D.esc(sizes)}</span><span class="table-secondary">${D.esc(fabrics)}</span></td><td>${D.fa(product.sales||0)}</td><td>${status(product.status||'active')}</td><td><div class="table-actions"><button class="table-action edit-product" data-id="${product.id}" title="ویرایش"><svg viewBox="0 0 24 24"><path d="m4 16-1 5 5-1L19 9l-4-4L4 16ZM13 7l4 4"/></svg></button><button class="table-action clone-product" data-id="${product.id}" title="کپی"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></button><button class="table-action delete-product" data-id="${product.id}" title="حذف"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></svg></button></div></td></tr>`;
 }
 function renderDashboard(){
-  const orders = getOrdersForDisplay();
-  const products = D.get('products');
-  const users = D.get('users');
-  const revenue=orders.filter(order=>order.status!=='cancelled').reduce((sum,order)=>sum+Number(order.total),0);
-  const activeProducts=products.filter(product=>(product.status||'active')==='active');
-  q('#statRevenue').textContent=D.toman(revenue);
-  q('#statOrders').textContent=D.fa(orders.length);
-  q('#statCustomers').textContent=D.fa(users.length);
-  q('#statProducts').textContent=D.fa(products.length);
-  q('#statStockChange').textContent=`${D.fa(activeProducts.length)} فعال`;
-  q('#donutOrders').textContent=D.fa(orders.length);
-  q('#adminRecentOrders').innerHTML=[...orders].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,5).map(order=>orderRow(order,true)).join('');
-  q('#adminTopProductsList').innerHTML=[...products].sort((a,b)=>Number(b.sales||0)-Number(a.sales||0)).slice(0,5).map((product,index)=>`<div class="list-item">${productThumb(product.title,product.image)}<span class="list-content"><strong>${D.esc(product.title)}</strong><small>${D.esc((product.categories||[product.category]).join('، '))} — ${D.esc((product.fabrics||[]).join('، '))}</small></span><span class="list-value"><strong>${D.fa(product.sales||0)} فروش</strong><small>رتبه ${D.fa(index+1)}</small></span></div>`).join('')||'<div class="empty-panel">محصولی ثبت نشده است.</div>';
-  monthlyChart('#adminRevenueChart');
-  q('#adminNewOrders').textContent=D.fa(orders.filter(order=>['processing','design-review'].includes(order.status)).length);
+  const analytics=getAnalytics();
+  const totals=analytics.totals||{};
+  const statusCounts=analytics.orderStatuses||{};
+  const monthlySales=analytics.monthlySales||[];
+  const topProducts=analytics.topProducts||[];
+  const orders=getOrdersForDisplay();
+  const products=D.get('products');
+
+  q('#statRevenue').textContent=D.toman(totals.revenue||0);
+  q('#statOrders').textContent=D.fa(totals.orders||0);
+  q('#statCustomers').textContent=D.fa(totals.customers||0);
+  q('#statProducts').textContent=D.fa(totals.products||0);
+  q('#statStockChange').textContent=`${D.fa(totals.activeProducts||0)} فعال`;
+  q('#statOrdersChange').textContent=`${D.fa(totals.paidOrders||0)} پرداخت‌شده`;
+  q('#statCustomersChange').textContent=`${D.fa(totals.newCustomers||0)} مشتری جدید`;
+
+  const growth=Number(totals.revenueGrowth||0);
+  const growthEl=q('#statRevenueChange');
+  if(growthEl){
+    growthEl.textContent=growth>0?`${D.fa(growth)}٪ رشد`:growth<0?`${D.fa(Math.abs(growth))}٪ کاهش`:'بدون تغییر';
+    growthEl.classList.toggle('down',growth<0);
+  }
+
+  q('#adminRecentOrders').innerHTML=[...orders]
+    .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))
+    .slice(0,5)
+    .map(order=>orderRow(order,true)).join('')||'<tr><td colspan="5"><div class="empty-panel">سفارشی ثبت نشده است.</div></td></tr>';
+
+  q('#adminTopProductsList').innerHTML=topProducts.slice(0,5).map((item,index)=>{
+    const product=products.find(entry=>Number(entry.id)===Number(item.id));
+    const image=product?.image||D.PRODUCT_IMAGE;
+    const categories=(product?.categories||[product?.category]).filter(Boolean).join('، ');
+    return `<div class="list-item">${productThumb(item.title,image)}<span class="list-content"><strong>${D.esc(item.title)}</strong><small>${D.esc(categories||'فروش قطعی دیتابیس')} — ${D.toman(item.revenue||0)}</small></span><span class="list-value"><strong>${D.fa(item.quantity||0)} فروش</strong><small>رتبه ${D.fa(index+1)}</small></span></div>`;
+  }).join('')||'<div class="empty-panel">هنوز فروش پرداخت‌شده‌ای ثبت نشده است.</div>';
+
+  monthlyChart('#adminRevenueChart',monthlySales);
+  renderOrderDonut(statusCounts);
+  q('#adminNewOrders').textContent=D.fa(Number(statusCounts.processing||0)+Number(statusCounts['design-review']||0));
   q('#adminOpenTickets').textContent=D.fa(D.get('tickets').filter(ticket=>ticket.status==='open').length);
 }
+
 function renderOrders() {
   const term = (
     q('#adminOrderSearch')?.value || ''
@@ -590,18 +664,23 @@ function renderCustom() {
   `;
 }
 function renderReports(){
-  const orders=D.get('orders'),products=[...D.get('products')].sort((a,b)=>(b.sales||0)-(a.sales||0)),users=[...D.get('users')].sort((a,b)=>b.total-a.total);
-  const valid=orders.filter(order=>order.status!=='cancelled');
-  const average=valid.length?valid.reduce((sum,order)=>sum+order.total,0)/valid.length:0;
-  const completion=orders.length?Math.round(orders.filter(order=>order.status==='delivered').length/orders.length*100):0;
-  q('#reportAov').textContent=D.toman(Math.round(average));
-  q('#reportCompletion').textContent=`${D.fa(completion)}٪`;
+  const analytics=getAnalytics();
+  const totals=analytics.totals||{};
+  const products=analytics.topProducts||[];
+  const users=analytics.topCustomers||[];
+
+  q('#reportAov').textContent=D.toman(totals.averageOrderValue||0);
+  q('#reportCompletion').textContent=`${D.fa(totals.completionRate||0)}٪`;
   q('#reportTopCustomer').textContent=D.toman(users[0]?.total||0);
-  const max=products[0]?.sales||1;
-  q('#reportTopProducts').innerHTML=products.slice(0,6).map(product=>`<div class="top-product-bar"><span>${D.esc(product.title)}</span><div class="bar-track"><span style="width:${Math.round((product.sales||0)/max*100)}%"></span></div><b>${D.fa(product.sales||0)}</b></div>`).join('');
-  q('#reportTopCustomers').innerHTML=users.slice(0,6).map((user,index)=>`<div class="list-item"><span class="list-icon">${D.fa(index+1)}</span><span class="list-content"><strong>${D.esc(user.name)}</strong><small>${D.fa(user.orders)} سفارش</small></span><span class="list-value"><strong>${D.toman(user.total)}</strong></span></div>`).join('');
-  monthlyChart('#reportRevenueChart');
+
+  const max=Math.max(1,...products.map(product=>Number(product.quantity||0)));
+  q('#reportTopProducts').innerHTML=products.slice(0,6).map(product=>`<div class="top-product-bar"><span>${D.esc(product.title)}</span><div class="bar-track"><span style="width:${Math.round(Number(product.quantity||0)/max*100)}%"></span></div><b title="${D.esc(D.toman(product.revenue||0))}">${D.fa(product.quantity||0)}</b></div>`).join('')||'<div class="empty-panel">هنوز محصول فروخته‌شده‌ای وجود ندارد.</div>';
+
+  q('#reportTopCustomers').innerHTML=users.slice(0,6).map((user,index)=>`<div class="list-item"><span class="list-icon">${D.fa(index+1)}</span><span class="list-content"><strong>${D.esc(user.name)}</strong><small>${D.fa(user.orders)} سفارش پرداخت‌شده${user.phone?` — ${D.esc(user.phone)}`:''}</small></span><span class="list-value"><strong>${D.toman(user.total)}</strong></span></div>`).join('')||'<div class="empty-panel">هنوز مشتری دارای خرید قطعی وجود ندارد.</div>';
+
+  monthlyChart('#reportRevenueChart',analytics.monthlySales||[]);
 }
+
 function renderNotifications(){
   const orders=D.get('orders').filter(order=>['processing','design-review'].includes(order.status));
   const tickets=D.get('tickets').filter(ticket=>ticket.status==='open');
@@ -1042,7 +1121,7 @@ q('#exportOrdersBtn')?.addEventListener('click',()=>exportRows('orders',D.get('o
 q('#exportProductsBtn')?.addEventListener('click',()=>exportRows('products',D.get('products').map(product=>({id:product.id,sku:product.sku,title:product.title,category:(product.categories||[product.category]).join(' | '),sizes:(product.sizes||[]).join(' | '),fabrics:(product.fabrics||[]).join(' | '),price:product.price,badge:product.badge,status:labels[product.status]}))));
 q('#exportCustomersBtn')?.addEventListener('click',()=>exportRows('customers',D.get('users').map(user=>({id:user.id,name:user.name,phone:user.phone,email:user.email,orders:user.orders,total:user.total,role:user.role}))));
 q('#exportCustomBtn')?.addEventListener('click',()=>exportRows('custom-designs',D.get('custom')));
-q('#downloadFullReport')?.addEventListener('click',()=>exportRows('full-sales-report',D.get('orders').map(order=>({order:order.id,customer:order.customer,date:order.date,total:order.total,status:labels[order.status]}))));
+q('#downloadFullReport')?.addEventListener('click',()=>exportRows('full-sales-report',D.get('orders').map(order=>({order:order.id,customer:order.customer,phone:order.phone,date:order.date,subtotal:order.subtotal,discount:order.discount,shipping:order.shipping,total:order.total,paymentStatus:labels[order.paymentStatus]||order.paymentStatus,status:labels[order.status]||order.status,includedInSales:order.paymentStatus==='paid'&&order.status!=='cancelled'?'بله':'خیر',coupon:order.couponCode||'',customerNote:order.customerNote||''}))));
 
 q('#adminLogout')?.addEventListener('click',async()=>{try{await window.CribAPI.request('/api/admin/logout',{method:'POST',body:'{}'});}catch{}location.reload();});
 renderAll();D.syncFromApi('admin').then(()=>renderAll()).catch(error=>D.toast(error.message||'ورود مدیر انجام نشد.','error'));
