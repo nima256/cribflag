@@ -13,7 +13,7 @@ const env = {
   cookieSameSite: process.env.COOKIE_SAMESITE || 'lax',
   otpExpiresSeconds: Number(process.env.OTP_EXPIRES_SECONDS || 120),
   melipayamakSharedKey: process.env.MELIPAYAMAK_SHARED_KEY || '',
-  melipayamakBodyId: Number(process.env.MELIPAYAMAK_BODY_ID || 347717),
+  melipayamakBodyId: Number(process.env.MELIPAYAMAK_BODY_ID || 502666),
   paymentMock: process.env.PAYMENT_MOCK === 'true',
   zarinpalMerchantId: process.env.ZARINPAL_MERCHANT_ID || '',
   zarinpalSandbox: process.env.ZARINPAL_SANDBOX === 'true',

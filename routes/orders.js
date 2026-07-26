@@ -6,6 +6,7 @@ const User = require('../models/User');
 const CustomRequest = require('../models/CustomRequest');
 const { calculate } = require('./discounts');
 const { requestPayment, verifyPayment } = require('../services/payment');
+const { sendOrderRegisteredSms } = require('../services/sms');
 const { requireUser } = require('../middlewares/auth');
 const { asyncHandler, ok, AppError } = require('../utils/http');
 const { orderNumber } = require('../utils/formatters');
@@ -67,6 +68,18 @@ async function applyInventory(order) {
   }
   order.inventoryApplied = true;
   await order.save();
+}
+
+async function notifyOrderRegistered(order) {
+  if (order.orderRegisteredSmsSentAt) return;
+
+  try {
+    await sendOrderRegisteredSms(order);
+    order.orderRegisteredSmsSentAt = new Date();
+    await order.save();
+  } catch (error) {
+    console.error(`[ORDER SMS] order=${order.orderNumber}`, error);
+  }
 }
 
 async function consumeCoupon(order) {
@@ -207,6 +220,7 @@ router.post('/', requireUser, asyncHandler(async (req, res) => {
   if (paymentMethod === 'manual') {
     await applyInventory(order);
     await consumeCoupon(order);
+    await notifyOrderRegistered(order);
     return ok(res, {
       message: 'سفارش کارت‌به‌کارت ثبت شد',
       orderNumber: order.orderNumber,
@@ -219,6 +233,7 @@ router.post('/', requireUser, asyncHandler(async (req, res) => {
     order.paymentInfo.paidAt = new Date();
     await applyInventory(order);
     await consumeCoupon(order);
+    await notifyOrderRegistered(order);
     return ok(res, {
       message: 'پرداخت محلی شبیه‌سازی شد',
       orderNumber: order.orderNumber,
@@ -264,6 +279,7 @@ router.get('/verify', asyncHandler(async (req, res) => {
     order.paymentInfo.paidAt = new Date();
     await applyInventory(order);
     await consumeCoupon(order);
+    await notifyOrderRegistered(order);
     return res.redirect(`/payment/success?order=${encodeURIComponent(order.orderNumber)}&shipping=${encodeURIComponent(order.shippingMethod)}&refId=${encodeURIComponent(order.paymentInfo.refId)}`);
   }
 

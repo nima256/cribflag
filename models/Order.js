@@ -37,6 +37,7 @@ const orderSchema = new mongoose.Schema({
   tracking: String,
   adminNote: String,
   inventoryApplied: { type: Boolean, default: false },
+  orderRegisteredSmsSentAt: Date,
   paymentInfo: {
     authority: String,
     url: String,
