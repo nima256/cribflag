@@ -9,7 +9,7 @@ const { requestPayment, verifyPayment } = require('../services/payment');
 const { sendOrderRegisteredSms } = require('../services/sms');
 const { requireUser } = require('../middlewares/auth');
 const { asyncHandler, ok, AppError } = require('../utils/http');
-const { orderNumber } = require('../utils/formatters');
+const { orderNumber, normalizeMobile } = require('../utils/formatters');
 const env = require('../config/env');
 const { findVariantPricing, fallbackPricing } = require('../utils/productPricing');
 
@@ -70,13 +70,54 @@ async function applyInventory(order) {
   await order.save();
 }
 
+async function resolveOrderCustomerMobile(order) {
+  let userMobile = '';
+
+  if (order.user) {
+    const userId = order.user?._id || order.user;
+    const customer = await User.findById(userId).select('mobile').lean();
+    userMobile = normalizeMobile(customer?.mobile);
+  }
+
+  const orderMobile = normalizeMobile(order.phone);
+  const customerMobile = /^09\d{9}$/.test(userMobile) ? userMobile : orderMobile;
+  if (!/^09\d{9}$/.test(customerMobile)) {
+    throw new Error(`شماره موبایل کاربر برای سفارش ${order.orderNumber} معتبر یا قابل بازیابی نیست`);
+  }
+
+  // شماره نرمال‌شده را روی خود سفارش هم نگه می‌داریم تا callbackهای بعدی مستقل از پروفایل باشند.
+  order.phone = customerMobile;
+  return customerMobile;
+}
+
 async function notifyOrderRegistered(order) {
   if (order.orderRegisteredSmsSentAt) return;
 
   try {
-    await sendOrderRegisteredSms(order);
-    order.orderRegisteredSmsSentAt = new Date();
+    const customerMobile = await resolveOrderCustomerMobile(order);
+    const result = await sendOrderRegisteredSms(order, {
+      customerMobile,
+      alreadySentRecipients: order.orderRegisteredSmsRecipients
+    });
+
+    order.orderRegisteredSmsRecipients = [...new Set([
+      ...(order.orderRegisteredSmsRecipients || []),
+      ...result.successfulRecipients
+    ])];
+
+    const sentRecipients = new Set(order.orderRegisteredSmsRecipients);
+    const pendingRecipients = result.recipients.filter(to => !sentRecipients.has(to));
+    if (!pendingRecipients.length) order.orderRegisteredSmsSentAt = new Date();
     await order.save();
+
+    if (result.failedRecipients.length) {
+      for (const failure of result.failedRecipients) {
+        console.error(
+          `[ORDER SMS] order=${order.orderNumber} to=${failure.to}`,
+          failure.error
+        );
+      }
+    }
   } catch (error) {
     console.error(`[ORDER SMS] order=${order.orderNumber}`, error);
   }
@@ -194,11 +235,16 @@ router.post('/', requireUser, asyncHandler(async (req, res) => {
   }
 
   const paymentMethod = req.body.paymentMethod === 'manual' ? 'manual' : 'online';
+  const customerMobile = normalizeMobile(user.mobile);
+  if (!/^09\d{9}$/.test(customerMobile)) {
+    throw new AppError(400, 'شماره موبایل حساب کاربری معتبر نیست؛ ابتدا آن را در پروفایل اصلاح کنید');
+  }
+
   const order = await Order.create({
     orderNumber: orderNumber(),
     user: user._id,
     customer: user.fullName,
-    phone: user.mobile,
+    phone: customerMobile,
     email: user.email || req.body.email || '',
     province,
     city,

@@ -37,6 +37,7 @@ const orderSchema = new mongoose.Schema({
   tracking: String,
   adminNote: String,
   inventoryApplied: { type: Boolean, default: false },
+  orderRegisteredSmsRecipients: { type: [String], default: [] },
   orderRegisteredSmsSentAt: Date,
   paymentInfo: {
     authority: String,
