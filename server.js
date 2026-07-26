@@ -46,7 +46,12 @@ app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), {
   setHeaders(res, filePath) {
     // JS/CSS filenames are not content-hashed. Always revalidate them so a deploy
     // cannot leave users on an old frontend for 30 days.
-    if (/\.(?:js|css)$/i.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+    if (/\.(?:js|css)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Surrogate-Control', 'no-store');
+    }
   }
 }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { fallthrough: false, maxAge: env.isProduction ? '7d' : 0 }));

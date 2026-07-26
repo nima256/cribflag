@@ -4376,3 +4376,9 @@ button.view-all { font-family: inherit; }
 
 /* بازخورد روشن برای وضعیت کد تخفیف در تسویه حساب */
 .discount-feedback{margin:10px 0 4px;padding:10px 12px;border-radius:10px;background:#f5f7fb;color:#667085;font-size:12px;line-height:1.8;border:1px solid #e5e9f2}.discount-feedback.success{background:#ecfdf3;color:#087443;border-color:#a8e7c2}.discount-feedback.error{background:#fff2f3;color:#b4233d;border-color:#ffc7ce}.summary-line #checkoutDiscount,.summary-line strong#checkoutDiscount{color:#c72d4f}
+
+.custom-order-summary .btn:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+  filter:grayscale(.2);
+}

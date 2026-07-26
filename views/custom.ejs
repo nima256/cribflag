@@ -76,13 +76,13 @@
 <label class="upload-dropzone" for="customFileInput"><input accept="image/jpeg,image/png,image/webp,application/pdf" id="customFileInput" type="file"/><div class="upload-preview" id="customUploadPreview"><div class="upload-placeholder"><span class="upload-icon">↑</span><strong>فایل را انتخاب کنید</strong><small>یا آن را داخل این کادر رها کنید</small></div></div></label><div class="upload-file-meta" id="customFileName">هنوز فایلی انتخاب نشده است.</div></section>
 <section class="custom-config-card"><div class="custom-section-title"><span>۲</span><div><h2>انتخاب سایز</h2><p>دو سایز پیشنهادی برای بیشتر سفارش‌ها مشخص شده‌اند.</p></div></div>
 <div class="order-size-grid">
-<label class="order-size-option recommended"><input data-price="890000" name="customOrderSize" type="radio" value="150x90"/><span class="recommend-badge">پیشنهادی</span><strong>۱۵۰ × ۹۰</strong><small>بزرگ و چشمگیر</small></label>
-<label class="order-size-option recommended"><input checked="" data-price="720000" name="customOrderSize" type="radio" value="100x70"/><span class="recommend-badge">پیشنهادی</span><strong>۱۰۰ × ۷۰</strong><small>متعادل و پرکاربرد</small></label>
-<label class="order-size-option"><input data-price="490000" name="customOrderSize" type="radio" value="50x70"/><strong>۵۰ × ۷۰</strong><small>جمع‌وجور و عمودی</small></label>
+<label class="order-size-option recommended"><input data-price="950000" name="customOrderSize" type="radio" value="150x90"/><span class="recommend-badge">پیشنهادی</span><strong>۱۵۰ × ۹۰</strong><small>بزرگ و چشمگیر</small></label>
+<label class="order-size-option recommended"><input checked="" data-price="800000" name="customOrderSize" type="radio" value="100x70"/><span class="recommend-badge">پیشنهادی</span><strong>۱۰۰ × ۷۰</strong><small>متعادل و پرکاربرد</small></label>
+<label class="order-size-option"><input data-price="550000" name="customOrderSize" type="radio" value="70x50"/><strong>۷۰ × ۵۰</strong><small>جمع‌وجور</small></label>
 <label class="order-size-option"><input data-price="0" name="customOrderSize" type="radio" value="custom"/><strong>سایز دلخواه</strong><small>ابعاد را وارد کنید</small></label>
-</div><div class="custom-dimension-fields" id="customDimensionFields"><label>عرض (سانتی‌متر)<input id="customOrderWidth" max="150" min="30" placeholder="مثلاً ۱۲۰" type="number"/></label><label>ارتفاع (سانتی‌متر)<input id="customOrderHeight" max="200" min="30" placeholder="مثلاً ۸۰" type="number"/></label></div>
+</div><div class="custom-dimension-fields" id="customDimensionFields"><label>عرض (سانتی‌متر)<input id="customOrderWidth" max="150" min="1" placeholder="مثلاً ۱۲۰" type="number"/></label><label>ارتفاع (سانتی‌متر)<input id="customOrderHeight" max="150" min="1" placeholder="مثلاً ۸۰" type="number"/></label></div>
 <div class="custom-section-title fabric-title"><span>۳</span><div><h2>انتخاب جنس پارچه</h2><p>جنس مناسب سفارش خود را انتخاب کنید.</p></div></div><div class="custom-fabric-field"><label for="customOrderFabric">جنس پارچه</label><select id="customOrderFabric"><option value="ساتن آمریکایی">ساتن آمریکایی</option><option value="ساتن براق">ساتن براق</option><option value="مخمل">مخمل</option></select></div><div class="custom-section-title notes-title"><span>۴</span><div><h2>توضیحات تغییرات</h2><p>نوشته، حذف پس‌زمینه یا هر نکته‌ای که طراح باید بداند.</p></div></div><textarea class="custom-order-notes" id="customOrderNotes" placeholder="مثلاً پس‌زمینه حذف شود، نوشته پایین تصویر سفید باشد و لوگو کمی بزرگ‌تر شود..."></textarea>
-<div class="custom-order-summary"><div><small>قیمت حدودی</small><strong id="customOrderPrice">۷۲۰٬۰۰۰ تومان</strong></div><button class="btn btn-primary" id="addCustomOrder" type="button">افزودن سفارش به سبد خرید</button></div><p class="form-hint">قیمت نهایی پس از بررسی کیفیت فایل و جزئیات تغییرات تأیید می‌شود.</p></section>
+<div class="custom-order-summary"><div><small>قیمت سفارش</small><strong id="customOrderPrice">۸۰۰٬۰۰۰ تومان</strong></div><button class="btn btn-primary" id="addCustomOrder" type="button">افزودن سفارش به سبد خرید</button></div><p class="form-hint">قیمت سایز دلخواه بر اساس بازه ابعاد محاسبه می‌شود و حداکثر سایز قابل ثبت ۱۵۰ × ۹۰ سانتی‌متر است.</p></section>
 </div></div></section></main>
 <%- include("partials/footer") %>
 <nav aria-label="منوی پایین موبایل" class="mobile-bottom-nav">
@@ -188,6 +188,6 @@
 <%- include("partials/page-data") %>
 <script src="/assets/js/api.js"></script>
 <script src="/assets/js/portal-data.js"></script>
-<script src="/assets/js/app.js"></script>
+<script src="/assets/js/app.js?v=20260726-custom-pricing-v3"></script>
 </body>
 </html>

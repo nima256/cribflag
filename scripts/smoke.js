@@ -108,7 +108,27 @@ const product = {
     throw new Error('Order discount/note serialization failed');
   }
 
-  console.log('Smoke OK: category API, dynamic routes, ready DB filtering, order discount/note serialization, and guards');
+  const { calculateCustomPrice } = require('../utils/customPricing');
+  const customPriceCases = [
+    ['40 × 30 سانتی‌متر', true, 550000],
+    ['70x50', true, 550000],
+    ['71x50', true, 800000],
+    ['100x70', true, 800000],
+    ['101x70', true, 950000],
+    ['150x90', true, 950000],
+    ['90x150', true, 950000],
+    ['151x90', false, 0],
+    ['150x91', false, 0],
+    ['۱۵۰ × ۹۰ سانتی‌متر', true, 950000]
+  ];
+  for (const [size, valid, price] of customPriceCases) {
+    const result = calculateCustomPrice(size);
+    if (result.valid !== valid || result.price !== price) {
+      throw new Error(`Custom pricing failed for ${size}`);
+    }
+  }
+
+  console.log('Smoke OK: category API, dynamic routes, ready DB filtering, custom pricing, order serialization, and guards');
 })().catch(error => {
   console.error(error);
   process.exit(1);

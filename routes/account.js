@@ -9,6 +9,7 @@ const upload = require('../middlewares/upload');
 const { requireUser } = require('../middlewares/auth');
 const { asyncHandler, ok, AppError } = require('../utils/http');
 const { publicCode } = require('../utils/formatters');
+const { calculateCustomPrice } = require('../utils/customPricing');
 const S = require('../services/serializers');
 const router = express.Router();
 router.use(requireUser);
@@ -26,7 +27,7 @@ router.get('/bootstrap',asyncHandler(async(req,res)=>ok(res,await bootstrap(req.
 router.patch('/profile',asyncHandler(async(req,res)=>{const user=await User.findById(req.session.userId);user.fullName=req.body.name||user.fullName;user.mobile=req.body.phone||user.mobile;user.email=req.body.email||undefined;await user.save();ok(res,{user:S.user(user)});}));
 
 router.post('/tickets',asyncHandler(async(req,res)=>{const user=await User.findById(req.session.userId);const ticket=await Ticket.create({publicId:publicCode('TK'),user:user._id,customer:user.fullName,subject:req.body.subject,department:req.body.department,priority:req.body.priority||'normal',messages:[{from:'user',text:req.body.message,date:'همین حالا'}]});ok(res,{ticket:S.ticket({...ticket.toObject(),user})},201);}));
-router.post('/custom',upload.single('file'),asyncHandler(async(req,res)=>{if(!req.file)throw new AppError(400,'فایل طرح الزامی است');const user=await User.findById(req.session.userId);const item=await CustomRequest.create({publicId:publicCode('DS'),user:user._id,customer:user.fullName,phone:user.mobile,email:user.email||'',fileName:req.file.originalname,filePath:req.file.path,mimeType:req.file.mimetype,size:req.body.size,fabric:req.body.fabric,requestType:req.body.requestType,notes:req.body.notes,status:'review',price:Number(req.body.price||0)});ok(res,{request:S.custom({...item.toObject(),user})},201);}));
+router.post('/custom',upload.single('file'),asyncHandler(async(req,res)=>{if(!req.file)throw new AppError(400,'فایل طرح الزامی است');const pricing=calculateCustomPrice(req.body.size);if(!pricing.valid)throw new AppError(400,pricing.reason==='too-large'?'حداکثر سایز قابل ثبت ۱۵۰ × ۹۰ سانتی‌متر است':'ابعاد واردشده معتبر نیست');const user=await User.findById(req.session.userId);const item=await CustomRequest.create({publicId:publicCode('DS'),user:user._id,customer:user.fullName,phone:user.mobile,email:user.email||'',fileName:req.file.originalname,filePath:req.file.path,mimeType:req.file.mimetype,size:req.body.size,fabric:req.body.fabric,requestType:req.body.requestType,notes:req.body.notes,status:'review',price:pricing.price});ok(res,{request:S.custom({...item.toObject(),user})},201);}));
 
 router.put('/sync/:name',asyncHandler(async(req,res)=>{
   const name=req.params.name,value=req.body.value;const user=await User.findById(req.session.userId);if(!user)throw new AppError(404,'کاربر یافت نشد');
@@ -35,7 +36,7 @@ router.put('/sync/:name',asyncHandler(async(req,res)=>{
   else if(name==='wishlist'){user.wishlist=(value||[]).map(Number).filter(Number.isFinite);await user.save();}
   else if(name==='notifications'){for(const n of value||[]){if(n.id)await Notification.updateOne({_id:n.id,user:user._id},{read:!!n.read});}}
   else if(name==='tickets'){for(const t of (value||[]).filter(x=>Number(x.userId)===Number(user.publicId))){await Ticket.findOneAndUpdate({publicId:t.id,user:user._id},{$set:{subject:t.subject,department:t.department,priority:t.priority,status:t.status,messages:t.messages,customer:user.fullName}},{upsert:true,setDefaultsOnInsert:true});}}
-  else if(name==='custom'){for(const c of (value||[]).filter(x=>Number(x.userId)===Number(user.publicId))){await CustomRequest.findOneAndUpdate({publicId:c.id,user:user._id},{$set:{customer:user.fullName,fileName:c.fileName,size:c.size,fabric:c.fabric,notes:c.notes,status:c.status,price:c.price}},{upsert:true,setDefaultsOnInsert:true});}}
+  else if(name==='custom'){for(const c of (value||[]).filter(x=>Number(x.userId)===Number(user.publicId))){const pricing=calculateCustomPrice(c.size);if(!pricing.valid)throw new AppError(400,pricing.reason==='too-large'?'حداکثر سایز قابل ثبت ۱۵۰ × ۹۰ سانتی‌متر است':'ابعاد واردشده معتبر نیست');await CustomRequest.findOneAndUpdate({publicId:c.id,user:user._id},{$set:{customer:user.fullName,fileName:c.fileName,size:c.size,fabric:c.fabric,notes:c.notes,price:pricing.price}},{upsert:true,setDefaultsOnInsert:true});}}
   ok(res,{message:'ذخیره شد'});
 }));
 module.exports=router;

@@ -98,6 +98,53 @@ const PAGE_ROUTES = {
   cart: "/cart", checkout: "/checkout", success: "/payment/success"
 };
 const CART_KEY = "cribFlagCartV2";
+const CUSTOM_PRICING_VERSION = "20260726-v3";
+const CUSTOM_SIZE_TIERS = Object.freeze([
+  Object.freeze({ maxLong: 70, maxShort: 50, price: 550000 }),
+  Object.freeze({ maxLong: 100, maxShort: 70, price: 800000 }),
+  Object.freeze({ maxLong: 150, maxShort: 90, price: 950000 })
+]);
+
+function normalizeCustomDigits(value) {
+  return String(value ?? '')
+    .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+    .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/,/g, '.');
+}
+
+function parseCustomDimensions(value) {
+  const match = normalizeCustomDigits(value).match(/(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)/i);
+  if (!match) return null;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null;
+  return { width, height };
+}
+
+function calculateCustomTierPrice(width, height) {
+  const parsedWidth = Number(normalizeCustomDigits(width));
+  const parsedHeight = Number(normalizeCustomDigits(height));
+  if (!Number.isFinite(parsedWidth) || !Number.isFinite(parsedHeight) || parsedWidth <= 0 || parsedHeight <= 0) {
+    return { valid: false, reason: 'invalid-dimensions', price: 0 };
+  }
+  const longSide = Math.max(parsedWidth, parsedHeight);
+  const shortSide = Math.min(parsedWidth, parsedHeight);
+  const tier = CUSTOM_SIZE_TIERS.find(item => longSide <= item.maxLong && shortSide <= item.maxShort);
+  if (!tier) return { valid: false, reason: 'too-large', price: 0, longSide, shortSide };
+  return { valid: true, reason: null, price: tier.price, longSide, shortSide };
+}
+
+function normalizeStoredCustomItem(item) {
+  const isCustom = ['طرح دلخواه', 'طرح اختصاصی'].includes(String(item?.category || '')) || Boolean(item?.customRequestId);
+  if (!isCustom) return item;
+  const dimensions = parseCustomDimensions(item?.size);
+  if (!dimensions) return item;
+  const pricing = calculateCustomTierPrice(dimensions.width, dimensions.height);
+  if (!pricing.valid) return item;
+  return { ...item, price: pricing.price, old: pricing.price };
+}
+
+window.__CUSTOM_PRICING_VERSION__ = CUSTOM_PRICING_VERSION;
 const body = document.body;
 const overlay = document.querySelector(".overlay");
 const toast = document.getElementById("toast");
@@ -193,7 +240,7 @@ function showToast(message) {
   if (!toast) return;
   toast.textContent = message; toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"),2400);
 }
-function loadCart() { try { const c=JSON.parse(localStorage.getItem(CART_KEY)||"[]"); return Array.isArray(c)?c:[]; } catch { return []; } }
+function loadCart() { try { const c=JSON.parse(localStorage.getItem(CART_KEY)||"[]"); return Array.isArray(c)?c.map(normalizeStoredCustomItem):[]; } catch { return []; } }
 function saveCart() { localStorage.setItem(CART_KEY, JSON.stringify(cart)); }
 
 function placeholderImage(label, variant="general", view=0) {
@@ -434,19 +481,19 @@ function renderCartPage(){
 function initCart(){renderCartPage();document.getElementById('cartCheckoutLink')?.addEventListener('click',e=>{if(!cart.length){e.preventDefault();showToast('سبد خرید خالی است.');return;}if(!currentUser){e.preventDefault();requireLogin('/checkout');return;}window.CribLoader?.show('در حال آماده‌سازی تسویه حساب...');});}
 
 function initCustomOrder(){
-  const input=document.getElementById('customFileInput'), preview=document.getElementById('customUploadPreview'), nameBox=document.getElementById('customFileName'), dims=document.getElementById('customDimensionFields'), priceBox=document.getElementById('customOrderPrice');let uploadData='';let fileName='';
+  const input=document.getElementById('customFileInput'), preview=document.getElementById('customUploadPreview'), nameBox=document.getElementById('customFileName'), dims=document.getElementById('customDimensionFields'), priceBox=document.getElementById('customOrderPrice'), addButton=document.getElementById('addCustomOrder');let uploadData='';let fileName='';let customDimensionError='';
   const selected=()=>document.querySelector('input[name="customOrderSize"]:checked');
-  const calcPrice=()=>{const radio=selected();let price=Number(radio?.dataset.price||0);if(radio?.value==='custom'){const w=Number(document.getElementById('customOrderWidth').value||0),h=Number(document.getElementById('customOrderHeight').value||0);price=w&&h?Math.max(420000,Math.round(w*h*82/10000)*10000):0;}priceBox.textContent=price?toman(price):'پس از ورود ابعاد';return price;};
+  const calcPrice=()=>{const radio=selected();let price=Number(radio?.dataset.price||0);customDimensionError='';if(radio?.value==='custom'){const w=document.getElementById('customOrderWidth').value,h=document.getElementById('customOrderHeight').value,pricing=calculateCustomTierPrice(w,h);if(!pricing.valid){price=0;customDimensionError=pricing.reason==='too-large'?'حداکثر سایز قابل ثبت ۱۵۰ × ۹۰ سانتی‌متر است.':'ابعاد معتبر را وارد کنید.';}else price=pricing.price;}if(addButton)addButton.disabled=Boolean(radio?.value==='custom'&&customDimensionError);priceBox.textContent=customDimensionError&&radio?.value==='custom'?customDimensionError:(price?toman(price):'پس از ورود ابعاد');return price;};
   document.querySelectorAll('input[name="customOrderSize"]').forEach(r=>r.addEventListener('change',()=>{dims.classList.toggle('show',r.value==='custom'&&r.checked);calcPrice();}));document.querySelectorAll('#customOrderWidth,#customOrderHeight').forEach(x=>x.addEventListener('input',calcPrice));
   input?.addEventListener('change',()=>{const file=input.files?.[0];if(!file)return;if(file.size>20*1024*1024){showToast('حجم فایل باید کمتر از ۲۰ مگابایت باشد.');input.value='';return;}fileName=file.name;nameBox.textContent=`${file.name} — ${toFa((file.size/1024/1024).toFixed(2))} مگابایت`;if(file.type.startsWith('image/')){const reader=new FileReader();reader.onload=()=>{uploadData=String(reader.result);preview.innerHTML=`<img src="${uploadData}" alt="پیش‌نمایش طرح آپلودشده">`;};reader.readAsDataURL(file);}else{uploadData='';preview.innerHTML='<div class="pdf-preview"><span>PDF</span><strong>فایل PDF آماده ثبت است</strong></div>';}});
   document.getElementById('addCustomOrder')?.addEventListener('click',async()=>{
     if(!fileName){showToast('ابتدا فایل طرح را انتخاب کنید.');return;}
     if(!currentUser){showToast('برای ثبت و نگهداری فایل طرح ابتدا وارد حساب شوید.');openOverlayLayer(document.querySelector('.auth-modal'));return;}
-    const radio=selected(),price=calcPrice();if(!radio||!price){showToast('ابعاد معتبر را وارد کنید.');return;}
+    const radio=selected(),price=calcPrice();if(!radio||!price){showToast(customDimensionError||'ابعاد معتبر را وارد کنید.');return;}
     const size=radio.value==='custom'?`${document.getElementById('customOrderWidth').value} × ${document.getElementById('customOrderHeight').value} سانتی‌متر`:radio.value.replace('x',' × ')+' سانتی‌متر';
     const notes=document.getElementById('customOrderNotes').value.trim(),fabric=document.getElementById('customOrderFabric')?.value||DEFAULT_FABRICS[0],safePreview=uploadData.length<450000?uploadData:'';
     let customId=`DS-${Math.floor(10000+Math.random()*89999)}`;
-    if(currentUser&&input.files?.[0]){try{const fd=new FormData();fd.append('file',input.files[0]);fd.append('size',size);fd.append('fabric',fabric);fd.append('notes',notes);fd.append('requestType','چاپ مستقیم');fd.append('price',String(price));const saved=await api('/api/account/custom',{method:'POST',body:fd});customId=saved.request.id;}catch(error){showToast(error.message||'آپلود فایل انجام نشد.');return;}}
+    if(currentUser&&input.files?.[0]){try{const fd=new FormData();fd.append('file',input.files[0]);fd.append('size',size);fd.append('fabric',fabric);fd.append('notes',notes);fd.append('requestType','چاپ مستقیم');const saved=await api('/api/account/custom',{method:'POST',body:fd});customId=saved.request.id;}catch(error){showToast(error.message||'آپلود فایل انجام نشد.');return;}}
     cart.push({id:`custom-${Date.now()}`,cartId:`custom-${Date.now()}-${Math.random()}`,title:`چاپ طرح اختصاصی — ${fileName}`,category:'طرح دلخواه',price,old:price,qty:1,size,fabric,notes,preview:safePreview,fileName,customRequestId:customId});
     renderCart();showToast(currentUser?'فایل و سفارش اختصاصی ثبت شد.':'سفارش به سبد اضافه شد؛ برای ذخیره فایل وارد حساب شوید.');setTimeout(()=>location.href='/cart',500);
   });
