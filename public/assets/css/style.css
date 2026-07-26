@@ -4028,130 +4028,93 @@
         grid-template-columns: 1fr;
       }
     }
-/* حالت دسکتاپ */
-/* دسکتاپ */
-.hero-slider {
-    position: relative !important;
-    width: 100% !important;
-    height: 425px !important;
-    min-height: 425px !important;
-    border-radius: 28px !important;
-    overflow: hidden !important;
-}
-
-.hero-slider .hero-track {
-    display: flex !important;
-    width: 100% !important;
-    height: 100% !important;
-}
-
-.hero-slider .hero-slide {
-    position: relative !important;
-    flex: 0 0 100% !important;
-    width: 100% !important;
-    height: 100% !important;
-    min-height: 0 !important;
-    overflow: hidden !important;
-}
-
-.hero-slider .hero-slide-image {
-    display: block !important;
-    width: 100% !important;
-    height: 100% !important;
-    max-width: none !important;
-    object-fit: contain !important;
-background-color: #071225;
-    object-position: center !important;
-}
-
-/* موبایل */
-@media screen and (max-width: 768px) {
-    .hero-slider {
-        width: 100% !important;
-        height: 125px !important;
-        min-height: 125px !important;
-        border-radius: 16px !important;
-    }
-
-    .hero-slider .hero-track,
-    .hero-slider .hero-slide {
-        height: 125px !important;
-        min-height: 125px !important;
-    }
-
-    .hero-slider .hero-slide-image {
-        width: 100% !important;
-        height: 125px !important;
-        object-fit: contain !important;
-background-color: #071225;
-        object-position: center !important;
-    }
-}
 /* ==============================
-   تنظیم نهایی اسلایدر
+   اسلایدر اصلی صفحه خانه
+   دسکتاپ: ارتفاع ثابت و نمایش تمام‌عرض
+   موبایل: نسبت تصویر واکنش‌گرا و بدون برش
 ============================== */
-
 .hero > .hero-slider {
-    position: relative !important;
-    width: 100% !important;
-
-    height: 425px !important;
-    min-height: 425px !important;
-
-    border-radius: 28px !important;
-    overflow: hidden !important;
+  position: relative !important;
+  width: 100% !important;
+  height: 425px !important;
+  min-height: 425px !important;
+  border-radius: 28px !important;
+  overflow: hidden !important;
+  background: #071225 !important;
 }
 
 .hero > .hero-slider > .hero-track {
-    display: flex !important;
-    width: 100% !important;
-    height: 100% !important;
-    min-height: 0 !important;
-
-    direction: ltr;
+  display: flex !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  direction: ltr;
 }
 
 .hero > .hero-slider .hero-slide {
-    flex: 0 0 100% !important;
-    width: 100% !important;
-    height: 100% !important;
-    min-height: 0 !important;
-
-    padding: 0 !important;
-    overflow: hidden !important;
+  position: relative !important;
+  flex: 0 0 100% !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  background: #071225 !important;
 }
 
 .hero > .hero-slider .hero-slide-image {
-    display: block !important;
-    width: 100% !important;
-    height: 100% !important;
-    max-width: none !important;
-
-    object-fit: cover !important;
-    object-position: center !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  object-fit: cover !important;
+  object-position: center !important;
 }
 
-/* موبایل */
 @media screen and (max-width: 768px) {
-    .hero > .hero-slider {
-        height: 125px !important;
-        min-height: 125px !important;
-        border-radius: 16px !important;
-    }
+  .hero > .hero-slider {
+    /* ارتفاع بنر روی هر گوشی متناسب با عرض صفحه محاسبه می‌شود. */
+    height: auto !important;
+    min-height: 0 !important;
+    aspect-ratio: 2081 / 755;
+    border-radius: 16px !important;
+  }
 
-    .hero > .hero-slider > .hero-track,
-    .hero > .hero-slider .hero-slide {
-        height: 100% !important;
-        min-height: 0 !important;
-    }
+  .hero > .hero-slider > .hero-track,
+  .hero > .hero-slider .hero-slide {
+    height: 100% !important;
+    min-height: 0 !important;
+  }
 
-    .hero > .hero-slider .hero-slide-image {
-        width: 100% !important;
-        height: 100% !important;
+  .hero > .hero-slider .hero-slide-image {
+    /* کل بنر دیده می‌شود و هیچ بخش مهمی در موبایل بریده نمی‌شود. */
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    object-position: center !important;
+    background: #071225 !important;
+  }
 
-        object-fit: cover !important;
-        object-position: center !important;
-    }
+  .hero > .hero-slider .hero-controls {
+    inset-inline: 10px;
+    bottom: 8px;
+  }
+
+  .hero > .hero-slider .slider-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 11px;
+    font-size: 18px;
+  }
+
+  .hero > .hero-slider .dot {
+    width: 7px;
+    height: 7px;
+  }
+
+  .hero > .hero-slider .dot.active {
+    width: 22px;
+  }
 }
     @media (max-width: 480px) {
       .container {
