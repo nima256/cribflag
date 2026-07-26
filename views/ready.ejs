@@ -77,13 +77,9 @@
 </div>
 <div class="chips">
 <button class="chip active ready-chip" data-ready-category="">همه طرح‌ها</button>
-<button class="chip ready-chip" data-ready-category="دکور اتاق">دکور اتاق</button>
-<button class="chip ready-chip" data-ready-category="مینیمال">مینیمال</button>
-<button class="chip ready-chip" data-ready-category="باشگاهی">باشگاهی</button>
-<button class="chip ready-chip" data-ready-category="برندینگ">برندینگ</button>
-<button class="chip ready-chip" data-ready-category="پرچم مناسبتی">مناسبتی</button>
+<% (readyCategories || []).forEach(category => { %><button class="chip ready-chip" data-ready-category="<%= category.slug %>"><%= category.name %></button><% }) %>
 </div>
-<div class="ready-grid" id="readyGrid"><% if (readyDesigns.length) { readyDesigns.forEach(item => { const readyTags = (item.categories || []).filter(category => category !== 'طرح آماده'); %><article class="ready-card"><a class="ready-card-link" href="/product/<%= item.id %>"><div class="ready-card-media"><div class="static-image-box"><img src="<%= item.image %>" alt="<%= item.title %>"></div></div><div class="ready-card-body"><span class="ready-tag"><%= readyTags[0] || item.category || 'طرح آماده' %></span><h3><%= item.title %></h3><p><%= item.description %></p><strong><%= toman(item.price) %></strong></div></a><button class="btn btn-primary add-ready-cart" data-id="<%= item.id %>" type="button">افزودن به سبد</button></article><% }) } else { %><div class="results-empty"><div><h3>هنوز طرح آماده‌ای ثبت نشده است</h3><p>در پنل ادمین، برای محصول موردنظر دسته «طرح آماده» را انتخاب کنید.</p></div></div><% } %></div>
+<div class="ready-grid" id="readyGrid"><% if (readyDesigns.length) { readyDesigns.forEach(item => { const rootName = readyRootCategory?.name || 'طرح آماده'; const readyTags = (item.categories || []).filter(category => category !== rootName); %><article class="ready-card"><a class="ready-card-link" href="/product/<%= item.id %>"><div class="ready-card-media"><div class="static-image-box"><img src="<%= item.image %>" alt="<%= item.title %>"></div></div><div class="ready-card-body"><span class="ready-tag"><%= readyTags[0] || item.category || rootName %></span><h3><%= item.title %></h3><p><%= item.description %></p><strong><%= toman(item.price) %></strong></div></a><button class="btn btn-primary add-ready-cart" data-id="<%= item.id %>" type="button">افزودن به سبد</button></article><% }) } else { %><div class="results-empty"><div><h3>هنوز طرح آماده‌ای ثبت نشده است</h3><p>در پنل ادمین، یک دسته را به‌عنوان «دسته مادر طرح آماده» تعیین و به محصولات مربوط متصل کنید.</p></div></div><% } %></div>
 </div>
 </section></main>
 <%- include("partials/footer") %>
@@ -122,11 +118,7 @@
 </div>
 <button class="mobile-accordion-btn">فروشگاه <span>+</span></button>
 <div class="mobile-submenu">
-<a class="mobile-sub-link store-category-link" data-category="پرچم ایران" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%A7%DB%8C%D8%B1%D8%A7%D9%86">پرچم ایران</a>
-<a class="mobile-sub-link store-category-link" data-category="پرچم کشورها" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%DA%A9%D8%B4%D9%88%D8%B1%D9%87%D8%A7">پرچم کشورهای جهان</a>
-<a class="mobile-sub-link store-category-link" data-category="پرچم تشریفات" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%AA%D8%B4%D8%B1%DB%8C%D9%81%D8%A7%D8%AA">پرچم تشریفات</a>
-<a class="mobile-sub-link store-category-link" data-category="پرچم رومیزی" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%B1%D9%88%D9%85%DB%8C%D8%B2%DB%8C">پرچم رومیزی</a>
-<a class="mobile-sub-link store-category-link" data-category="پرچم ساحلی" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%B3%D8%A7%D8%AD%D9%84%DB%8C">پرچم ساحلی</a>
+<%- include("partials/mobile-category-links") %>
 </div>
 <a class="mobile-link" data-page-link="custom" href="/custom">طرح دلخواه</a>
 <a class="mobile-link" data-page-link="ready" href="/ready">طرح‌های آماده</a>
@@ -163,15 +155,7 @@
 <input class="price-max-mobile" inputmode="numeric" placeholder="تا"/>
 </div>
 </div>
-<div class="filter-block">
-<h4>دسته‌بندی</h4>
-<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="فلگ دیواری"/> فلگ دیواری</label>
-<!-- <label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم ایران" /> پرچم ایران</label> -->
-<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم تشریفات"/> پرچم تشریفات</label>
-<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم رومیزی"/> پرچم رومیزی</label>
-<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم کشورها"/> پرچم کشورها</label>
-<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم ساحلی"/> پرچم ساحلی</label>
-</div>
+<div class="filter-block"><h4>دسته‌بندی</h4><%- include("partials/category-filters", { inputClass: "category-filter-mobile" }) %></div>
 
 <button class="btn btn-primary apply-mobile-filters" style="width:100%;margin-top:12px;">اعمال فیلتر</button>
 </aside>

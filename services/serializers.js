@@ -1,6 +1,6 @@
 const { faDate } = require('../utils/formatters');
 
-const product = (p) => {
+const product = (p, categoryLookup = null) => {
   const price = Number(p.price || 0);
   const rawOldPrice = Number(p.oldPrice);
   const rawVariants = Array.isArray(p.variantPrices) ? p.variantPrices : [];
@@ -28,10 +28,30 @@ const product = (p) => {
   const images = [...new Set(rawImages.map(item => String(item || '').trim()).filter(Boolean))];
   if (!images.length) images.push('assets/images/ukflag.png');
 
-  const categories = [...new Set([
+  const rawCategoryRefs = Array.isArray(p.categoryRefs) ? p.categoryRefs : [];
+  const categoryDetails = [];
+  if (categoryLookup) {
+    for (const ref of rawCategoryRefs) {
+      const key = String(ref && ref._id ? ref._id : ref || '');
+      const category = categoryLookup.get ? categoryLookup.get(key) : categoryLookup[key];
+      if (category && !categoryDetails.some(item => item.publicId === category.publicId)) categoryDetails.push(category);
+    }
+    const primaryKey = String(p.primaryCategory && p.primaryCategory._id ? p.primaryCategory._id : p.primaryCategory || '');
+    const primary = categoryLookup.get ? categoryLookup.get(primaryKey) : categoryLookup[primaryKey];
+    if (primary) {
+      const index = categoryDetails.findIndex(item => item.publicId === primary.publicId);
+      if (index > 0) categoryDetails.unshift(categoryDetails.splice(index, 1)[0]);
+      else if (index < 0) categoryDetails.unshift(primary);
+    }
+  }
+
+  const legacyCategories = [...new Set([
     p.category,
     ...(Array.isArray(p.categories) ? p.categories : [])
   ].map(item => String(item || '').trim()).filter(Boolean))];
+  const categories = categoryDetails.length ? categoryDetails.map(item => item.name) : legacyCategories;
+  const categoryIds = categoryDetails.map(item => item.publicId);
+  const categorySlugs = categoryDetails.map(item => item.slug);
 
   return {
     id: p.publicId,
@@ -39,6 +59,10 @@ const product = (p) => {
     sku: p.sku,
     category: categories[0] || p.category || '',
     categories,
+    primaryCategoryId: categoryIds[0] || null,
+    categoryIds,
+    categorySlugs,
+    categoryDetails: categoryDetails.map(item => ({ id: item.publicId, name: item.name, slug: item.slug })),
     price,
     hasDiscount,
     old,

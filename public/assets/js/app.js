@@ -2,40 +2,12 @@ const PRODUCT_IMAGE = "/assets/images/ukflag.png";
 const DEFAULT_SIZES = window.CribData?.DEFAULT_SIZES || ["۱۵۰ × ۹۰ سانتی‌متر","۱۰۰ × ۷۰ سانتی‌متر","۵۰ × ۷۰ سانتی‌متر"];
 const DEFAULT_FABRICS = window.CribData?.DEFAULT_FABRICS || ["ساتن آمریکایی","ساتن براق","مخمل"];
 
-const defaultProducts = [
-  {id:1,title:"فلگ دیواری طرح دلخواه",sku:"CF-1001",category:"فلگ دیواری",price:680000,old:790000,badge:"سفارشی",date:12,rate:4.9,status:"active",sales:47,sizes:DEFAULT_SIZES,fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:"فلگ دیواری با چاپ طرح دلخواه، مناسب اتاق، دکور، هدیه و فضای شخصی."},
-  {id:2,title:"پرچم ایران مدل پریمیوم",sku:"CF-1002",category:"پرچم ایران",price:420000,old:520000,badge:"پرفروش",date:10,rate:4.8,status:"active",sales:89,sizes:DEFAULT_SIZES,fabrics:["ساتن آمریکایی","ساتن براق"],image:PRODUCT_IMAGE,description:"پرچم ایران با چاپ شفاف و دوخت تمیز، مناسب دکور، مراسم و استفاده رسمی."},
-  {id:3,title:"پرچم تشریفات ایران با پایه استیل",sku:"CF-1003",category:"پرچم تشریفات",price:1280000,old:1550000,badge:"ویژه",date:9,rate:4.7,status:"active",sales:21,sizes:["۱۵۰ × ۹۰ سانتی‌متر","۱۰۰ × ۷۰ سانتی‌متر"],fabrics:["ساتن آمریکایی","مخمل"],image:PRODUCT_IMAGE,description:"پرچم تشریفات رسمی با ظاهر لوکس و پایه استیل، مناسب شرکت‌ها، دفاتر و سالن‌های رسمی."},
-  {id:4,title:"پرچم رومیزی با چاپ لوگوی اختصاصی",sku:"CF-1004",category:"پرچم رومیزی",price:245000,old:320000,badge:"تخفیف",date:7,rate:4.6,status:"active",sales:63,sizes:["۵۰ × ۷۰ سانتی‌متر"],fabrics:["ساتن آمریکایی","ساتن براق"],image:PRODUCT_IMAGE,description:"پرچم رومیزی مناسب میز مدیریت، شرکت، نمایشگاه و برندینگ سازمانی."},
-  {id:5,title:"فلگ مینیمال مناسب اتاق",sku:"CF-1005",category:"فلگ دیواری",price:590000,old:690000,badge:"جدید",date:13,rate:4.8,status:"active",sales:36,sizes:DEFAULT_SIZES,fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:"فلگ دیواری با طراحی مینیمال، مناسب اتاق‌های مدرن و دکورهای ساده."},
-  {id:6,title:"پرچم کشورهای جهان مدل رومیزی",sku:"CF-1006",category:"پرچم کشورها",price:330000,old:410000,badge:"محبوب",date:6,rate:4.5,status:"active",sales:52,sizes:["۵۰ × ۷۰ سانتی‌متر"],fabrics:["ساتن آمریکایی","ساتن براق"],image:PRODUCT_IMAGE,description:"پرچم کشورهای مختلف در ابعاد رومیزی، مناسب کلکسیون، اداره، آموزشگاه و میز کار."},
-  {id:7,title:"پرچم ساحلی تبلیغاتی برای کمپین",sku:"CF-1007",category:"پرچم ساحلی",price:980000,old:1200000,badge:"کمپین",date:5,rate:4.6,status:"active",sales:17,sizes:["۱۵۰ × ۹۰ سانتی‌متر","۱۰۰ × ۷۰ سانتی‌متر"],fabrics:["ساتن آمریکایی","ساتن براق"],image:PRODUCT_IMAGE,description:"پرچم ساحلی مناسب تبلیغات، ورودی فروشگاه، نمایشگاه و کمپین‌های محیطی."},
-  {id:8,title:"فلگ گرافیکی مناسب دکور",sku:"CF-1008",category:"فلگ دیواری",price:640000,old:760000,badge:"خاص",date:11,rate:4.7,status:"active",sales:31,sizes:DEFAULT_SIZES,fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:"فلگ گرافیکی با چاپ شفاف، مناسب دکورهای خاص و فضاهای شخصی."},
-  {id:9,title:"پرچم مناسبتی با چاپ باکیفیت",sku:"CF-1009",category:"پرچم مناسبتی",price:520000,old:640000,badge:"سریع",date:4,rate:4.4,status:"active",sales:28,sizes:DEFAULT_SIZES,fabrics:["ساتن آمریکایی","ساتن براق"],image:PRODUCT_IMAGE,description:"پرچم مناسبتی برای رویدادها، مراسم، هیئت‌ها و مناسبت‌های خاص با چاپ تمیز."},
-  {id:10,title:"سفارش عمده فلگ با طرح اختصاصی",sku:"CF-1010",category:"سفارش عمده",price:1850000,old:2200000,badge:"عمده",date:8,rate:4.9,status:"active",sales:14,sizes:DEFAULT_SIZES,fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:"پکیج سفارش عمده فلگ برای فروشگاه‌ها، برندها، کمپین‌ها و رویدادهای بزرگ."},
-  {id:11,title:"پرچم رومیزی مدیریتی دوخت تمیز",sku:"CF-1011",category:"پرچم رومیزی",price:310000,old:390000,badge:"اداری",date:3,rate:4.5,status:"active",sales:44,sizes:["۵۰ × ۷۰ سانتی‌متر"],fabrics:["ساتن آمریکایی","ساتن براق"],image:PRODUCT_IMAGE,description:"پرچم رومیزی اداری با دوخت تمیز و ظاهر رسمی، مناسب میز مدیریت و جلسات."},
-  {id:12,title:"پرچم کشورهای اروپایی مدل اداری",sku:"CF-1012",category:"پرچم کشورها",price:760000,old:910000,badge:"برندینگ",date:14,rate:4.8,status:"draft",sales:19,sizes:["۱۰۰ × ۷۰ سانتی‌متر","۵۰ × ۷۰ سانتی‌متر"],fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:"چاپ فلگ با لوگو و طرح اختصاصی برای برندها و کسب‌وکارها."}
-];
+const defaultProducts = [];
+let products=(Array.isArray(window.__INITIAL_PRODUCTS__)?window.__INITIAL_PRODUCTS__:defaultProducts).map(normalizeProductPricing);
 
-function loadManagedProducts(fallback){
-  try{
-    const managed=JSON.parse(localStorage.getItem("cribFlagProducts")||"null");
-    if(Array.isArray(managed)&&managed.length){
-      return managed.filter(product=>(product.status||"active")==="active").map(product=>normalizeProductPricing({
-        ...product,
-        rate:Number(product.rate||4.7),
-        date:Number(product.date||1),
-        sizes:Array.isArray(product.sizes)&&product.sizes.length?product.sizes:[...DEFAULT_SIZES],
-        fabrics:Array.isArray(product.fabrics)&&product.fabrics.length?product.fabrics:[...DEFAULT_FABRICS],
-        image:product.image||PRODUCT_IMAGE
-      }));
-    }
-  }catch{}
-  return fallback;
-}
-let products=(Array.isArray(window.__INITIAL_PRODUCTS__)&&window.__INITIAL_PRODUCTS__.length?window.__INITIAL_PRODUCTS__:loadManagedProducts(defaultProducts)).map(normalizeProductPricing);
-
-const readyDesigns = Array.isArray(window.__READY_DESIGNS__)?window.__READY_DESIGNS__.map(normalizeProductPricing):[];
+let categories = Array.isArray(window.__INITIAL_CATEGORIES__) ? window.__INITIAL_CATEGORIES__ : [];
+let readyRootCategory = window.__READY_ROOT_CATEGORY__ || null;
+let readyDesigns = Array.isArray(window.__READY_DESIGNS__)?window.__READY_DESIGNS__.map(normalizeProductPricing):[];
 
 const faqItems = [
       { q: "بعد از پرداخت امکان تغییر طرح یا برگشت هزینه وجود دارد؟", a: "حتی یک ثانیه بعد از پرداخت وجه، نه امکان تعویض طرح دارید نه برگشت هزینه؛ چون سفارش وارد فرایند چاپ می‌شود و پارچه استفاده‌شده قابل بازگشت به حالت قبل نیست." },
@@ -141,7 +113,8 @@ let currentUser=window.__CURRENT_USER__||null;
 const api=(path,options)=>window.CribAPI?.request(path,options);
 async function bootstrapRemoteData(){
   if(!window.CribAPI)return;
-  try{const result=await api('/api/products');if(Array.isArray(result.products)&&result.products.length)products=result.products.map(normalizeProductPricing);}catch(error){console.warn('Product API unavailable:',error.message);}
+  try{const result=await api('/api/products');if(Array.isArray(result.products))products=result.products.map(normalizeProductPricing);}catch(error){console.warn('Product API unavailable:',error.message);}
+  try{const result=await api('/api/categories');if(Array.isArray(result.categories))categories=result.categories;}catch(error){console.warn('Category API unavailable:',error.message);}
   try{const auth=await api('/api/auth/me');currentUser=auth.authenticated?auth.user:null;}catch{currentUser=null;}
 }
 function saveSessionUser(user){currentUser=user||null;try{localStorage.setItem('cribFlagSession',JSON.stringify(user?{userId:user.id,name:user.name,loggedIn:true}:{userId:null,name:'',loggedIn:false}));}catch{}}
@@ -167,8 +140,36 @@ function normalizeProductPricing(product={}) {
   const rawImages=Array.isArray(product.images)&&product.images.length?product.images:[product.image];
   const images=[...new Set(rawImages.map(image=>String(image||'').trim()).filter(Boolean))];
   if(!images.length)images.push(PRODUCT_IMAGE);
-  const categories=[...new Set([product.category,...(Array.isArray(product.categories)?product.categories:[])].map(item=>String(item||'').trim()).filter(Boolean))];
-  return {...product,category:categories[0]||'',categories,price,hasDiscount,old,variantPrices,image:images[0],images};
+  const productCategories=[...new Set([product.category,...(Array.isArray(product.categories)?product.categories:[])].map(item=>String(item||'').trim()).filter(Boolean))];
+  const categorySlugs=[...new Set((Array.isArray(product.categorySlugs)?product.categorySlugs:[]).map(item=>String(item||'').trim()).filter(Boolean))];
+  const categoryIds=[...new Set((Array.isArray(product.categoryIds)?product.categoryIds:[]).map(Number).filter(Number.isFinite))];
+  return {...product,category:productCategories[0]||'',categories:productCategories,categorySlugs,categoryIds,price,hasDiscount,old,variantPrices,image:images[0],images};
+}
+function normalizeCategoryKey(value) {
+  let key=String(value||'').trim();
+  try{key=decodeURIComponent(key);}catch{}
+  return normalizeText(key)
+    .replace(/[\u200c\u200d\u200e\u200f]/g,'')
+    .replace(/[‐‑‒–—−ـ]+/g,'-')
+    .replace(/\s*-\s*/g,'-')
+    .trim();
+}
+function categoryKeyVariants(value) {
+  const key=normalizeCategoryKey(value);
+  if(!key)return [];
+  return [...new Set([
+    key,
+    key.replace(/-/g,' ').replace(/\s+/g,' ').trim(),
+    key.replace(/\s+/g,'-')
+  ].filter(Boolean))];
+}
+function productCategoryKeys(product={}) {
+  const raw=[
+    ...(product.categorySlugs||[]),
+    ...(product.categories||[product.category]),
+    ...(Array.isArray(product.categoryDetails)?product.categoryDetails.flatMap(item=>[item?.slug,item?.name]):[])
+  ];
+  return [...new Set(raw.flatMap(categoryKeyVariants))];
 }
 function getVariantPricing(product,size,fabric) {
   const normalized=normalizeProductPricing(product);
@@ -220,7 +221,7 @@ function productCard(product) {
   <button class="add-btn add-cart" data-id="${product.id}" aria-label="افزودن به سبد">+</button></div></div></article>`;
 }
 function readyCard(item) {
-  const tag=(item.categories||[]).find(category=>category!=='طرح آماده')||item.category||'طرح آماده';
+  const rootName=readyRootCategory?.name||'طرح آماده';const tag=(item.categories||[]).find(category=>category!==rootName)||item.category||rootName;
   return `<article class="ready-card"><a class="ready-card-link" href="/product/${item.id}"><div class="ready-card-media">${productImageBox(item.title,item.image)}</div><div class="ready-card-body"><span class="ready-tag">${escapeHTML(tag)}</span><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.description)}</p></div></a><div class="ready-meta"><strong>${oldPriceMarkup(item.price,item.old,item.hasDiscount)}${toman(item.price)}</strong><button class="btn btn-primary add-ready-cart" data-id="${item.id}">افزودن به سبد</button></div></article>`;
 }
 function faqTemplate(item) { return `<div class="faq-item"><button class="faq-question"><b>${escapeHTML(item.q)}</b><span>+</span></button><div class="faq-answer">${escapeHTML(item.a)}</div></div>`; }
@@ -328,7 +329,7 @@ function initHome(){
 function getFilteredProducts(){
   let r=[...products];
   if(storeState.query){const q=normalizeText(storeState.query);r=r.filter(p=>normalizeText(`${p.title} ${(p.categories||[p.category]).join(' ')} ${p.description} ${(p.sizes||[]).join(" ")} ${(p.fabrics||[]).join(" ")}`).includes(q));}
-  if(storeState.categories.length)r=r.filter(p=>storeState.categories.some(category=>(p.categories||[p.category]).includes(category)));
+  if(storeState.categories.length){const selectedKeys=[...new Set(storeState.categories.flatMap(categoryKeyVariants))];r=r.filter(p=>{const productKeys=productCategoryKeys(p);return selectedKeys.some(category=>productKeys.includes(category));});}
   if(storeState.min)r=r.filter(p=>p.price>=Number(storeState.min));if(storeState.max)r=r.filter(p=>p.price<=Number(storeState.max));
   if(storeState.sort==='cheap')r.sort((a,b)=>a.price-b.price);if(storeState.sort==='expensive')r.sort((a,b)=>b.price-a.price);if(storeState.sort==='newest')r.sort((a,b)=>b.date-a.date);if(storeState.sort==='popular')r.sort((a,b)=>b.rate-a.rate);return r;
 }
@@ -420,7 +421,7 @@ function initProduct(){
   document.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));btn.classList.add('active');document.getElementById(`tab-${btn.dataset.tab}`)?.classList.add('active');}));
 }
 function initFaq(){const box=document.getElementById('fullFaqList');if(box)box.innerHTML=faqItems.map(faqTemplate).join('');document.addEventListener('click',e=>{const q=e.target.closest('.faq-question');if(q){const item=q.closest('.faq-item');item.classList.toggle('open');q.querySelector('span').textContent=item.classList.contains('open')?'−':'+';}});}
-function initReady(){const box=document.getElementById('readyGrid');const draw=c=>{if(!box)return;const list=c?readyDesigns.filter(item=>(item.categories||[item.category]).includes(c)):readyDesigns;box.innerHTML=list.length?list.map(readyCard).join(''):'<div class="results-empty"><div><h3>طرح آماده‌ای پیدا نشد</h3><p>محصولات این صفحه مستقیماً از دیتابیس و دسته «طرح آماده» نمایش داده می‌شوند.</p></div></div>';};draw('');document.querySelectorAll('.ready-chip').forEach(chip=>chip.addEventListener('click',()=>{document.querySelectorAll('.ready-chip').forEach(x=>x.classList.remove('active'));chip.classList.add('active');draw(chip.dataset.readyCategory||'');}));}
+function initReady(){const box=document.getElementById('readyGrid');const draw=c=>{if(!box)return;const list=c?readyDesigns.filter(item=>productCategoryKeys(item).includes(c)):readyDesigns;box.innerHTML=list.length?list.map(readyCard).join(''):'<div class="results-empty"><div><h3>طرح آماده‌ای پیدا نشد</h3><p>محصولات این صفحه مستقیماً از دیتابیس و دسته «طرح آماده» نمایش داده می‌شوند.</p></div></div>';};draw('');document.querySelectorAll('.ready-chip').forEach(chip=>chip.addEventListener('click',()=>{document.querySelectorAll('.ready-chip').forEach(x=>x.classList.remove('active'));chip.classList.add('active');draw(chip.dataset.readyCategory||'');}));}
 function initBlog(){const box=document.getElementById('blogGrid');if(box)box.innerHTML=blogPosts.map(blogTemplate).join('');}
 function initBlogDetail(){const id=Number(location.pathname.split('/').filter(Boolean).pop())||Number(new URLSearchParams(location.search).get('id'))||1;const p=blogPosts.find(x=>x.id===id)||blogPosts[0];const set=(id,v,html=false)=>{const e=document.getElementById(id);if(e)html?e.innerHTML=v:e.textContent=v;};set('blogDetailBreadcrumb',p.title);set('blogDetailCategory',p.tag);set('blogDetailDate',p.date);set('blogDetailTitle',p.title);set('blogDetailBody',p.body,true);const img=document.getElementById('articleCoverImg');if(img){img.src=placeholderImage(p.title,'مجله Crib Flag');img.alt=p.title;}const rel=document.getElementById('relatedPosts');if(rel)rel.innerHTML=blogPosts.filter(x=>x.id!==p.id).slice(0,3).map(x=>`<a class="related-post" href="/blog/${x.id}">${imageSlot(x.title,'مجله Crib Flag')}<span><h4>${escapeHTML(x.title)}</h4><small>${x.read}</small></span></a>`).join('');}
 

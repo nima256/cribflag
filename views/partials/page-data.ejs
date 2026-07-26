@@ -1,6 +1,8 @@
 <script>
 window.__INITIAL_PRODUCTS__ = <%- safeJson(products || []) %>;
 window.__READY_DESIGNS__ = <%- safeJson(readyDesigns || []) %>;
+window.__INITIAL_CATEGORIES__ = <%- safeJson(categories || []) %>;
+window.__READY_ROOT_CATEGORY__ = <%- safeJson(readyRootCategory || null) %>;
 window.__CURRENT_USER__ = <%- safeJson(currentUser || null) %>;
 window.__CURRENT_PRODUCT__ = <%- safeJson(product || null) %>;
 window.__PAYMENT_FAILED__ = <%- safeJson(typeof paymentFailed === "boolean" ? paymentFailed : false) %>;

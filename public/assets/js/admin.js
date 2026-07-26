@@ -2,6 +2,10 @@
 'use strict';
 
 const D=window.CribData;
+if(!D){
+  console.error('CribData بارگذاری نشده است؛ فایل portal-data.js باید قبل از admin.js لود شود.');
+  return;
+}
 D.ensure();
 
 const q=selector=>document.querySelector(selector);
@@ -498,16 +502,65 @@ function renderOrders() {
     )
   );
 }
+function productCategoryIds(product){
+  const ids=Array.isArray(product?.categoryIds)?product.categoryIds.map(Number).filter(Number.isFinite):[];
+  if(ids.length)return ids;
+  const names=new Set((product?.categories||[product?.category]).filter(Boolean));
+  return D.get('categories').filter(category=>names.has(category.name)).map(category=>Number(category.id));
+}
 function renderProducts(){
-  const term=(q('#adminProductSearch')?.value||'').toLowerCase(),category=q('#adminProductCategory')?.value||'',productStatus=q('#adminProductStatus')?.value||'';
+  const term=(q('#adminProductSearch')?.value||'').toLowerCase();
+  const categoryId=Number(q('#adminProductCategory')?.value||0);
+  const productStatus=q('#adminProductStatus')?.value||'';
   let list=D.get('products');
-  if(term)list=list.filter(product=>`${product.title} ${product.sku} ${(product.categories||[product.category]).join(' ')}`.toLowerCase().includes(term));
-  if(category)list=list.filter(product=>(product.categories||[product.category]).includes(category));
+  if(term)list=list.filter(product=>`${product.title} ${product.sku} ${(product.categories||[product.category]).join(' ')} ${(product.categorySlugs||[]).join(' ')}`.toLowerCase().includes(term));
+  if(categoryId)list=list.filter(product=>productCategoryIds(product).includes(categoryId));
   if(productStatus)list=list.filter(product=>(product.status||'active')===productStatus);
   q('#adminProductsTable').innerHTML=list.map(productRow).join('')||'<tr><td colspan="8"><div class="empty-panel">محصولی پیدا نشد.</div></td></tr>';
-  const categories=[...new Set(D.get('products').flatMap(product=>product.categories||[product.category]).filter(Boolean))];
+  const categories=D.get('categories');
   const select=q('#adminProductCategory'),oldValue=select?.value||'';
-  if(select){select.innerHTML='<option value="">همه دسته‌ها</option>'+categories.map(item=>`<option>${D.esc(item)}</option>`).join('');select.value=oldValue;}
+  if(select){
+    select.innerHTML='<option value="">همه دسته‌ها</option>'+categories.map(item=>`<option value="${D.esc(item.id)}">${D.esc(item.name)}</option>`).join('');
+    if([...select.options].some(option=>option.value===oldValue))select.value=oldValue;
+  }
+}
+function categoryPlacements(category){
+  const items=[];
+  if(category.showInMenu)items.push('منو');
+  if(category.showInStore)items.push('فروشگاه');
+  if(category.showInHome)items.push('خانه');
+  if(category.showInReady)items.push('فیلتر آماده');
+  if(category.isReadyRoot)items.push('ریشه طرح آماده');
+  return items;
+}
+function renderCategories(){
+  const categories=D.get('categories');
+  const term=(q('#adminCategorySearch')?.value||'').trim().toLowerCase();
+  const categoryStatus=q('#adminCategoryStatus')?.value||'';
+  const placement=q('#adminCategoryPlacement')?.value||'';
+  let list=categories;
+  if(term)list=list.filter(category=>`${category.name} ${category.slug} ${category.description||''}`.toLowerCase().includes(term));
+  if(categoryStatus)list=list.filter(category=>category.status===categoryStatus);
+  if(placement){
+    const field={menu:'showInMenu',store:'showInStore',home:'showInHome',ready:'showInReady'}[placement];
+    if(field)list=list.filter(category=>Boolean(category[field]));
+  }
+  q('#categoryStatAll').textContent=D.fa(categories.length);
+  q('#categoryStatActive').textContent=D.fa(categories.filter(category=>category.status==='active').length);
+  q('#categoryStatMenu').textContent=D.fa(categories.filter(category=>category.showInMenu).length);
+  q('#categoryStatProducts').textContent=D.fa(categories.reduce((sum,category)=>sum+Number(category.productCount||0),0));
+  q('#adminCategoriesTable').innerHTML=list.map(category=>{
+    const placements=categoryPlacements(category);
+    return `<tr>
+      <td><div class="table-product">${category.image?`<span class="product-mini-img"><img src="${D.esc(category.image)}" alt="${D.esc(category.name)}"></span>`:'<span class="category-table-icon">▦</span>'}<span><b>${D.esc(category.name)}</b><small class="table-secondary">ID ${D.fa(category.id)}</small></span></div></td>
+      <td><code class="category-slug">${D.esc(category.slug)}</code></td>
+      <td>${D.fa(category.sortOrder)}</td>
+      <td><div class="category-flags">${placements.map(item=>`<span>${D.esc(item)}</span>`).join('')||'<small class="table-secondary">بدون محل نمایش</small>'}</div></td>
+      <td><b>${D.fa(category.productCount||0)}</b></td>
+      <td>${status(category.status||'active')}</td>
+      <td><div class="table-actions"><button class="table-action edit-category" data-id="${category.id}" title="ویرایش"><svg viewBox="0 0 24 24"><path d="m4 16-1 5 5-1L19 9l-4-4L4 16ZM13 7l4 4"/></svg></button><button class="table-action delete-category" data-id="${category.id}" title="حذف"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></svg></button></div></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="7"><div class="empty-panel">دسته‌بندی‌ای پیدا نشد.</div></td></tr>';
 }
 function renderCoupons(){
   const term=(q('#couponSearch')?.value||'').toLowerCase(),couponStatus=q('#couponStatus')?.value||'';
@@ -690,7 +743,7 @@ function renderNotifications(){
   ];
   q('#adminNotificationList').innerHTML=items.map(item=>`<div class="notification-item unread"><span class="notification-mark"></span><div><strong>${D.esc(item.title)}</strong><p>${D.esc(item.text)}</p><small>${D.esc(item.date)}</small></div></div>`).join('')||'<div class="empty-panel">اعلان جدیدی وجود ندارد.</div>';
 }
-function renderAll(){renderDashboard();renderOrders();renderProducts();renderCoupons();renderCustomers();renderTickets();renderCustom();renderReports();renderNotifications();}
+function renderAll(){renderDashboard();renderOrders();renderProducts();renderCategories();renderCoupons();renderCustomers();renderTickets();renderCustom();renderReports();renderNotifications();}
 
 function ensureSelectOption(select,value){
   if(!select||!value)return;
@@ -699,6 +752,42 @@ function ensureSelectOption(select,value){
 function setChecked(selector,values){
   const selected=Array.isArray(values)?values:[];
   qa(selector).forEach(input=>{input.checked=selected.includes(input.value);});
+}
+function normalizeCategorySlug(value=''){
+  return String(value).trim().toLowerCase().replace(/[ي]/g,'ی').replace(/[ك]/g,'ک').replace(/[^a-z0-9\u0600-\u06FF]+/g,'-').replace(/^-+|-+$/g,'');
+}
+function renderProductCategoryOptions(product=null){
+  const box=q('#productCategories');if(!box)return;
+  const categories=D.get('categories');
+  const selectedIds=new Set(productCategoryIds(product));
+  const fallbackPrimary=selectedIds.values().next().value;
+  const primaryId=Number(product?.primaryCategoryId||fallbackPrimary||0);
+  box.innerHTML=categories.map(category=>{
+    const id=Number(category.id),checked=selectedIds.has(id),isPrimary=checked&&id===primaryId;
+    return `<article class="product-category-choice${category.status==='draft'?' is-draft':''}">
+      <label class="product-choice"><input class="product-category-option" type="checkbox" value="${D.esc(id)}" ${checked?'checked':''}/><span><b>${D.esc(category.name)}</b><small>${D.esc(category.slug)}${category.status==='draft'?' — پیش‌نویس':''}</small></span></label>
+      <label class="category-primary-toggle"><input class="product-primary-category" name="productPrimaryCategory" type="radio" value="${D.esc(id)}" ${isPrimary?'checked':''} ${checked?'':'disabled'}/><span>دسته اصلی</span></label>
+    </article>`;
+  }).join('')||'<div class="variant-pricing-empty">هنوز دسته‌بندی‌ای ساخته نشده است؛ ابتدا از بخش «دسته‌بندی‌ها» یک دسته ایجاد کنید.</div>';
+}
+function categoryModal(id=null){
+  const category=id?D.get('categories').find(item=>Number(item.id)===Number(id)):null;
+  q('#categoryForm')?.reset();
+  q('#categoryModalTitle').textContent=category?'ویرایش دسته‌بندی':'افزودن دسته‌بندی';
+  q('#categoryId').value=category?.id||'';
+  q('#categoryName').value=category?.name||'';
+  q('#categorySlug').value=category?.slug||'';
+  q('#categorySortOrder').value=category?.sortOrder??0;
+  q('#categoryStatus').value=category?.status||'active';
+  q('#categoryImage').value=category?.image||'';
+  q('#categoryDescription').value=category?.description||'';
+  q('#categoryShowInMenu').checked=category?Boolean(category.showInMenu):true;
+  q('#categoryShowInStore').checked=category?Boolean(category.showInStore):true;
+  q('#categoryShowInHome').checked=category?Boolean(category.showInHome):true;
+  q('#categoryShowInReady').checked=Boolean(category?.showInReady);
+  q('#categoryIsReadyRoot').checked=Boolean(category?.isReadyRoot);
+  q('#categorySlug').dataset.manual=category?'true':'false';
+  openModal('#categoryModal');
 }
 function generateRandomSku(excludeId=null){
   const used=new Set(D.get('products').filter(item=>Number(item.id)!==Number(excludeId)).map(item=>String(item.sku||'').toUpperCase()));
@@ -754,7 +843,7 @@ function productModal(id=null){
   q('#productId').value=product?.id||'';
   q('#productTitle').value=product?.title||'';
   q('#productSku').value=product?.sku||generateRandomSku(product?.id);
-  setChecked('.product-category-option',product?.categories||[product?.category].filter(Boolean));
+  renderProductCategoryOptions(product);
   q('#productPrice').value=product?.price??'';
   q('#productHasDiscount').checked=Boolean(product?.hasDiscount);
   q('#productOldPrice').value=product?.old??'';
@@ -990,11 +1079,23 @@ q('#fillVariantPrices')?.addEventListener('click',()=>{
   qa('.variant-price-input').forEach(input=>{input.value=price;});
   if(q('#productHasDiscount')?.checked)qa('.variant-old-price-input').forEach(input=>{input.value=oldPrice;});
 });
+document.addEventListener('change',event=>{
+  const checkbox=event.target.closest('.product-category-option');
+  if(!checkbox)return;
+  const radio=checkbox.closest('.product-category-choice')?.querySelector('.product-primary-category');
+  if(radio)radio.disabled=!checkbox.checked;
+  if(!checkbox.checked&&radio?.checked){
+    radio.checked=false;
+    const next=q('.product-category-option:checked')?.closest('.product-category-choice')?.querySelector('.product-primary-category');
+    if(next)next.checked=true;
+  }else if(checkbox.checked&&!q('.product-primary-category:checked')&&radio){radio.checked=true;}
+});
 document.addEventListener('click',event=>{if(!event.target.closest('#adminNotificationPanel')&&!event.target.closest('#adminNotificationBtn'))q('#adminNotificationPanel')?.classList.remove('open');});
 
 [
   ['#adminOrderSearch','input',renderOrders],['#adminOrderStatus','change',renderOrders],['#adminPaymentStatus','change',renderOrders],
   ['#adminProductSearch','input',renderProducts],['#adminProductCategory','change',renderProducts],['#adminProductStatus','change',renderProducts],
+  ['#adminCategorySearch','input',renderCategories],['#adminCategoryStatus','change',renderCategories],['#adminCategoryPlacement','change',renderCategories],
   ['#couponSearch','input',renderCoupons],['#couponStatus','change',renderCoupons],['#customerSearch','input',renderCustomers],['#customerRole','change',renderCustomers],
   ['#adminTicketSearch','input',renderTickets],['#adminTicketStatus','change',renderTickets],['#adminTicketPriority','change',renderTickets],
   ['#adminCustomSearch','input',renderCustom],['#adminCustomStatus','change',renderCustom]
@@ -1002,7 +1103,13 @@ document.addEventListener('click',event=>{if(!event.target.closest('#adminNotifi
 
 q('#productForm')?.addEventListener('submit',async event=>{
   event.preventDefault();
-  const categories=qa('.product-category-option:checked').map(input=>input.value);
+  const selectedCategoryIds=qa('.product-category-option:checked').map(input=>Number(input.value)).filter(Number.isFinite);
+  const selectedPrimary=Number(q('.product-primary-category:checked')?.value||selectedCategoryIds[0]||0);
+  const categoryIds=[selectedPrimary,...selectedCategoryIds.filter(id=>id!==selectedPrimary)].filter(Boolean);
+  const categoryMap=new Map(D.get('categories').map(category=>[Number(category.id),category]));
+  const selectedCategories=categoryIds.map(id=>categoryMap.get(id)).filter(Boolean);
+  const categories=selectedCategories.map(category=>category.name);
+  const categorySlugs=selectedCategories.map(category=>category.slug);
   const sizes=qa('.product-size-option:checked').map(input=>input.value);
   const fabrics=qa('.product-fabric-option:checked').map(input=>input.value);
   if(!categories.length)return D.toast('حداقل یک دسته‌بندی را انتخاب کنید.','error');
@@ -1042,6 +1149,7 @@ q('#productForm')?.addEventListener('submit',async event=>{
 
   const data={
     ...previous,id,title:q('#productTitle').value.trim(),sku,category:categories[0],categories,
+    primaryCategoryId:categoryIds[0],categoryIds,categorySlugs,
     price:cheapest.price,hasDiscount,old:hasDiscount?cheapest.oldPrice:null,
     variantPrices:variantPrices.map(item=>({...item,hasDiscount,oldPrice:hasDiscount?item.oldPrice:null})),
     badge:q('#productBadge').value,status:q('#productStatus').value,sizes,fabrics,
@@ -1064,6 +1172,29 @@ q('#saveCustomChanges')?.addEventListener('click',()=>{
   }
   closeModals();renderAll();D.toast('درخواست طراحی به‌روزرسانی شد.');
 });
+q('#addCategoryBtn')?.addEventListener('click',()=>categoryModal());
+q('#categoryName')?.addEventListener('input',event=>{
+  const slug=q('#categorySlug');
+  if(slug&&slug.dataset.manual!=='true')slug.value=normalizeCategorySlug(event.target.value);
+});
+q('#categorySlug')?.addEventListener('input',event=>{event.target.dataset.manual='true';});
+q('#categorySlug')?.addEventListener('blur',event=>{event.target.value=normalizeCategorySlug(event.target.value);});
+q('#categoryForm')?.addEventListener('submit',async event=>{
+  event.preventDefault();
+  const id=Number(q('#categoryId').value||0);
+  const payload={
+    name:q('#categoryName').value.trim(),slug:normalizeCategorySlug(q('#categorySlug').value||q('#categoryName').value),
+    sortOrder:Number(q('#categorySortOrder').value||0),status:q('#categoryStatus').value,
+    image:q('#categoryImage').value.trim(),description:q('#categoryDescription').value.trim(),
+    showInMenu:q('#categoryShowInMenu').checked,showInStore:q('#categoryShowInStore').checked,
+    showInHome:q('#categoryShowInHome').checked,showInReady:q('#categoryShowInReady').checked,
+    isReadyRoot:q('#categoryIsReadyRoot').checked
+  };
+  try{
+    await window.CribAPI.request(id?`/api/admin/categories/${id}`:'/api/admin/categories',{method:id?'PUT':'POST',body:JSON.stringify(payload)});
+    await D.syncFromApi('admin');closeModals();renderAll();D.toast(id?'دسته‌بندی ویرایش شد.':'دسته‌بندی ایجاد شد.');
+  }catch(error){D.toast(error.message||'ذخیره دسته‌بندی انجام نشد.','error');}
+});
 q('#addCouponBtn')?.addEventListener('click',()=>couponModal());
 q('#couponForm')?.addEventListener('submit',event=>{
   event.preventDefault();let all=D.get('coupons');const id=Number(q('#couponId').value)||Date.now(),old=all.find(coupon=>Number(coupon.id)===id);
@@ -1074,7 +1205,7 @@ q('#refreshDashboard')?.addEventListener('click',()=>{D.syncFromApi('admin').the
 q('#createOrderBtn')?.addEventListener('click',async()=>{const customer=prompt('نام مشتری:');if(!customer)return;const phone=prompt('شماره تماس مشتری:');if(!phone)return;const productId=prompt('شناسه عددی محصول:','1');if(!productId)return;const qty=prompt('تعداد:','1');if(!qty)return;try{await window.CribAPI.request('/api/admin/orders/manual',{method:'POST',body:JSON.stringify({customer,phone,productId:Number(productId),qty:Number(qty),paymentStatus:'paid'})});await D.syncFromApi('admin');renderAll();D.toast('سفارش دستی ثبت شد.');}catch(error){D.toast(error.message,'error');}});
 q('#adminGlobalSearch')?.addEventListener('keydown',event=>{if(event.key==='Enter'){const value=event.target.value.trim();if(!value)return;showView('orders');q('#adminOrderSearch').value=value;renderOrders();}});
 
-document.addEventListener('click',event=>{
+document.addEventListener('click',async event=>{
   const orderView = event.target.closest('.admin-order-view');
 
 
@@ -1083,6 +1214,14 @@ document.addEventListener('click',event=>{
   }
   const orderPrint=event.target.closest('.admin-order-print');if(orderPrint)D.toast(`نسخه چاپی سفارش ${orderPrint.dataset.id} آماده شد.`);
   const editProduct=event.target.closest('.edit-product');if(editProduct)productModal(Number(editProduct.dataset.id));
+  const editCategory=event.target.closest('.edit-category');if(editCategory)categoryModal(Number(editCategory.dataset.id));
+  const deleteCategory=event.target.closest('.delete-category');if(deleteCategory){
+    const category=D.get('categories').find(item=>Number(item.id)===Number(deleteCategory.dataset.id));
+    if(category&&confirm(`دسته‌بندی «${category.name}» حذف شود؟`)){
+      try{await window.CribAPI.request(`/api/admin/categories/${category.id}`,{method:'DELETE'});await D.syncFromApi('admin');renderAll();D.toast('دسته‌بندی حذف شد.');}
+      catch(error){D.toast(error.message||'حذف دسته‌بندی انجام نشد.','error');}
+    }
+  }
   const cloneProduct=event.target.closest('.clone-product');if(cloneProduct){const all=D.get('products'),product=all.find(item=>Number(item.id)===Number(cloneProduct.dataset.id));if(product){const id=Math.max(...all.map(item=>Number(item.id)))+1;all.unshift({...product,id,sku:generateRandomSku(id),title:`${product.title} — کپی`,status:'draft',sales:0,image:product.image||D.PRODUCT_IMAGE,images:[...(product.images||[product.image||D.PRODUCT_IMAGE])]});D.set('products',all);renderAll();D.toast('یک نسخه پیش‌نویس از محصول ساخته شد.');}}
   const deleteProduct=event.target.closest('.delete-product');if(deleteProduct){const all=D.get('products');if(all.length<=1)return D.toast('حداقل یک محصول باید باقی بماند.','error');D.set('products',all.filter(product=>Number(product.id)!==Number(deleteProduct.dataset.id)));renderAll();D.toast('محصول حذف شد.');}
   const editCoupon=event.target.closest('.edit-coupon');if(editCoupon)couponModal(Number(editCoupon.dataset.id));
@@ -1119,10 +1258,22 @@ document.addEventListener('click',event=>{
 function exportRows(name,rows){D.downloadCSV(`${name}-${new Date().toISOString().slice(0,10)}.csv`,rows);}
 q('#exportOrdersBtn')?.addEventListener('click',()=>exportRows('orders',D.get('orders').map(order=>({order:order.id,customer:order.customer,phone:order.phone,date:order.date,subtotal:order.subtotal,coupon:order.couponCode||'',discount:order.discount,total:order.total,note:order.customerNote||'',status:labels[order.status],payment:labels[order.paymentStatus]||order.paymentStatus}))));
 q('#exportProductsBtn')?.addEventListener('click',()=>exportRows('products',D.get('products').map(product=>({id:product.id,sku:product.sku,title:product.title,category:(product.categories||[product.category]).join(' | '),sizes:(product.sizes||[]).join(' | '),fabrics:(product.fabrics||[]).join(' | '),price:product.price,badge:product.badge,status:labels[product.status]}))));
+q('#exportCategoriesBtn')?.addEventListener('click',()=>exportRows('categories',D.get('categories').map(category=>({id:category.id,name:category.name,slug:category.slug,sortOrder:category.sortOrder,status:labels[category.status]||category.status,placements:categoryPlacements(category).join(' | '),productCount:category.productCount||0}))));
 q('#exportCustomersBtn')?.addEventListener('click',()=>exportRows('customers',D.get('users').map(user=>({id:user.id,name:user.name,phone:user.phone,email:user.email,orders:user.orders,total:user.total,role:user.role}))));
 q('#exportCustomBtn')?.addEventListener('click',()=>exportRows('custom-designs',D.get('custom')));
 q('#downloadFullReport')?.addEventListener('click',()=>exportRows('full-sales-report',D.get('orders').map(order=>({order:order.id,customer:order.customer,phone:order.phone,date:order.date,subtotal:order.subtotal,discount:order.discount,shipping:order.shipping,total:order.total,paymentStatus:labels[order.paymentStatus]||order.paymentStatus,status:labels[order.status]||order.status,includedInSales:order.paymentStatus==='paid'&&order.status!=='cancelled'?'بله':'خیر',coupon:order.couponCode||'',customerNote:order.customerNote||''}))));
 
 q('#adminLogout')?.addEventListener('click',async()=>{try{await window.CribAPI.request('/api/admin/logout',{method:'POST',body:'{}'});}catch{}location.reload();});
-renderAll();D.syncFromApi('admin').then(()=>renderAll()).catch(error=>D.toast(error.message||'ورود مدیر انجام نشد.','error'));
+async function bootstrapAdmin(){
+  try{
+    await D.syncFromApi('admin');
+    renderAll();
+  }catch(error){
+    D.clearServerData?.();
+    renderAll();
+    console.error('Admin bootstrap failed:',error);
+    D.toast(`دریافت اطلاعات پنل از دیتابیس ناموفق بود: ${error.message||'خطای نامشخص'}`,'error');
+  }
+}
+bootstrapAdmin();
 })();

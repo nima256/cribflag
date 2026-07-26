@@ -136,11 +136,7 @@
 </div>
 <button class="mobile-accordion-btn">فروشگاه <span>+</span></button>
 <div class="mobile-submenu">
-<a class="mobile-sub-link store-category-link" data-category="پرچم ایران" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%A7%DB%8C%D8%B1%D8%A7%D9%86">پرچم ایران</a>
-<a class="mobile-sub-link store-category-link" data-category="پرچم کشورها" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%DA%A9%D8%B4%D9%88%D8%B1%D9%87%D8%A7">پرچم کشورهای جهان</a>
-<a class="mobile-sub-link store-category-link" data-category="پرچم تشریفات" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%AA%D8%B4%D8%B1%DB%8C%D9%81%D8%A7%D8%AA">پرچم تشریفات</a>
-<a class="mobile-sub-link store-category-link" data-category="پرچم رومیزی" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%B1%D9%88%D9%85%DB%8C%D8%B2%DB%8C">پرچم رومیزی</a>
-<a class="mobile-sub-link store-category-link" data-category="پرچم ساحلی" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%B3%D8%A7%D8%AD%D9%84%DB%8C">پرچم ساحلی</a>
+<%- include("partials/mobile-category-links") %>
 </div>
 <a class="mobile-link" data-page-link="custom" href="/custom">طرح دلخواه</a>
 <a class="mobile-link" data-page-link="ready" href="/ready">طرح‌های آماده</a>
@@ -177,15 +173,7 @@
 <input class="price-max-mobile" inputmode="numeric" placeholder="تا"/>
 </div>
 </div>
-<div class="filter-block">
-<h4>دسته‌بندی</h4>
-<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="فلگ دیواری"/> فلگ دیواری</label>
-<!-- <label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم ایران" /> پرچم ایران</label> -->
-<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم تشریفات"/> پرچم تشریفات</label>
-<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم رومیزی"/> پرچم رومیزی</label>
-<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم کشورها"/> پرچم کشورها</label>
-<label class="filter-check"><input class="category-filter-mobile" type="checkbox" value="پرچم ساحلی"/> پرچم ساحلی</label>
-</div>
+<div class="filter-block"><h4>دسته‌بندی</h4><%- include("partials/category-filters", { inputClass: "category-filter-mobile" }) %></div>
 
 <button class="btn btn-primary apply-mobile-filters" style="width:100%;margin-top:12px;">اعمال فیلتر</button>
 </aside>

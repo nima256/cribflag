@@ -6,8 +6,13 @@ const ejs = require('ejs');
 const request = require('supertest');
 const app = require('../server');
 const Product = require('../models/Product');
+const Category = require('../models/Category');
 
 const safeJson = value => JSON.stringify(value).replace(/</g, '\\u003c');
+const categories = [
+  { id: 1, publicId: 1, _id: '64b000000000000000000001', name: 'فلگ دیواری', slug: 'wall-flag', description: '', image: '/assets/images/divari.png', status: 'active', sortOrder: 10, showInMenu: true, showInStore: true, showInHome: true, showInReady: false, isReadyRoot: false },
+  { id: 2, publicId: 2, _id: '64b000000000000000000002', name: 'دکور اتاق', slug: 'room-decor', description: '', image: '', status: 'active', sortOrder: 20, showInMenu: false, showInStore: false, showInHome: false, showInReady: true, isReadyRoot: false }
+];
 const product = {
   id: 1,
   title: 'فلگ آزمایشی',
@@ -37,6 +42,8 @@ const product = {
 
 
   const originalFind = Product.find;
+  const originalCategoryFind = Category.find;
+  const originalProductAggregate = Product.aggregate;
   Product.find = () => ({
     sort: () => ({
       lean: async () => Array.from({ length: 6 }, (_, index) => ({
@@ -58,16 +65,28 @@ const product = {
       }))
     })
   });
+  Category.find = () => ({ sort: () => ({ lean: async () => categories }) });
+  Product.aggregate = async () => [{ _id: categories[0]._id, count: 6 }];
+  const categoryApi = await request(app).get('/api/categories').expect(200);
+  if (categoryApi.body.categories?.[0]?.slug !== 'wall-flag' || categoryApi.body.categories[0].productCount !== 6) throw new Error('Category API failed');
   const routedHome = await request(app).get('/').expect(200);
   const routedReady = await request(app).get('/ready').expect(200);
   Product.find = originalFind;
+  Category.find = originalCategoryFind;
+  Product.aggregate = originalProductAggregate;
   if (!routedHome.text.includes('فلگ آزمایشی 1') || !routedHome.text.includes('/product/1')) throw new Error('Express EJS product route failed');
-  if (!routedHome.text.includes('فلگ دیواری') || !routedHome.text.includes('استیکر مخمل')) throw new Error('Express navbar route failed');
+  if (!routedHome.text.includes('فلگ دیواری') || !routedHome.text.includes('wall-flag')) throw new Error('Express dynamic category navbar route failed');
   if (!routedReady.text.includes('<h3>فلگ آزمایشی 1</h3>') || routedReady.text.includes('<h3>فلگ آزمایشی 2</h3>')) throw new Error('Ready route database category filtering failed');
 
   const html = await ejs.renderFile(path.join(__dirname, '..', 'views', 'index.ejs'), {
     products: [product, product, product, product, product],
     readyDesigns: [],
+    categories,
+    navCategories: categories.filter(item => item.showInMenu),
+    storeCategories: categories.filter(item => item.showInStore),
+    homeCategories: categories.filter(item => item.showInHome),
+    readyCategories: categories.filter(item => item.showInReady),
+    readyRootCategory: null,
     currentUser: null,
     product: null,
     nextUrl: '',
@@ -76,7 +95,7 @@ const product = {
     toman: value => `${new Intl.NumberFormat('fa-IR').format(Number(value || 0))} تومان`,
     safeJson
   });
-  if (!html.includes('فلگ دیواری') || !html.includes('استیکر مخمل')) throw new Error('Navbar submenu missing');
+  if (!html.includes('فلگ دیواری') || !html.includes('wall-flag')) throw new Error('Dynamic navbar submenu missing');
   if (!html.includes('فلگ آزمایشی') || !html.includes('/product/1')) throw new Error('EJS product rendering failed');
 
   const serializers = require('../services/serializers');
@@ -89,7 +108,7 @@ const product = {
     throw new Error('Order discount/note serialization failed');
   }
 
-  console.log('Smoke OK: routes, ready DB filtering, order discount/note serialization, and guards');
+  console.log('Smoke OK: category API, dynamic routes, ready DB filtering, order discount/note serialization, and guards');
 })().catch(error => {
   console.error(error);
   process.exit(1);

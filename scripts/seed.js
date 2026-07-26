@@ -5,6 +5,7 @@ const Product = require('../models/Product');
 const Coupon = require('../models/Coupon');
 const Admin = require('../models/Admin');
 const User = require('../models/User');
+const { ensureLegacyCategories } = require('../services/categories');
 
 const S=['۱۵۰ × ۹۰ سانتی‌متر','۱۰۰ × ۷۰ سانتی‌متر','۵۰ × ۷۰ سانتی‌متر'];
 const F=['ساتن آمریکایی','ساتن براق','مخمل'];
@@ -32,6 +33,7 @@ const products=[
 async function run(){
  await mongoose.connect(env.mongodbUri);
  for(const p of products)await Product.findOneAndUpdate({publicId:p.publicId},{$set:p},{upsert:true,setDefaultsOnInsert:true});
+ await ensureLegacyCategories();
  const coupons=[{publicId:1,code:'CRIB10',type:'percent',value:10,minOrderAmount:500000,usageLimit:100,usedCount:0,displayExpires:'۱۴۰۶/۱۲/۲۹',status:'active'},{publicId:2,code:'WELCOME',type:'fixed',value:100000,minOrderAmount:1000000,usageLimit:50,usedCount:0,displayExpires:'۱۴۰۶/۱۲/۲۹',status:'active'}];
  for(const c of coupons)await Coupon.findOneAndUpdate({publicId:c.publicId},{$set:c},{upsert:true,setDefaultsOnInsert:true});
  await Admin.findOneAndUpdate({email:env.adminEmail.toLowerCase()},{$set:{fullName:'مدیر Crib Flag',email:env.adminEmail.toLowerCase(),mobile:env.adminMobile,password:await bcrypt.hash(env.adminPassword,12),role:'superadmin',permissions:['*'],isActive:true}},{upsert:true,setDefaultsOnInsert:true});

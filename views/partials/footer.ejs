@@ -8,7 +8,10 @@
 <p class="footer-desc">Crib Flag، فروشگاه تخصصی تولید و فروش انواع فلگ دیواری، پرچم تشریفات، رومیزی، سازمانی و طرح دلخواه با کیفیت چاپ حرفه‌ای.</p>
 <div class="socials"><a href="#">IG</a><a href="#">TG</a><a href="#">WA</a><a href="#">AP</a></div>
 </div>
-<div class="footer-col"><h4>دسته‌بندی‌ها</h4><a href="/store?category=فلگ%20دیواری">فلگ دیواری</a><a href="/store?category=پرچم%20تشریفات">پرچم تشریفات</a><a href="/custom">طرح دلخواه</a></div>
+<div class="footer-col"><h4>دسته‌بندی‌ها</h4>
+<% (navCategories || []).slice(0, 4).forEach(category => { %><a class="store-category-link" data-category="<%= category.slug %>" href="/store?category=<%= encodeURIComponent(category.slug) %>"><%= category.name %></a><% }) %>
+<% if (!(navCategories || []).length) { %><a href="/store">همه محصولات</a><% } %>
+<a href="/custom">طرح دلخواه</a></div>
 <div class="footer-col"><h4>لینک‌های مفید</h4><a href="/faq">سوالات متداول</a><a href="/blog">مجله Crib Flag</a><a href="/ready">طرح‌های آماده</a><a href="/faq">شرایط ارسال</a></div>
 <div class="footer-col"><h4>پشتیبانی</h4><a href="/faq">پیگیری سفارش</a><a href="/custom">ثبت سفارش عمده</a><a href="/custom">درخواست طراحی</a><a href="/faq">قوانین مرجوعی</a></div>
 <div class="footer-col"><h4>تماس با ما</h4><p>تهران، خیابان نمونه، پلاک ۱۲</p><p>۰۲۱-۱۲۳۴۵۶۷۸</p><p><a href="mailto:support@cribflag.ir">support@cribflag.ir</a></p><div class="trusts"><div class="trust-badge">اینماد</div><div class="trust-badge">ساماندهی</div><div class="trust-badge">اعتماد</div></div></div>

@@ -1,5 +1,6 @@
 const express = require('express');
 const Product = require('../models/Product');
+const Category = require('../models/Category');
 const User = require('../models/User');
 const Admin = require('../models/Admin');
 const S = require('../services/serializers');
@@ -31,12 +32,32 @@ const normalizeAsset = value => {
 };
 
 async function common(req) {
-  const productDocs = await Product.find({ status: 'active' }).sort({ publicId: 1 }).lean();
-  const products = productDocs.map(S.product).map(item => {
+  const [productDocs, categoryDocs] = await Promise.all([
+    Product.find({ status: 'active' }).sort({ publicId: 1 }).lean(),
+    Category.find({ status: 'active' }).sort({ sortOrder: 1, publicId: 1 }).lean()
+  ]);
+  const categoryLookup = new Map(categoryDocs.map(category => [String(category._id), category]));
+  const categories = categoryDocs.map(category => ({
+    id: category.publicId,
+    name: category.name,
+    slug: category.slug,
+    description: category.description || '',
+    image: category.image ? normalizeAsset(category.image) : '',
+    sortOrder: Number(category.sortOrder || 0),
+    showInMenu: Boolean(category.showInMenu),
+    showInStore: Boolean(category.showInStore),
+    showInHome: Boolean(category.showInHome),
+    showInReady: Boolean(category.showInReady),
+    isReadyRoot: Boolean(category.isReadyRoot)
+  }));
+  const products = productDocs.map(product => S.product(product, categoryLookup)).map(item => {
     const images = (Array.isArray(item.images) ? item.images : [item.image]).map(normalizeAsset);
     return { ...item, image: images[0], images };
   });
-  const readyDesigns = products.filter(item => Array.isArray(item.categories) && item.categories.includes('طرح آماده'));
+  const readyRoot = categories.find(category => category.isReadyRoot);
+  const readyDesigns = products.filter(item => readyRoot
+    ? item.categoryIds.includes(readyRoot.id)
+    : Array.isArray(item.categories) && item.categories.includes('طرح آماده'));
   let currentUser = null;
   if (req.session?.userId) {
     const user = await User.findById(req.session.userId).lean();
@@ -44,6 +65,12 @@ async function common(req) {
   }
   return {
     products,
+    categories,
+    navCategories: categories.filter(category => category.showInMenu && !category.isReadyRoot),
+    storeCategories: categories.filter(category => category.showInStore && !category.isReadyRoot),
+    homeCategories: categories.filter(category => category.showInHome && !category.isReadyRoot),
+    readyCategories: categories.filter(category => category.showInReady && !category.isReadyRoot),
+    readyRootCategory: readyRoot || null,
     readyDesigns,
     currentUser,
     product: null,

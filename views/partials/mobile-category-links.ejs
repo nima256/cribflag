@@ -1,0 +1,4 @@
+<% (navCategories || []).forEach(category => { %>
+<a class="mobile-sub-link store-category-link" data-category="<%= category.slug %>" href="/store?category=<%= encodeURIComponent(category.slug) %>"><%= category.name %></a>
+<% }) %>
+<% if (!(navCategories || []).length) { %><a class="mobile-sub-link" href="/store">همه محصولات</a><% } %>

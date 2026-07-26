@@ -2,6 +2,7 @@ const express = require('express');
 const Admin = require('../models/Admin');
 const User = require('../models/User');
 const Product = require('../models/Product');
+const Category = require('../models/Category');
 const Coupon = require('../models/Coupon');
 const Order = require('../models/Order');
 const Ticket = require('../models/Ticket');
@@ -18,7 +19,33 @@ const crypto = require('crypto');
 const { prepareProductPricing, findVariantPricing, fallbackPricing } = require('../utils/productPricing');
 const upload = require('../middlewares/upload');
 const { buildAnalytics, isPaidSale } = require('../services/analytics');
+const { categoryPayload, ensureLegacyCategories, nextCategoryId, resolveCategorySelection, syncProductCategoryNames } = require('../services/categories');
 
+
+function booleanField(value, fallback = false) {
+  if (value === undefined || value === null || value === '') return fallback;
+  return value === true || value === 'true' || value === 1 || value === '1' || value === 'on';
+}
+
+async function categoryData(body = {}, current = null) {
+  const name = String(body.name || '').trim();
+  if (!name) throw new AppError(400, 'نام دسته‌بندی الزامی است');
+  const slug = Category.normalizeSlug(body.slug || name);
+  if (!slug) throw new AppError(400, 'اسلاگ دسته‌بندی معتبر نیست');
+  return {
+    name,
+    slug,
+    description: String(body.description || '').trim(),
+    image: String(body.image || '').trim(),
+    status: body.status === 'draft' ? 'draft' : 'active',
+    sortOrder: Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : Number(current?.sortOrder || 0),
+    showInMenu: booleanField(body.showInMenu, current?.showInMenu ?? true),
+    showInStore: booleanField(body.showInStore, current?.showInStore ?? true),
+    showInHome: booleanField(body.showInHome, current?.showInHome ?? true),
+    showInReady: booleanField(body.showInReady, current?.showInReady ?? false),
+    isReadyRoot: booleanField(body.isReadyRoot, current?.isReadyRoot ?? false)
+  };
+}
 
 async function generateUniqueSku() {
   for (let attempt = 0; attempt < 30; attempt += 1) {
@@ -110,14 +137,24 @@ router.get(
 );
 
 async function getBootstrap() {
-  const [products, orders, users, coupons, tickets, custom] = await Promise.all([
+  await ensureLegacyCategories();
+  const [products, categories, orders, users, coupons, tickets, custom] = await Promise.all([
     Product.find().sort({ publicId: 1 }).lean(),
+    Category.find().sort({ sortOrder: 1, publicId: 1 }).lean(),
     Order.find().populate('user').sort({ createdAt: -1 }).lean(),
     User.find().sort({ publicId: 1 }).lean(),
     Coupon.find().sort({ publicId: 1 }).lean(),
     Ticket.find().populate('user').sort({ createdAt: -1 }).lean(),
     CustomRequest.find().populate('user').sort({ createdAt: -1 }).lean()
   ]);
+  const categoryLookup = new Map(categories.map(category => [String(category._id), category]));
+  const categoryCounts = new Map();
+  for (const product of products) {
+    for (const categoryId of product.categoryRefs || []) {
+      const key = String(categoryId);
+      categoryCounts.set(key, (categoryCounts.get(key) || 0) + 1);
+    }
+  }
 
   const userStats = {};
   for (const order of orders) {
@@ -129,7 +166,8 @@ async function getBootstrap() {
   }
 
   return {
-    products: products.map(S.product),
+    products: products.map(product => S.product(product, categoryLookup)),
+    categories: categories.map(category => categoryPayload(category, categoryCounts.get(String(category._id)) || 0)),
     orders: orders.map(S.order),
     users: users.map(user => S.user(user, userStats[user.publicId] || {})),
     coupons: coupons.map(S.coupon),
@@ -140,6 +178,56 @@ async function getBootstrap() {
   };
 }
 router.get('/bootstrap',asyncHandler(async(_req,res)=>ok(res,await getBootstrap())));
+router.get('/categories', asyncHandler(async (_req, res) => {
+  await ensureLegacyCategories();
+  const categories = await Category.find().sort({ sortOrder: 1, publicId: 1 }).lean();
+  const counts = await Product.aggregate([
+    { $unwind: { path: '$categoryRefs', preserveNullAndEmptyArrays: false } },
+    { $group: { _id: '$categoryRefs', count: { $sum: 1 } } }
+  ]);
+  const countMap = new Map(counts.map(item => [String(item._id), item.count]));
+  ok(res, { categories: categories.map(category => categoryPayload(category, countMap.get(String(category._id)) || 0)) });
+}));
+
+router.post('/categories', asyncHandler(async (req, res) => {
+  const data = await categoryData(req.body);
+  if (data.isReadyRoot) await Category.updateMany({}, { $set: { isReadyRoot: false } });
+  const category = await Category.create({ publicId: await nextCategoryId(), ...data });
+  await RecentAction.create({ action: 'category_create', targetType: 'category', targetId: String(category._id), targetName: category.name, adminId: req.session.adminId, ipAddress: req.ip });
+  ok(res, { message: 'دسته‌بندی ایجاد شد', category: categoryPayload(category, 0) }, 201);
+}));
+
+router.put('/categories/:id', asyncHandler(async (req, res) => {
+  const category = await Category.findOne({ publicId: Number(req.params.id) });
+  if (!category) throw new AppError(404, 'دسته‌بندی پیدا نشد');
+  const oldName = category.name;
+  const data = await categoryData(req.body, category);
+  if (data.isReadyRoot) await Category.updateMany({ _id: { $ne: category._id } }, { $set: { isReadyRoot: false } });
+  Object.assign(category, data);
+  await category.save();
+  if (oldName !== category.name) await syncProductCategoryNames();
+  await RecentAction.create({ action: 'category_update', targetType: 'category', targetId: String(category._id), targetName: category.name, adminId: req.session.adminId, ipAddress: req.ip });
+  const productCount = await Product.countDocuments({ $or: [{ categoryRefs: category._id }, { primaryCategory: category._id }] });
+  ok(res, { message: 'دسته‌بندی ویرایش شد', category: categoryPayload(category, productCount) });
+}));
+
+router.delete('/categories/:id', asyncHandler(async (req, res) => {
+  const category = await Category.findOne({ publicId: Number(req.params.id) });
+  if (!category) throw new AppError(404, 'دسته‌بندی پیدا نشد');
+  const productCount = await Product.countDocuments({
+    $or: [
+      { categoryRefs: category._id },
+      { primaryCategory: category._id },
+      { category: category.name },
+      { categories: category.name }
+    ]
+  });
+  if (productCount) throw new AppError(409, `این دسته‌بندی به ${productCount} محصول متصل است؛ ابتدا دسته محصولات را تغییر دهید`);
+  await category.deleteOne();
+  await RecentAction.create({ action: 'category_delete', targetType: 'category', targetId: String(category._id), targetName: category.name, adminId: req.session.adminId, ipAddress: req.ip });
+  ok(res, { message: 'دسته‌بندی حذف شد' });
+}));
+
 router.post('/orders/manual',asyncHandler(async(req,res)=>{
   const product = await Product.findOne({ publicId: Number(req.body.productId), status: 'active' });
   if (!product) throw new AppError(404, 'محصول یافت نشد');
@@ -189,9 +277,7 @@ router.put('/sync/:name',asyncHandler(async(req,res)=>{
 
       const sizes = Array.isArray(p.sizes) ? p.sizes.map(item => String(item).trim()).filter(Boolean) : [];
       const fabrics = Array.isArray(p.fabrics) ? p.fabrics.map(item => String(item).trim()).filter(Boolean) : [];
-      const categories = [...new Set((Array.isArray(p.categories) ? p.categories : [p.category])
-        .map(item => String(item || '').trim()).filter(Boolean))];
-      if (!categories.length) throw new AppError(400, `حداقل یک دسته‌بندی برای محصول ${p.title || id} انتخاب کنید`);
+      const selectedCategories = await resolveCategorySelection(p);
       const pricing = prepareProductPricing(p);
       pricing.variantPrices = pricing.variantPrices.filter(item => sizes.includes(item.size) && fabrics.includes(item.fabric));
       if (Array.isArray(p.variantPrices) && p.variantPrices.length && pricing.variantPrices.length !== sizes.length * fabrics.length) {
@@ -208,8 +294,10 @@ router.put('/sync/:name',asyncHandler(async(req,res)=>{
         { $set: {
           title: p.title,
           sku,
-          category: categories[0],
-          categories,
+          category: selectedCategories.category,
+          categories: selectedCategories.categories,
+          primaryCategory: selectedCategories.primaryCategory,
+          categoryRefs: selectedCategories.categoryRefs,
           price: pricing.price,
           hasDiscount: pricing.hasDiscount,
           oldPrice: pricing.oldPrice,

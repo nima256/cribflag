@@ -6,7 +6,7 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <meta content="پنل مدیریت پیشرفته Crib Flag" name="description"/>
 <title>مدیریت فروشگاه | Crib Flag</title>
-<link href="/assets/css/dashboard.css" rel="stylesheet"/>
+<link href="/assets/css/dashboard.css?v=20260725-categories-1" rel="stylesheet"/>
 <link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
 <style>
     * {
@@ -27,6 +27,7 @@
 <button class="portal-nav-btn" data-admin-view="custom" data-view-title="درخواست‌های طراحی"><svg viewbox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"></path><path d="M14 3v6h6M8 15l2-2 2 2 3-4 3 4"></path></svg>طرح‌های اختصاصی</button>
 <div class="portal-nav-label">کاتالوگ و فروش</div>
 <button class="portal-nav-btn" data-admin-view="products" data-view-title="مدیریت محصولات"><svg viewbox="0 0 24 24"><path d="m12 3 8 4-8 4-8-4 8-4Zm-8 8 8 4 8-4M4 15l8 4 8-4"></path></svg>محصولات</button>
+<button class="portal-nav-btn" data-admin-view="categories" data-view-title="مدیریت دسته‌بندی‌ها"><svg viewbox="0 0 24 24"><path d="M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 0h6v6h-6v-6Z"></path></svg>دسته‌بندی‌ها</button>
 
 <button class="portal-nav-btn" data-admin-view="coupons" data-view-title="کدهای تخفیف"><svg viewbox="0 0 24 24"><path d="M3 8V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3a3 3 0 0 0 0 6v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a3 3 0 0 0 0-6Z"></path><path d="M12 7v10"></path></svg>تخفیف‌ها</button>
 <div class="portal-nav-label">مشتریان و ارتباطات</div>
@@ -80,6 +81,12 @@
 <section class="portal-view" data-admin-section="products">
 <div class="view-head"><div><h2>مدیریت محصولات</h2><p>محصولات این بخش مستقیماً در صفحات فروشگاه نمایش داده می‌شوند</p></div><div class="view-actions"><button class="portal-btn portal-btn-light" id="exportProductsBtn">خروجی CSV</button><button class="portal-btn portal-btn-primary" data-open-product-modal="">افزودن محصول</button></div></div>
 <div class="portal-card"><div class="table-tools"><input class="table-search" id="adminProductSearch" placeholder="نام، کد یا دسته‌بندی"/><select class="table-filter" id="adminProductCategory"><option value="">همه دسته‌ها</option></select><select class="table-filter" id="adminProductStatus"><option value="">همه وضعیت‌ها</option><option value="active">فعال</option><option value="draft">پیش‌نویس</option></select></div><div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>محصول</th><th>کد</th><th>دسته‌بندی</th><th>قیمت</th><th>سایز و پارچه</th><th>فروش</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="adminProductsTable"></tbody></table></div></div>
+</section>
+
+<section class="portal-view" data-admin-section="categories">
+<div class="view-head"><div><h2>مدیریت دسته‌بندی‌ها</h2><p>ساخت، ویرایش، ترتیب و کنترل محل نمایش دسته‌ها در سایت</p></div><div class="view-actions"><button class="portal-btn portal-btn-light" id="exportCategoriesBtn">خروجی CSV</button><button class="portal-btn portal-btn-primary" id="addCategoryBtn">افزودن دسته‌بندی</button></div></div>
+<div class="stats-grid category-stats"><article class="stat-card"><h3 id="categoryStatAll">۰</h3><p>همه دسته‌ها</p></article><article class="stat-card"><h3 id="categoryStatActive">۰</h3><p>دسته فعال</p></article><article class="stat-card"><h3 id="categoryStatMenu">۰</h3><p>نمایش در منو</p></article><article class="stat-card"><h3 id="categoryStatProducts">۰</h3><p>اتصال به محصولات</p></article></div>
+<div class="portal-card"><div class="table-tools"><input class="table-search" id="adminCategorySearch" placeholder="نام یا اسلاگ دسته‌بندی"/><select class="table-filter" id="adminCategoryStatus"><option value="">همه وضعیت‌ها</option><option value="active">فعال</option><option value="draft">پیش‌نویس</option></select><select class="table-filter" id="adminCategoryPlacement"><option value="">همه محل‌ها</option><option value="menu">منوی سایت</option><option value="store">فروشگاه</option><option value="home">صفحه اصلی</option><option value="ready">طرح‌های آماده</option></select></div><div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>دسته‌بندی</th><th>اسلاگ</th><th>ترتیب</th><th>محل نمایش</th><th>محصولات</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="adminCategoriesTable"></tbody></table></div></div>
 </section>
 
 <section class="portal-view" data-admin-section="coupons">
@@ -137,22 +144,8 @@
 <div class="form-grid form-grid-3">
 <div class="field full"><label>نام محصول</label><input id="productTitle" placeholder="مثلاً پرچم تشریفات پایه استیل" required=""/></div>
 <div class="field"><label>کد محصول</label><div class="sku-generator"><input id="productSku" placeholder="CF-123456" required=""/><button class="portal-btn portal-btn-soft" id="productSkuGenerate" type="button">ساخت خودکار</button></div></div>
-<div class="field full"><label>دسته‌بندی‌ها <small class="field-help">می‌توانید چند مورد را هم‌زمان انتخاب کنید؛ اولین گزینه، دسته اصلی محصول است.</small></label>
-<div class="product-choice-grid product-category-grid" id="productCategories">
-<label class="product-choice"><input class="product-category-option" type="checkbox" value="فلگ دیواری"/><span><b>فلگ دیواری</b></span></label>
-<label class="product-choice"><input class="product-category-option" type="checkbox" value="پرچم ایران"/><span><b>پرچم ایران</b></span></label>
-<label class="product-choice"><input class="product-category-option" type="checkbox" value="پرچم کشورها"/><span><b>پرچم کشورها</b></span></label>
-<label class="product-choice"><input class="product-category-option" type="checkbox" value="پرچم تشریفات"/><span><b>پرچم تشریفات</b></span></label>
-<label class="product-choice"><input class="product-category-option" type="checkbox" value="پرچم رومیزی"/><span><b>پرچم رومیزی</b></span></label>
-<label class="product-choice"><input class="product-category-option" type="checkbox" value="پرچم ساحلی"/><span><b>پرچم ساحلی</b></span></label>
-<label class="product-choice"><input class="product-category-option" type="checkbox" value="پرچم مناسبتی"/><span><b>پرچم مناسبتی</b></span></label>
-<label class="product-choice"><input class="product-category-option" type="checkbox" value="سفارش عمده"/><span><b>سفارش عمده</b></span></label>
-<label class="product-choice"><input class="product-category-option" type="checkbox" value="دکور اتاق"/><span><b>دکور اتاق</b></span></label>
-<label class="product-choice"><input class="product-category-option" type="checkbox" value="مینیمال"/><span><b>مینیمال</b></span></label>
-<label class="product-choice"><input class="product-category-option" type="checkbox" value="باشگاهی"/><span><b>باشگاهی</b></span></label>
-<label class="product-choice"><input class="product-category-option" type="checkbox" value="برندینگ"/><span><b>برندینگ</b></span></label>
-<label class="product-choice"><input class="product-category-option" type="checkbox" value="طرح آماده"/><span><b>طرح آماده</b><small>نمایش در صفحه /ready</small></span></label>
-</div>
+<div class="field full"><label>دسته‌بندی‌ها <small class="field-help">می‌توانید چند مورد را هم‌زمان انتخاب کنید و دسته اصلی را جداگانه مشخص کنید.</small></label>
+<div class="product-choice-grid product-category-grid" id="productCategories"></div>
 </div>
 <div class="field"><label>وضعیت</label><select id="productStatus"><option value="active">فعال</option><option value="draft">پیش‌نویس</option></select></div>
 <div class="field"><label>نشان محصول</label>
@@ -213,13 +206,36 @@
 </form>
 </div>
 </div>
+
+<div class="portal-modal-backdrop" id="categoryModal">
+<div class="portal-modal wide">
+<div class="portal-modal-head"><div><h3 id="categoryModalTitle">افزودن دسته‌بندی</h3><small>تنظیمات نمایش این دسته در بخش‌های مختلف فروشگاه</small></div><button class="portal-modal-close" data-close-modal="" type="button">×</button></div>
+<form id="categoryForm"><div class="portal-modal-body"><input id="categoryId" type="hidden"/>
+<div class="form-grid form-grid-3">
+<div class="field"><label>نام دسته‌بندی</label><input id="categoryName" required placeholder="مثلاً فلگ دیواری"/></div>
+<div class="field"><label>اسلاگ</label><input id="categorySlug" required placeholder="wall-flag"/><small class="field-help">برای آدرس و فیلتر سایت استفاده می‌شود.</small></div>
+<div class="field"><label>ترتیب نمایش</label><input id="categorySortOrder" type="number" value="0"/></div>
+<div class="field"><label>وضعیت</label><select id="categoryStatus"><option value="active">فعال</option><option value="draft">پیش‌نویس</option></select></div>
+<div class="field full"><label>مسیر تصویر دسته</label><input id="categoryImage" placeholder="/assets/images/category.png"/></div>
+<div class="field full"><label>توضیحات</label><textarea id="categoryDescription" placeholder="توضیح کوتاه دسته‌بندی"></textarea></div>
+</div>
+<div class="category-placement-grid">
+<label class="product-choice"><input id="categoryShowInMenu" type="checkbox"/><span><b>نمایش در منو</b><small>لینک دسته در منوی دسکتاپ و موبایل</small></span></label>
+<label class="product-choice"><input id="categoryShowInStore" type="checkbox"/><span><b>نمایش در فروشگاه</b><small>چیپ‌ها و فیلتر دسته‌بندی</small></span></label>
+<label class="product-choice"><input id="categoryShowInHome" type="checkbox"/><span><b>نمایش در صفحه اصلی</b><small>کارت دسته‌بندی صفحه خانه</small></span></label>
+<label class="product-choice"><input id="categoryShowInReady" type="checkbox"/><span><b>فیلتر طرح آماده</b><small>نمایش در چیپ‌های صفحه طرح آماده</small></span></label>
+<label class="product-choice"><input id="categoryIsReadyRoot" type="checkbox"/><span><b>دسته مادر طرح آماده</b><small>محصولات عضو این دسته در صفحه /ready نمایش داده می‌شوند.</small></span></label>
+</div>
+</div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="" type="button">انصراف</button><button class="portal-btn portal-btn-primary" type="submit">ذخیره دسته‌بندی</button></div></form>
+</div></div>
+
 <div class="portal-modal-backdrop" id="adminOrderModal"><div class="portal-modal wide"><div class="portal-modal-head"><h3>مدیریت سفارش</h3><button class="portal-modal-close" data-close-modal="">×</button></div><div class="portal-modal-body" id="adminOrderModalBody"></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="">بستن</button><button class="portal-btn portal-btn-primary" id="saveOrderChanges">ذخیره تغییرات</button></div></div></div>
 <div class="portal-modal-backdrop" id="couponModal"><div class="portal-modal"><div class="portal-modal-head"><h3 id="couponModalTitle">کد تخفیف جدید</h3><button class="portal-modal-close" data-close-modal="">×</button></div><form id="couponForm"><div class="portal-modal-body"><input id="couponId" type="hidden"/><div class="form-grid"><div class="field"><label>کد تخفیف</label><input id="couponCode" required=""/></div><div class="field"><label>نوع تخفیف</label><select id="couponType"><option value="percent">درصدی</option><option value="fixed">مبلغ ثابت</option></select></div><div class="field"><label>مقدار</label><input id="couponValue" required="" type="number"/></div><div class="field"><label>حداقل خرید</label><input id="couponMin" type="number"/></div><div class="field"><label>سقف استفاده</label><input id="couponLimit" type="number"/></div><div class="field"><label>تاریخ انقضا</label><input id="couponExpires" placeholder="۱۴۰۵/۰۵/۳۱"/></div><div class="field"><label>وضعیت</label><select id="couponStatusField"><option value="active">فعال</option><option value="expired">منقضی</option></select></div></div></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="" type="button">انصراف</button><button class="portal-btn portal-btn-primary" type="submit">ذخیره کد</button></div></form></div></div>
 <div class="portal-modal-backdrop" id="customerModal"><div class="portal-modal wide"><div class="portal-modal-head"><h3>پرونده مشتری</h3><button class="portal-modal-close" data-close-modal="">×</button></div><div class="portal-modal-body" id="customerModalBody"></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="">بستن</button></div></div></div>
 <div class="portal-modal-backdrop" id="adminTicketModal"><div class="portal-modal"><div class="portal-modal-head"><h3>گفت‌وگوی پشتیبانی</h3><button class="portal-modal-close" data-close-modal="">×</button></div><div class="portal-modal-body" id="adminTicketModalBody"></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="">بستن</button></div></div></div>
 <div class="portal-modal-backdrop" id="customAdminModal"><div class="portal-modal"><div class="portal-modal-head"><h3>مدیریت درخواست طراحی</h3><button class="portal-modal-close" data-close-modal="">×</button></div><div class="portal-modal-body" id="customAdminModalBody"></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="">بستن</button><button class="portal-btn portal-btn-primary" id="saveCustomChanges">ذخیره تغییرات</button></div></div></div>
-<script src="/assets/js/api.js"></script>
-<script src="/assets/js/portal-data.js"></script>
-<script src="/assets/js/admin.js"></script>
+<script src="/assets/js/api.js?v=20260725-categories-1"></script>
+<script src="/assets/js/portal-data.js?v=20260725-categories-1"></script>
+<script src="/assets/js/admin.js?v=20260725-categories-1"></script>
 </body>
 </html>

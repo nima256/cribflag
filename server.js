@@ -10,7 +10,7 @@ const env = require('./config/env');
 const { AppError } = require('./utils/http');
 
 const app = express();
-if (env.trustProxy) app.set('trust proxy', 1); // انتشار پشت Nginx/Cloudflare: TRUST_PROXY=1
+if (env.trustProxy || env.isProduction) app.set('trust proxy', 1); // حفظ کوکی نشست پشت Nginx/Cloudflare/هاست
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -30,21 +30,30 @@ const sessionOptions = {
   cookie: {
     httpOnly: true,
     sameSite: env.cookieSameSite,
-    secure: env.isProduction,
+    secure: env.isProduction ? 'auto' : false,
     maxAge: 14 * 24 * 60 * 60 * 1000
   }
 };
 // انتشار: SESSION_STORE=mongo باعث ذخیره نشست‌ها در MongoDB می‌شود.
-if (env.sessionStore === 'mongo') {
+if (env.sessionStore === 'mongo' || env.isProduction) {
   sessionOptions.store = MongoStore.create({ mongoUrl: env.mongodbUri, collectionName: 'sessions' });
 }
 app.use(session(sessionOptions));
 
-app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), { maxAge: env.isProduction ? '30d' : 0 }));
+app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), {
+  maxAge: env.isProduction ? '30d' : 0,
+  etag: true,
+  setHeaders(res, filePath) {
+    // JS/CSS filenames are not content-hashed. Always revalidate them so a deploy
+    // cannot leave users on an old frontend for 30 days.
+    if (/\.(?:js|css)$/i.test(filePath)) res.setHeader('Cache-Control', 'no-cache');
+  }
+}));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { fallthrough: false, maxAge: env.isProduction ? '7d' : 0 }));
 
 app.get('/api/health', (_req, res) => res.json({ success: true, status: 'ok', environment: env.nodeEnv, paymentMock: env.paymentMock, viewEngine: 'ejs' }));
 app.use('/api/products', require('./routes/products'));
+app.use('/api/categories', require('./routes/categories'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/discounts', require('./routes/discounts'));
 app.use('/api/orders', require('./routes/orders'));
@@ -71,6 +80,7 @@ app.use((err, req, res, _next) => {
 
 async function start() {
   await mongoose.connect(env.mongodbUri);
+  await require('./services/categories').ensureLegacyCategories();
   app.listen(env.port, () => console.log(`Crib Flag: ${env.siteUrl} | MongoDB: ${env.mongodbUri} | EJS enabled`));
 }
 if (require.main === module) start().catch(err => { console.error('Startup failed:', err); process.exit(1); });

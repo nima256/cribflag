@@ -12,10 +12,12 @@ const productSchema = new mongoose.Schema({
   publicId: { type: Number, required: true, unique: true, index: true },
   title: { type: String, required: true, trim: true },
   sku: { type: String, required: true, unique: true, trim: true, uppercase: true },
-  // category برای سازگاری با داده‌های قدیمی، دسته اصلی محصول است.
+  // فیلدهای متنی برای سازگاری با سفارش‌ها و داده‌های قبلی حفظ شده‌اند.
   category: { type: String, required: true, index: true },
-  // categories امکان حضور هم‌زمان محصول در چند بخش فروشگاه را فراهم می‌کند.
   categories: { type: [String], default: [], index: true },
+  // مرجع واقعی دسته‌بندی‌ها در دیتابیس.
+  primaryCategory: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', default: null, index: true },
+  categoryRefs: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category', index: true }],
   price: { type: Number, required: true, min: 0 },
   hasDiscount: { type: Boolean, default: false },
   oldPrice: { type: Number, min: 0, default: null },

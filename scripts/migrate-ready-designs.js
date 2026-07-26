@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const env = require('../config/env');
 const Product = require('../models/Product');
 const legacyReadyDesigns = require('../data/readyDesigns');
+const { ensureLegacyCategories } = require('../services/categories');
 
 const DEFAULT_SIZES = [
   '۱۵۰ × ۹۰ سانتی‌متر',
@@ -87,6 +88,7 @@ async function run() {
   await mongoose.connect(env.mongodbUri);
   const normalized = await normalizeExistingProducts();
   const { imported, skipped } = await importLegacyReadyDesigns();
+  await ensureLegacyCategories();
   console.log(`Category migration completed. Normalized: ${normalized}, imported ready designs: ${imported}, skipped conflicts: ${skipped}.`);
   await mongoose.disconnect();
 }

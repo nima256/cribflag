@@ -5,7 +5,7 @@
   const DEFAULT_SIZES=['۱۵۰ × ۹۰ سانتی‌متر','۱۰۰ × ۷۰ سانتی‌متر','۵۰ × ۷۰ سانتی‌متر'];
   const DEFAULT_FABRICS=['ساتن آمریکایی','ساتن براق','مخمل'];
   const KEYS={
-    products:'cribFlagProducts',orders:'cribFlagOrders',users:'cribFlagUsers',coupons:'cribFlagCoupons',tickets:'cribFlagTickets',
+    products:'cribFlagProducts',categories:'cribFlagCategories',orders:'cribFlagOrders',users:'cribFlagUsers',coupons:'cribFlagCoupons',tickets:'cribFlagTickets',
     addresses:'cribFlagAddresses',notifications:'cribFlagNotifications',custom:'cribFlagCustomRequests',wishlist:'cribFlagWishlist',session:'cribFlagSession',analytics:'cribFlagAnalytics'
   };
 
@@ -98,6 +98,12 @@
       if(scope==='admin'&&error.status===401){await window.CribAPI.adminLoginDialog();data=await load();}
       else throw error;
     }
+    // سازگاری با حالتی که فایل frontend جدید روی backend قدیمی‌تر deploy شده
+    // و پاسخ bootstrap هنوز فیلد categories را برنمی‌گرداند.
+    if(scope==='admin'&&!Array.isArray(data?.categories)){
+      const categoryResponse=await window.CribAPI.request('/api/admin/categories');
+      data={...data,categories:Array.isArray(categoryResponse?.categories)?categoryResponse.categories:[]};
+    }
     suppressPersist=true;
     try{for(const name of Object.keys(KEYS)){if(Object.prototype.hasOwnProperty.call(data,name))set(name,data[name]);}}finally{suppressPersist=false;}
     return data;
@@ -131,7 +137,24 @@
     });
   }
   function normalizeUsers(list){return (Array.isArray(list)?list:users).map(item=>({...item}));}
+  const ADMIN_SERVER_COLLECTIONS=['products','categories','orders','users','coupons','tickets','custom','notifications'];
+  function clearServerData(){
+    for(const name of ADMIN_SERVER_COLLECTIONS)write(KEYS[name],[]);
+    write(KEYS.analytics,{});
+  }
   function ensure(){
+    /*
+     * پنل مدیریت باید فقط از API و دیتابیس تغذیه شود.
+     * داده‌های نمونه قبلی و localStorage قدیمی در صفحه admin پاک می‌شوند
+     * تا هنگام خطای API، اطلاعات ساختگی نمایش داده نشود.
+     */
+    if(document.body?.dataset?.portal==='admin'){
+      clearServerData();
+      if(!localStorage.getItem(KEYS.session))write(KEYS.session,{userId:null,name:'',loggedIn:false});
+      localStorage.removeItem('cribFlagSettings');
+      return;
+    }
+
     write(KEYS.products,normalizeProducts(read(KEYS.products,products)));
     if(!localStorage.getItem(KEYS.orders))write(KEYS.orders,orders);
     write(KEYS.users,normalizeUsers(read(KEYS.users,users)));
@@ -149,7 +172,7 @@
   function fa(n){return new Intl.NumberFormat('fa-IR').format(Number(n||0));}
   function toman(n){return `${fa(n)} تومان`;}
   function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
-  function get(name){return read(KEYS[name],['products','orders','users','coupons','tickets','addresses','notifications','custom','wishlist'].includes(name)?[]:{});}
+  function get(name){return read(KEYS[name],['products','categories','orders','users','coupons','tickets','addresses','notifications','custom','wishlist'].includes(name)?[]:{});}
   function set(name,value){
     if(name==='products')value=normalizeProducts(value);
     if(name==='users')value=normalizeUsers(value);
@@ -171,7 +194,7 @@
 
   ensure();
   window.CribData={
-    KEYS,read,write,get,set,ensure,syncFromApi,persist,uid,fa,toman,esc,toast,downloadCSV,
+    KEYS,read,write,get,set,ensure,clearServerData,syncFromApi,persist,uid,fa,toman,esc,toast,downloadCSV,
     PRODUCT_IMAGE,DEFAULT_SIZES,DEFAULT_FABRICS,
     defaults:{products,orders,users,coupons,tickets,addresses,notifications,custom,analytics:{}}
   };

@@ -14,7 +14,7 @@ const env = {
   otpExpiresSeconds: Number(process.env.OTP_EXPIRES_SECONDS || 120),
   melipayamakSharedKey: process.env.MELIPAYAMAK_SHARED_KEY || '',
   melipayamakBodyId: Number(process.env.MELIPAYAMAK_BODY_ID || 347717),
-  paymentMock: String(process.env.PAYMENT_MOCK).toLowerCase() === 'true',
+  paymentMock: process.env.PAYMENT_MOCK === 'true',
   zarinpalMerchantId: process.env.ZARINPAL_MERCHANT_ID || '',
   zarinpalSandbox: process.env.ZARINPAL_SANDBOX === 'true',
   zarinpalAmountUnit: process.env.ZARINPAL_AMOUNT_UNIT || 'toman',

@@ -1,0 +1,3 @@
+<% (storeCategories || []).forEach(category => { %>
+<label class="filter-check"><input class="<%= inputClass %>" type="checkbox" value="<%= category.slug %>"/> <%= category.name %></label>
+<% }) %>

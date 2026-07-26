@@ -3,32 +3,14 @@
 <nav aria-label="منوی اصلی" class="secondary-nav">
 <div class="nav-item">
 <button onclick="window.location.href='/store'" class="nav-link nav-dropdown-toggle" type="button">
-              فروشگاه
-              <span>⌄</span>
+  فروشگاه
+  <span>⌄</span>
 </button>
 <div class="dropdown">
-<div class="dropdown-item has-nested">
-<button class="dropdown-link nested-toggle" type="button">فلگ دیواری<span>›</span></button>
-<div class="nested-dropdown">
-<a class="dropdown-link store-category-link" data-category="پرچم ایران" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%A7%DB%8C%D8%B1%D8%A7%D9%86">پرچم ایران</a>
-<a class="dropdown-link store-category-link" data-category="پرچم کشورها" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%DA%A9%D8%B4%D9%88%D8%B1%D9%87%D8%A7">پرچم کشورهای آسیایی</a>
-<a class="dropdown-link store-category-link" data-category="پرچم کشورها" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%DA%A9%D8%B4%D9%88%D8%B1%D9%87%D8%A7">پرچم کشورهای اروپایی</a>
-<a class="dropdown-link store-category-link" data-category="پرچم کشورها" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%DA%A9%D8%B4%D9%88%D8%B1%D9%87%D8%A7">پرچم سازمان ملل</a>
-</div>
-</div>
-<div class="dropdown-item has-nested">
-<button class="dropdown-link nested-toggle" type="button">استیکر مخمل<span>›</span></button>
-<div class="nested-dropdown">
-<a class="dropdown-link store-category-link" data-category="پرچم تشریفات" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%AA%D8%B4%D8%B1%DB%8C%D9%81%D8%A7%D8%AA">پایه استیل</a>
-<a class="dropdown-link store-category-link" data-category="پرچم تشریفات" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%AA%D8%B4%D8%B1%DB%8C%D9%81%D8%A7%D8%AA">پایه خورشیدی</a>
-<a class="dropdown-link store-category-link" data-category="پرچم تشریفات" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%AA%D8%B4%D8%B1%DB%8C%D9%81%D8%A7%D8%AA">پرچم مدیریتی</a>
-</div>
-</div>
-<a class="dropdown-link store-category-link" data-category="پرچم رومیزی" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%B1%D9%88%D9%85%DB%8C%D8%B2%DB%8C">پوستر</a>
-<a class="dropdown-link store-category-link" data-category="پرچم ساحلی" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D8%B3%D8%A7%D8%AD%D9%84%DB%8C">روبالشتی</a>
-<a class="dropdown-link store-category-link" data-category="پرچم مناسبتی" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D9%85%D9%86%D8%A7%D8%B3%D8%A8%D8%AA%DB%8C">رو تختی</a>
-<a class="dropdown-link store-category-link" data-category="پرچم مناسبتی" href="/store?category=%D9%BE%D8%B1%DA%86%D9%85%20%D9%85%D9%86%D8%A7%D8%B3%D8%A8%D8%AA%DB%8C">طرح های آماده</a>
-
+<% (navCategories || []).forEach(category => { %>
+<a class="dropdown-link store-category-link" data-category="<%= category.slug %>" href="/store?category=<%= encodeURIComponent(category.slug) %>"><%= category.name %></a>
+<% }) %>
+<% if (!(navCategories || []).length) { %><a class="dropdown-link" href="/store">همه محصولات</a><% } %>
 </div>
 </div>
 <a class="nav-link" data-page-link="custom" href="/custom">طرح دلخواه</a>
