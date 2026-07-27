@@ -1,7 +1,7 @@
 <article class="product-card">
   <% if (product.badge) { %><span class="badge"><%= product.badge %></span><% } %>
   <a class="product-title-btn open-product" data-id="<%= product.id %>" href="/product/<%= product.id %>">
-    <div class="product-media"><div class="static-image-box"><img src="<%= product.image || '/assets/images/ukflag.png' %>" alt="<%= product.title %>"></div></div>
+    <div class="product-media"><div class="static-image-box"><img src="<%= product.image || '/assets/images/ukflag.png' %>" alt="<%= product.title %>" width="800" height="800" loading="lazy" decoding="async"></div></div>
   </a>
   <div class="product-content">
     <a class="product-title-btn open-product" data-id="<%= product.id %>" href="/product/<%= product.id %>"><h3 class="product-title"><%= product.title %></h3></a>

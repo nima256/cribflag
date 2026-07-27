@@ -44,13 +44,10 @@ app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), {
   maxAge: env.isProduction ? '30d' : 0,
   etag: true,
   setHeaders(res, filePath) {
-    // JS/CSS filenames are not content-hashed. Always revalidate them so a deploy
-    // cannot leave users on an old frontend for 30 days.
+    // JS/CSS filenames are not content-hashed, so revalidate them. `no-cache`
+    // still allows the browser to keep a local copy and receive a lightweight 304.
     if (/\.(?:js|css)$/i.test(filePath)) {
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('Surrogate-Control', 'no-store');
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
     }
   }
 }));

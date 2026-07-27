@@ -1,4 +1,5 @@
 <script>
+window.__SSR_DATA_READY__ = true;
 window.__INITIAL_PRODUCTS__ = <%- safeJson(products || []) %>;
 window.__READY_DESIGNS__ = <%- safeJson(readyDesigns || []) %>;
 window.__INITIAL_CATEGORIES__ = <%- safeJson(categories || []) %>;

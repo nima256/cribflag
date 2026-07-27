@@ -160,9 +160,16 @@ let currentUser=window.__CURRENT_USER__||null;
 const api=(path,options)=>window.CribAPI?.request(path,options);
 async function bootstrapRemoteData(){
   if(!window.CribAPI)return;
-  try{const result=await api('/api/products');if(Array.isArray(result.products))products=result.products.map(normalizeProductPricing);}catch(error){console.warn('Product API unavailable:',error.message);}
-  try{const result=await api('/api/categories');if(Array.isArray(result.categories))categories=result.categories;}catch(error){console.warn('Category API unavailable:',error.message);}
-  try{const auth=await api('/api/auth/me');currentUser=auth.authenticated?auth.user:null;}catch{currentUser=null;}
+  const [productResult,categoryResult,authResult]=await Promise.allSettled([
+    api('/api/products'),
+    api('/api/categories'),
+    api('/api/auth/me')
+  ]);
+  if(productResult.status==='fulfilled'&&Array.isArray(productResult.value.products))products=productResult.value.products.map(normalizeProductPricing);
+  else if(productResult.status==='rejected')console.warn('Product API unavailable:',productResult.reason?.message);
+  if(categoryResult.status==='fulfilled'&&Array.isArray(categoryResult.value.categories))categories=categoryResult.value.categories;
+  else if(categoryResult.status==='rejected')console.warn('Category API unavailable:',categoryResult.reason?.message);
+  if(authResult.status==='fulfilled')currentUser=authResult.value.authenticated?authResult.value.user:null;
 }
 function saveSessionUser(user){currentUser=user||null;try{localStorage.setItem('cribFlagSession',JSON.stringify(user?{userId:user.id,name:user.name,loggedIn:true}:{userId:null,name:'',loggedIn:false}));}catch{}}
 
@@ -256,7 +263,7 @@ function productImageSrc(productOrImage) {
   const image=typeof productOrImage==='object'?productOrImage?.image:productOrImage;
   return String(image||PRODUCT_IMAGE);
 }
-function productImageBox(label, image=PRODUCT_IMAGE, id="") { return `<div class="static-image-box"${id?` id="${id}"`:""}><img src="${escapeHTML(productImageSrc(image))}" alt="${escapeHTML(label)}"></div>`; }
+function productImageBox(label, image=PRODUCT_IMAGE, id="", loading="lazy") { return `<div class="static-image-box"${id?` id="${id}"`:""}><img src="${escapeHTML(productImageSrc(image))}" alt="${escapeHTML(label)}" width="800" height="800" loading="${loading}" decoding="async"></div>`; }
 
 function productCard(product) {
   const badge=product.badge?`<span class="badge">${escapeHTML(product.badge)}</span>`:"";
@@ -368,7 +375,10 @@ function initAuth(){
 }
 
 function initHome(){
-  const special=document.getElementById('specialProducts'),best=document.getElementById('bestSellerSlider');if(special)special.innerHTML=products.slice(0,4).map(productCard).join('');if(best)best.innerHTML=products.slice(4,12).map(productCard).join('');
+  const special=document.getElementById('specialProducts'),best=document.getElementById('bestSellerSlider');
+  // EJS already rendered these cards. Rebuilding them cancels image work and causes a large repaint.
+  if(special&&!special.children.length)special.innerHTML=products.slice(0,4).map(productCard).join('');
+  if(best&&!best.children.length)best.innerHTML=products.slice(4,12).map(productCard).join('');
   const track=document.querySelector('.hero-track'),dots=[...document.querySelectorAll('.dot')],slides=[...document.querySelectorAll('.hero-slide')];if(track&&slides.length){let i=0;const update=()=>{track.style.transform=`translateX(-${i*100}%)`;dots.forEach((d,n)=>d.classList.toggle('active',n===i));};document.querySelector('.hero-next')?.addEventListener('click',()=>{i=(i+1)%slides.length;update();});document.querySelector('.hero-prev')?.addEventListener('click',()=>{i=(i-1+slides.length)%slides.length;update();});dots.forEach((d,n)=>d.addEventListener('click',()=>{i=n;update();}));setInterval(()=>{i=(i+1)%slides.length;update();},5600);}
   document.querySelector('.best-next')?.addEventListener('click',()=>best?.scrollBy({left:-320,behavior:'smooth'}));document.querySelector('.best-prev')?.addEventListener('click',()=>best?.scrollBy({left:320,behavior:'smooth'}));
 }
@@ -388,7 +398,8 @@ function initStore(){
   document.querySelectorAll('.store-chip').forEach(chip=>{chip.classList.toggle('active',chip.dataset.category===cat||(!cat&&!chip.dataset.category));chip.addEventListener('click',()=>{const category=chip.dataset.category||'';storeState.categories=category?[category]:[];document.querySelectorAll('.store-chip').forEach(x=>x.classList.remove('active'));chip.classList.add('active');document.querySelectorAll('.category-filter,.category-filter-mobile').forEach(x=>x.checked=category&&x.value===category);renderStoreProducts();});});
   document.querySelector('.apply-filters')?.addEventListener('click',()=>{syncDesktopFilters();renderStoreProducts();});document.querySelectorAll('.reset-filters').forEach(x=>x.addEventListener('click',resetFilters));document.getElementById('sortSelect')?.addEventListener('change',()=>{syncDesktopFilters();renderStoreProducts();});
   document.querySelector('.filter-open')?.addEventListener('click',()=>openOverlayLayer(document.querySelector('.filter-drawer')));document.querySelector('.apply-mobile-filters')?.addEventListener('click',()=>{storeState.min=document.querySelector('.price-min-mobile')?.value||'';storeState.max=document.querySelector('.price-max-mobile')?.value||'';storeState.categories=[...document.querySelectorAll('.category-filter-mobile:checked')].map(x=>x.value);closeAllLayers();renderStoreProducts();});
-  renderStoreProducts();
+  // Preserve the server-rendered grid on a normal visit. Only rebuild when the URL asks for filtering.
+  if(storeState.query||storeState.categories.length)renderStoreProducts();
 }
 
 function initProduct(){
@@ -468,7 +479,7 @@ function initProduct(){
   document.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));btn.classList.add('active');document.getElementById(`tab-${btn.dataset.tab}`)?.classList.add('active');}));
 }
 function initFaq(){const box=document.getElementById('fullFaqList');if(box)box.innerHTML=faqItems.map(faqTemplate).join('');document.addEventListener('click',e=>{const q=e.target.closest('.faq-question');if(q){const item=q.closest('.faq-item');item.classList.toggle('open');q.querySelector('span').textContent=item.classList.contains('open')?'−':'+';}});}
-function initReady(){const box=document.getElementById('readyGrid');const draw=c=>{if(!box)return;const list=c?readyDesigns.filter(item=>productCategoryKeys(item).includes(c)):readyDesigns;box.innerHTML=list.length?list.map(readyCard).join(''):'<div class="results-empty"><div><h3>طرح آماده‌ای پیدا نشد</h3><p>محصولات این صفحه مستقیماً از دیتابیس و دسته «طرح آماده» نمایش داده می‌شوند.</p></div></div>';};draw('');document.querySelectorAll('.ready-chip').forEach(chip=>chip.addEventListener('click',()=>{document.querySelectorAll('.ready-chip').forEach(x=>x.classList.remove('active'));chip.classList.add('active');draw(chip.dataset.readyCategory||'');}));}
+function initReady(){const box=document.getElementById('readyGrid');const draw=c=>{if(!box)return;const list=c?readyDesigns.filter(item=>productCategoryKeys(item).includes(c)):readyDesigns;box.innerHTML=list.length?list.map(readyCard).join(''):'<div class="results-empty"><div><h3>طرح آماده‌ای پیدا نشد</h3><p>محصولات این صفحه مستقیماً از دیتابیس و دسته «طرح آماده» نمایش داده می‌شوند.</p></div></div>';};document.querySelectorAll('.ready-chip').forEach(chip=>chip.addEventListener('click',()=>{document.querySelectorAll('.ready-chip').forEach(x=>x.classList.remove('active'));chip.classList.add('active');draw(chip.dataset.readyCategory||'');}));}
 function initBlog(){const box=document.getElementById('blogGrid');if(box)box.innerHTML=blogPosts.map(blogTemplate).join('');}
 function initBlogDetail(){const id=Number(location.pathname.split('/').filter(Boolean).pop())||Number(new URLSearchParams(location.search).get('id'))||1;const p=blogPosts.find(x=>x.id===id)||blogPosts[0];const set=(id,v,html=false)=>{const e=document.getElementById(id);if(e)html?e.innerHTML=v:e.textContent=v;};set('blogDetailBreadcrumb',p.title);set('blogDetailCategory',p.tag);set('blogDetailDate',p.date);set('blogDetailTitle',p.title);set('blogDetailBody',p.body,true);const img=document.getElementById('articleCoverImg');if(img){img.src=placeholderImage(p.title,'مجله Crib Flag');img.alt=p.title;}const rel=document.getElementById('relatedPosts');if(rel)rel.innerHTML=blogPosts.filter(x=>x.id!==p.id).slice(0,3).map(x=>`<a class="related-post" href="/blog/${x.id}">${imageSlot(x.title,'مجله Crib Flag')}<span><h4>${escapeHTML(x.title)}</h4><small>${x.read}</small></span></a>`).join('');}
 
@@ -654,7 +665,13 @@ function initCheckout(){
 function initSuccess(){try{const params=new URLSearchParams(location.search),o=JSON.parse(sessionStorage.getItem('cribFlagLastOrder')||'{}');const id=params.get('order')||o.id,shipping=params.get('shipping')||o.shipping;if(id)document.getElementById('successOrderId').textContent=id;if(shipping)document.getElementById('successShipping').textContent=shipping;if(params.get('failed')||window.__PAYMENT_FAILED__)showToast('پرداخت ناموفق بود؛ سفارش لغو شد.');}catch{}}
 
 function initPage(){initHeader();const p=body.dataset.page;if(p==='home')initHome();if(p==='store')initStore();if(p==='product')initProduct();if(p==='custom')initCustomOrder();if(p==='cart')initCart();if(p==='faq')initFaq();if(p==='ready')initReady();if(p==='blog')initBlog();if(p==='blog-detail')initBlogDetail();if(p==='checkout')initCheckout();if(p==='success')initSuccess();}
-document.addEventListener('DOMContentLoaded',async()=>{window.CribLoader?.show('در حال دریافت اطلاعات...');try{await bootstrapRemoteData();initPage();}finally{window.CribLoader?.hide(true);}});
+document.addEventListener('DOMContentLoaded',async()=>{
+  // Public pages are server-rendered with products, categories and the current user.
+  // Initialize immediately instead of blocking first interaction behind three duplicate API calls.
+  if(window.__SSR_DATA_READY__){initPage();return;}
+  window.CribLoader?.show('در حال دریافت اطلاعات...');
+  try{await bootstrapRemoteData();initPage();}finally{window.CribLoader?.hide(true);}
+});
 
 window.CribLoader = (() => {
   const element = document.getElementById('appLoading');

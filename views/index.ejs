@@ -76,15 +76,15 @@
     <div class="hero-track" style="transform: translateX(-100%);">
 
         <article class="hero-slide slide-1">
-            <img src="/assets/images/banner1.png" alt="بنر اسلاید ۱" class="hero-slide-image" width="2081" height="755" fetchpriority="high" decoding="async">
+            <img src="/assets/images/banner1.webp" alt="بنر اسلاید ۱" class="hero-slide-image" width="2081" height="755" fetchpriority="high" decoding="async">
         </article>
 
         <article class="hero-slide slide-2">
-            <img src="/assets/images/banner2.png" alt="بنر اسلاید ۲" class="hero-slide-image" width="1855" height="848" loading="lazy" decoding="async">
+            <img src="/assets/images/banner2.webp" alt="بنر اسلاید ۲" class="hero-slide-image" width="1855" height="848" loading="lazy" decoding="async">
         </article>
 
         <article class="hero-slide slide-3">
-            <img src="/assets/images/banner3.png" alt="بنر اسلاید ۳" class="hero-slide-image" width="2081" height="755" loading="lazy" decoding="async">
+            <img src="/assets/images/banner3.webp" alt="بنر اسلاید ۳" class="hero-slide-image" width="2081" height="755" loading="lazy" decoding="async">
         </article>
 
     </div>
@@ -128,7 +128,7 @@
 <div class="categories-grid">
 <% (homeCategories || []).forEach(category => { %>
 <a class="category-card store-category-link" data-category="<%= category.slug %>" href="/store?category=<%= encodeURIComponent(category.slug) %>">
-<div class="category-card-media"><img alt="<%= category.name %>" height="800" src="<%= category.image || '/assets/images/ukflag.png' %>" width="800"/></div>
+<div class="category-card-media"><img alt="<%= category.name %>" height="800" src="<%= category.image || '/assets/images/ukflag.png' %>" width="800" loading="lazy" decoding="async"/></div>
 <h3><%= category.name %></h3>
 </a>
 <% }) %>
