@@ -4,7 +4,7 @@ const Product = require('../models/Product');
 const { AppError } = require('../utils/http');
 
 const LEGACY_SETTINGS = {
-  'فلگ دیواری': { sortOrder: 10, showInMenu: true, showInStore: true, showInHome: true, image: '/assets/images/divari.png' },
+  'پرچم دیواری': { sortOrder: 10, showInMenu: true, showInStore: true, showInHome: true, image: '/assets/images/divari.png' },
   'پرچم ایران': { sortOrder: 20, showInMenu: true, showInStore: true, showInHome: true },
   'پرچم کشورها': { sortOrder: 30, showInMenu: true, showInStore: true, showInHome: true, image: '/assets/images/rotakhti.png' },
   'پرچم تشریفات': { sortOrder: 40, showInMenu: true, showInStore: true, showInHome: true, image: '/assets/images/makhmal.png' },

@@ -1,20 +1,36 @@
+const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { AppError } = require('../utils/http');
 
-const allowed = new Set(['image/png', 'image/jpeg', 'image/webp', 'application/pdf']);
+const MIME_EXTENSIONS = new Map([
+  ['image/png', '.png'],
+  ['image/jpeg', '.jpg'],
+  ['image/webp', '.webp'],
+  ['application/pdf', '.pdf']
+]);
+
+const uploadsRoot = path.join(__dirname, '..', 'uploads');
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, path.join(__dirname, '..', 'uploads')),
+  destination: (_req, file, cb) => {
+    // فایل‌های اختصاصی مشتری نباید از مسیر عمومی /uploads قابل دریافت باشند.
+    const folder = file.fieldname === 'file' ? 'custom' : 'products';
+    const destination = path.join(uploadsRoot, folder);
+    fs.mkdir(destination, { recursive: true }, error => cb(error, destination));
+  },
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, '');
+    const ext = MIME_EXTENSIONS.get(file.mimetype);
+    if (!ext) return cb(new AppError(400, 'فرمت فایل مجاز نیست'));
     cb(null, `${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`);
   }
 });
 
 const upload = multer({
   storage,
-  limits: { fileSize: 20 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => allowed.has(file.mimetype) ? cb(null, true) : cb(new AppError(400, 'فرمت فایل مجاز نیست'))
+  limits: { fileSize: 20 * 1024 * 1024, files: 12 },
+  fileFilter: (_req, file, cb) => MIME_EXTENSIONS.has(file.mimetype)
+    ? cb(null, true)
+    : cb(new AppError(400, 'فرمت فایل مجاز نیست'))
 });
 
 module.exports = upload;

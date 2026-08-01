@@ -10,24 +10,24 @@
   };
 
   const products=[
-    {id:1,title:'فلگ دیواری طرح دلخواه',sku:'CF-1001',category:'فلگ دیواری',price:680000,old:790000,badge:'سفارشی',date:12,rate:4.9,status:'active',sales:47,sizes:DEFAULT_SIZES,fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:'فلگ دیواری با چاپ طرح دلخواه، مناسب اتاق، دکور، هدیه و فضای شخصی.'},
+    {id:1,title:'پرچم دیواری طرح دلخواه',sku:'CF-1001',category:'پرچم دیواری',price:680000,old:790000,badge:'سفارشی',date:12,rate:4.9,status:'active',sales:47,sizes:DEFAULT_SIZES,fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:'پرچم دیواری با چاپ طرح دلخواه، مناسب اتاق، دکور، هدیه و فضای شخصی.'},
     {id:2,title:'پرچم ایران مدل پریمیوم',sku:'CF-1002',category:'پرچم ایران',price:420000,old:520000,badge:'پرفروش',date:10,rate:4.8,status:'active',sales:89,sizes:DEFAULT_SIZES,fabrics:['ساتن آمریکایی','ساتن براق'],image:PRODUCT_IMAGE,description:'پرچم ایران با چاپ شفاف و دوخت تمیز، مناسب دکور، مراسم و استفاده رسمی.'},
     {id:3,title:'پرچم تشریفات ایران با پایه استیل',sku:'CF-1003',category:'پرچم تشریفات',price:1280000,old:1550000,badge:'ویژه',date:9,rate:4.7,status:'active',sales:21,sizes:['۱۵۰ × ۹۰ سانتی‌متر','۱۰۰ × ۷۰ سانتی‌متر'],fabrics:['ساتن آمریکایی','مخمل'],image:PRODUCT_IMAGE,description:'پرچم تشریفات رسمی با ظاهر لوکس و پایه استیل، مناسب شرکت‌ها، دفاتر و سالن‌های رسمی.'},
     {id:4,title:'پرچم رومیزی با چاپ لوگوی اختصاصی',sku:'CF-1004',category:'پرچم رومیزی',price:245000,old:320000,badge:'تخفیف',date:7,rate:4.6,status:'active',sales:63,sizes:['۵۰ × ۷۰ سانتی‌متر'],fabrics:['ساتن آمریکایی','ساتن براق'],image:PRODUCT_IMAGE,description:'پرچم رومیزی مناسب میز مدیریت، شرکت، نمایشگاه و برندینگ سازمانی.'},
-    {id:5,title:'فلگ مینیمال مناسب اتاق',sku:'CF-1005',category:'فلگ دیواری',price:590000,old:690000,badge:'جدید',date:13,rate:4.8,status:'active',sales:36,sizes:DEFAULT_SIZES,fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:'فلگ دیواری با طراحی مینیمال، مناسب اتاق‌های مدرن و دکورهای ساده.'},
+    {id:5,title:'پرچم مینیمال مناسب اتاق',sku:'CF-1005',category:'پرچم دیواری',price:590000,old:690000,badge:'جدید',date:13,rate:4.8,status:'active',sales:36,sizes:DEFAULT_SIZES,fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:'پرچم دیواری با طراحی مینیمال، مناسب اتاق‌های مدرن و دکورهای ساده.'},
     {id:6,title:'پرچم کشورهای جهان مدل رومیزی',sku:'CF-1006',category:'پرچم کشورها',price:330000,old:410000,badge:'محبوب',date:6,rate:4.5,status:'active',sales:52,sizes:['۵۰ × ۷۰ سانتی‌متر'],fabrics:['ساتن آمریکایی','ساتن براق'],image:PRODUCT_IMAGE,description:'پرچم کشورهای مختلف در ابعاد رومیزی، مناسب کلکسیون، اداره، آموزشگاه و میز کار.'},
     {id:7,title:'پرچم ساحلی تبلیغاتی برای کمپین',sku:'CF-1007',category:'پرچم ساحلی',price:980000,old:1200000,badge:'کمپین',date:5,rate:4.6,status:'active',sales:17,sizes:['۱۵۰ × ۹۰ سانتی‌متر','۱۰۰ × ۷۰ سانتی‌متر'],fabrics:['ساتن آمریکایی','ساتن براق'],image:PRODUCT_IMAGE,description:'پرچم ساحلی مناسب تبلیغات، ورودی فروشگاه، نمایشگاه و کمپین‌های محیطی.'},
-    {id:8,title:'فلگ گرافیکی مناسب دکور',sku:'CF-1008',category:'فلگ دیواری',price:640000,old:760000,badge:'خاص',date:11,rate:4.7,status:'active',sales:31,sizes:DEFAULT_SIZES,fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:'فلگ گرافیکی با چاپ شفاف، مناسب دکورهای خاص و فضاهای شخصی.'},
+    {id:8,title:'پرچم گرافیکی مناسب دکور',sku:'CF-1008',category:'پرچم دیواری',price:640000,old:760000,badge:'خاص',date:11,rate:4.7,status:'active',sales:31,sizes:DEFAULT_SIZES,fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:'پرچم گرافیکی با چاپ شفاف، مناسب دکورهای خاص و فضاهای شخصی.'},
     {id:9,title:'پرچم مناسبتی با چاپ باکیفیت',sku:'CF-1009',category:'پرچم مناسبتی',price:520000,old:640000,badge:'سریع',date:4,rate:4.4,status:'active',sales:28,sizes:DEFAULT_SIZES,fabrics:['ساتن آمریکایی','ساتن براق'],image:PRODUCT_IMAGE,description:'پرچم مناسبتی برای رویدادها، مراسم، هیئت‌ها و مناسبت‌های خاص با چاپ تمیز.'},
-    {id:10,title:'سفارش عمده فلگ با طرح اختصاصی',sku:'CF-1010',category:'سفارش عمده',price:1850000,old:2200000,badge:'عمده',date:8,rate:4.9,status:'active',sales:14,sizes:DEFAULT_SIZES,fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:'پکیج سفارش عمده فلگ برای فروشگاه‌ها، برندها، کمپین‌ها و رویدادهای بزرگ.'},
+    {id:10,title:'سفارش عمده پرچم با طرح اختصاصی',sku:'CF-1010',category:'سفارش عمده',price:1850000,old:2200000,badge:'عمده',date:8,rate:4.9,status:'active',sales:14,sizes:DEFAULT_SIZES,fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:'پکیج سفارش عمده پرچم برای فروشگاه‌ها، برندها، کمپین‌ها و رویدادهای بزرگ.'},
     {id:11,title:'پرچم رومیزی مدیریتی دوخت تمیز',sku:'CF-1011',category:'پرچم رومیزی',price:310000,old:390000,badge:'اداری',date:3,rate:4.5,status:'active',sales:44,sizes:['۵۰ × ۷۰ سانتی‌متر'],fabrics:['ساتن آمریکایی','ساتن براق'],image:PRODUCT_IMAGE,description:'پرچم رومیزی اداری با دوخت تمیز و ظاهر رسمی، مناسب میز مدیریت و جلسات.'},
-    {id:12,title:'پرچم کشورهای اروپایی مدل اداری',sku:'CF-1012',category:'پرچم کشورها',price:760000,old:910000,badge:'برندینگ',date:14,rate:4.8,status:'draft',sales:19,sizes:['۱۰۰ × ۷۰ سانتی‌متر','۵۰ × ۷۰ سانتی‌متر'],fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:'چاپ فلگ با لوگو و طرح اختصاصی برای برندها و کسب‌وکارها.'}
+    {id:12,title:'پرچم کشورهای اروپایی مدل اداری',sku:'CF-1012',category:'پرچم کشورها',price:760000,old:910000,badge:'برندینگ',date:14,rate:4.8,status:'draft',sales:19,sizes:['۱۰۰ × ۷۰ سانتی‌متر','۵۰ × ۷۰ سانتی‌متر'],fabrics:DEFAULT_FABRICS,image:PRODUCT_IMAGE,description:'چاپ پرچم با لوگو و طرح اختصاصی برای برندها و کسب‌وکارها.'}
   ];
 
   const fallbackCategorySets={
-    5:['فلگ دیواری','دکور اتاق','مینیمال','طرح آماده'],
+    5:['پرچم دیواری','دکور اتاق','مینیمال','طرح آماده'],
     6:['پرچم کشورها','طرح آماده'],
-    8:['فلگ دیواری','دکور اتاق','برندینگ','طرح آماده'],
+    8:['پرچم دیواری','دکور اتاق','برندینگ','طرح آماده'],
     9:['پرچم مناسبتی','طرح آماده']
   };
   products.forEach(item=>{item.categories=fallbackCategorySets[item.id]||[item.category];item.category=item.categories[0];});
@@ -42,10 +42,10 @@
   ];
 
   const orders=[
-    {id:'KR-84621',userId:1,customer:'مهدی احمدی',phone:'09121234567',email:'mehdi@example.com',date:'۱۴۰۵/۰۴/۲۳',createdAt:'2026-07-14T08:15:00',total:1445000,subtotal:1360000,shipping:85000,discount:0,status:'processing',payment:'پرداخت آنلاین',paymentStatus:'paid',shippingMethod:'تیپاکس',tracking:'',address:'تهران، سعادت‌آباد، خیابان نمونه، پلاک ۱۲',items:[{id:1,title:'فلگ دیواری طرح دلخواه',price:680000,qty:2,size:'۱۵۰ × ۹۰ سانتی‌متر',fabric:'ساتن آمریکایی'}]},
+    {id:'KR-84621',userId:1,customer:'مهدی احمدی',phone:'09121234567',email:'mehdi@example.com',date:'۱۴۰۵/۰۴/۲۳',createdAt:'2026-07-14T08:15:00',total:1445000,subtotal:1360000,shipping:85000,discount:0,status:'processing',payment:'پرداخت آنلاین',paymentStatus:'paid',shippingMethod:'تیپاکس',tracking:'',address:'تهران، سعادت‌آباد، خیابان نمونه، پلاک ۱۲',items:[{id:1,title:'پرچم دیواری طرح دلخواه',price:680000,qty:2,size:'۱۵۰ × ۹۰ سانتی‌متر',fabric:'ساتن آمریکایی'}]},
     {id:'KR-73108',userId:2,customer:'سارا کریمی',phone:'09351234567',email:'sara@example.com',date:'۱۴۰۵/۰۴/۲۲',createdAt:'2026-07-13T13:40:00',total:1065000,subtotal:980000,shipping:85000,discount:0,status:'shipped',payment:'پرداخت آنلاین',paymentStatus:'paid',shippingMethod:'تیپاکس',tracking:'TIP-98217452',address:'کرج، عظیمیه، میدان مهران، پلاک ۸',items:[{id:7,title:'پرچم ساحلی تبلیغاتی برای کمپین',price:980000,qty:1,size:'۱۵۰ × ۹۰ سانتی‌متر',fabric:'ساتن براق'}]},
-    {id:'KR-62819',userId:4,customer:'شرکت آفتاب',phone:'02188776655',email:'order@aftab.co',date:'۱۴۰۵/۰۴/۲۱',createdAt:'2026-07-12T09:20:00',total:3785000,subtotal:3700000,shipping:85000,discount:0,status:'design-review',payment:'کارت به کارت',paymentStatus:'review',shippingMethod:'تیپاکس',tracking:'',address:'تهران، میرداماد، برج آفتاب، طبقه ۴',items:[{id:10,title:'سفارش عمده فلگ با طرح اختصاصی',price:1850000,qty:2,size:'۱۰۰ × ۷۰ سانتی‌متر',fabric:'مخمل'}]},
-    {id:'KR-54177',userId:1,customer:'مهدی احمدی',phone:'09121234567',email:'mehdi@example.com',date:'۱۴۰۵/۰۴/۱۸',createdAt:'2026-07-09T17:10:00',total:765000,subtotal:680000,shipping:85000,discount:0,status:'delivered',payment:'پرداخت آنلاین',paymentStatus:'paid',shippingMethod:'تیپاکس',tracking:'TIP-55120430',address:'تهران، سعادت‌آباد، خیابان نمونه، پلاک ۱۲',items:[{id:1,title:'فلگ دیواری طرح دلخواه',price:680000,qty:1,size:'۱۰۰ × ۷۰ سانتی‌متر',fabric:'ساتن آمریکایی'}]},
+    {id:'KR-62819',userId:4,customer:'شرکت آفتاب',phone:'02188776655',email:'order@aftab.co',date:'۱۴۰۵/۰۴/۲۱',createdAt:'2026-07-12T09:20:00',total:3785000,subtotal:3700000,shipping:85000,discount:0,status:'design-review',payment:'کارت به کارت',paymentStatus:'review',shippingMethod:'تیپاکس',tracking:'',address:'تهران، میرداماد، برج آفتاب، طبقه ۴',items:[{id:10,title:'سفارش عمده پرچم با طرح اختصاصی',price:1850000,qty:2,size:'۱۰۰ × ۷۰ سانتی‌متر',fabric:'مخمل'}]},
+    {id:'KR-54177',userId:1,customer:'مهدی احمدی',phone:'09121234567',email:'mehdi@example.com',date:'۱۴۰۵/۰۴/۱۸',createdAt:'2026-07-09T17:10:00',total:765000,subtotal:680000,shipping:85000,discount:0,status:'delivered',payment:'پرداخت آنلاین',paymentStatus:'paid',shippingMethod:'تیپاکس',tracking:'TIP-55120430',address:'تهران، سعادت‌آباد، خیابان نمونه، پلاک ۱۲',items:[{id:1,title:'پرچم دیواری طرح دلخواه',price:680000,qty:1,size:'۱۰۰ × ۷۰ سانتی‌متر',fabric:'ساتن آمریکایی'}]},
     {id:'KR-43802',userId:3,customer:'علی محمدی',phone:'09192224455',email:'ali@example.com',date:'۱۴۰۵/۰۴/۱۶',createdAt:'2026-07-07T11:30:00',total:815000,subtotal:760000,shipping:85000,discount:30000,status:'cancelled',payment:'پرداخت آنلاین',paymentStatus:'refunded',shippingMethod:'تیپاکس',tracking:'',address:'قم، بلوار امین، کوچه ۱۰، پلاک ۲',items:[{id:12,title:'پرچم کشورهای اروپایی مدل اداری',price:760000,qty:1,size:'۱۰۰ × ۷۰ سانتی‌متر',fabric:'مخمل'}]}
   ];
 
@@ -81,13 +81,25 @@
     try{const value=JSON.parse(localStorage.getItem(key));return value===null?fallback:value;}catch{return fallback;}
   }
   let suppressPersist=false;
+  const persistQueues=new Map();
   function write(key,value){localStorage.setItem(key,JSON.stringify(value));return value;}
-  async function persist(name,value){
-    if(suppressPersist||!window.CribAPI)return;
+  function persist(name,value,options={}){
+    if(suppressPersist||!window.CribAPI)return Promise.resolve();
     const scope=document.body?.dataset?.portal;
-    if(!['admin','account'].includes(scope))return;
-    try{await window.CribAPI.request(`/api/${scope}/sync/${encodeURIComponent(name)}`,{method:'PUT',body:JSON.stringify({value})});}
-    catch(error){toast(error.message||'ذخیره در سرور انجام نشد.','error');}
+    if(!['admin','account'].includes(scope))return Promise.resolve();
+    const task=async()=>{
+      try{
+        await window.CribAPI.request(`/api/${scope}/sync/${encodeURIComponent(name)}`,{
+          method:'PUT',
+          body:JSON.stringify({value,...(options.confirmEmpty?{confirmEmpty:true}:{})})
+        });
+      }catch(error){toast(error.message||'ذخیره در سرور انجام نشد.','error');}
+    };
+    const previous=persistQueues.get(name)||Promise.resolve();
+    const next=previous.catch(()=>{}).then(task);
+    persistQueues.set(name,next);
+    next.finally(()=>{if(persistQueues.get(name)===next)persistQueues.delete(name);});
+    return next;
   }
   async function syncFromApi(scope=document.body?.dataset?.portal){
     if(!scope||!window.CribAPI)return null;
@@ -111,11 +123,12 @@
   function normalizeProducts(list){
     return (Array.isArray(list)?list:products).map((item,index)=>{
       const next={...item};
-      delete next.stock;
       delete next.color;
       delete next.imageName;
       next.id=Number(next.id||index+1);
       next.price=Number(next.price||0);
+      next.inventoryMode=next.inventoryMode==='managed'?'managed':'unlimited';
+      next.stock=next.inventoryMode==='managed'?Math.max(0,Math.trunc(Number(next.stock||0))):0;
       next.categories=[...new Set([next.category,...(Array.isArray(next.categories)?next.categories:[])].map(category=>String(category||'').trim()).filter(Boolean))];
       next.category=next.categories[0]||'';
       const legacyDiscount=next.hasDiscount===undefined&&Number(next.old)>next.price;
@@ -173,11 +186,11 @@
   function toman(n){return `${fa(n)} تومان`;}
   function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
   function get(name){return read(KEYS[name],['products','categories','orders','users','coupons','tickets','addresses','notifications','custom','wishlist'].includes(name)?[]:{});}
-  function set(name,value){
+  function set(name,value,options={}){
     if(name==='products')value=normalizeProducts(value);
     if(name==='users')value=normalizeUsers(value);
     const result=write(KEYS[name],value);
-    if(name!=='analytics')persist(name,result);
+    if(!['analytics','session'].includes(name))persist(name,result,options);
     return result;
   }
   function toast(message,type='success'){

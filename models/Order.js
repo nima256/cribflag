@@ -11,7 +11,8 @@ const itemSchema = new mongoose.Schema({
   notes: String,
   fileName: String,
   filePath: String,
-  customRequestId: String
+  customRequestId: String,
+  inventoryManaged: { type: Boolean, default: false }
 }, { _id: false });
 const orderSchema = new mongoose.Schema({
   orderNumber: { type: String, required: true, unique: true, index: true },
@@ -39,6 +40,7 @@ const orderSchema = new mongoose.Schema({
   inventoryApplied: { type: Boolean, default: false },
   orderRegisteredSmsRecipients: { type: [String], default: [] },
   orderRegisteredSmsSentAt: Date,
+  orderRegisteredSmsLockAt: Date,
   paymentInfo: {
     authority: String,
     url: String,

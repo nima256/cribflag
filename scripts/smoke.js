@@ -1,6 +1,8 @@
 process.env.SESSION_STORE = 'memory';
 process.env.NODE_ENV = 'test';
 
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const ejs = require('ejs');
 const request = require('supertest');
@@ -10,13 +12,14 @@ const Category = require('../models/Category');
 
 const safeJson = value => JSON.stringify(value).replace(/</g, '\\u003c');
 const categories = [
-  { id: 1, publicId: 1, _id: '64b000000000000000000001', name: 'فلگ دیواری', slug: 'wall-flag', description: '', image: '/assets/images/divari.png', status: 'active', sortOrder: 10, showInMenu: true, showInStore: true, showInHome: true, showInReady: false, isReadyRoot: false },
-  { id: 2, publicId: 2, _id: '64b000000000000000000002', name: 'دکور اتاق', slug: 'room-decor', description: '', image: '', status: 'active', sortOrder: 20, showInMenu: false, showInStore: false, showInHome: false, showInReady: true, isReadyRoot: false }
+  { id: 1, publicId: 1, _id: '64b000000000000000000001', name: 'پرچم دیواری', slug: 'wall-flag', description: '', image: '/assets/images/divari.png', status: 'active', sortOrder: 10, showInMenu: true, showInStore: true, showInHome: true, showInReady: false, isReadyRoot: false },
+  { id: 2, publicId: 2, _id: '64b000000000000000000002', name: 'دکور اتاق', slug: 'room-decor', description: '', image: '', status: 'active', sortOrder: 20, showInMenu: false, showInStore: false, showInHome: false, showInReady: true, isReadyRoot: false },
+  { id: 3, publicId: 3, _id: '64b000000000000000000003', name: 'طرح آماده', slug: 'ready-design', description: '', image: '', status: 'active', sortOrder: 999, showInMenu: false, showInStore: false, showInHome: false, showInReady: false, isReadyRoot: true }
 ];
 const product = {
   id: 1,
-  title: 'فلگ آزمایشی',
-  category: 'فلگ دیواری',
+  title: 'پرچم آزمایشی',
+  category: 'پرچم دیواری',
   image: '/assets/images/ukflag.png',
   badge: 'ویژه',
   rate: 4.9,
@@ -40,31 +43,58 @@ const product = {
     .expect(401);
   if (anonymousOrder.body.success !== false) throw new Error('Anonymous order protection failed');
 
+  const crossSiteMutation = await request(app)
+    .post('/api/auth/logout')
+    .set('Origin', 'https://evil.example')
+    .expect(403);
+  if (crossSiteMutation.body.success !== false) throw new Error('Cross-site mutation guard failed');
+
+  await request(app).get('/uploads/custom/private-file.pdf').expect(404);
+
+  const { assertUploadedFile } = require('../utils/uploadValidation');
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cribflag-upload-'));
+  const validPng = path.join(tempDir, 'valid.png');
+  const fakePng = path.join(tempDir, 'fake.png');
+  fs.writeFileSync(validPng, Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0,0,0,0]));
+  fs.writeFileSync(fakePng, 'not a png');
+  await assertUploadedFile({ path: validPng, mimetype: 'image/png' }, new Set(['image/png']));
+  let fakeRejected = false;
+  try { await assertUploadedFile({ path: fakePng, mimetype: 'image/png' }, new Set(['image/png'])); }
+  catch { fakeRejected = true; }
+  fs.rmSync(tempDir, { recursive: true, force: true });
+  if (!fakeRejected) throw new Error('Spoofed upload signature was accepted');
 
   const originalFind = Product.find;
   const originalCategoryFind = Category.find;
   const originalProductAggregate = Product.aggregate;
-  Product.find = () => ({
-    sort: () => ({
-      lean: async () => Array.from({ length: 6 }, (_, index) => ({
-        publicId: index + 1,
-        title: `فلگ آزمایشی ${index + 1}`,
-        sku: `TEST-${index + 1}`,
-        category: 'فلگ دیواری',
-        categories: index === 0 ? ['فلگ دیواری', 'دکور اتاق', 'طرح آماده'] : ['فلگ دیواری'],
-        image: '/assets/images/ukflag.png',
-        badge: 'ویژه',
-        rate: 4.9,
-        oldPrice: 500000,
-        price: 450000,
-        description: 'محصول تست',
-        sizes: ['۱۰۰ × ۷۰'],
-        fabrics: ['مخمل'],
-        status: 'active',
-        stock: 10
-      }))
-    })
-  });
+  const productRows = Array.from({ length: 6 }, (_, index) => ({
+    _id: `65b00000000000000000000${index + 1}`,
+    publicId: index + 1,
+    title: `پرچم آزمایشی ${index + 1}`,
+    sku: `TEST-${index + 1}`,
+    category: 'پرچم دیواری',
+    categories: index === 0 ? ['پرچم دیواری', 'دکور اتاق', 'طرح آماده'] : ['پرچم دیواری'],
+    primaryCategory: categories[0]._id,
+    categoryRefs: index === 0 ? [categories[0]._id, categories[1]._id, categories[2]._id] : [categories[0]._id],
+    image: '/assets/images/ukflag.png',
+    badge: 'ویژه',
+    rate: 4.9,
+    oldPrice: 500000,
+    price: 450000,
+    description: 'محصول تست',
+    sizes: ['۱۰۰ × ۷۰'],
+    fabrics: ['مخمل'],
+    status: 'active',
+    stock: 10
+  }));
+  Product.find = () => {
+    const query = {
+      select: () => query,
+      sort: () => query,
+      lean: async () => productRows
+    };
+    return query;
+  };
   Category.find = () => ({ sort: () => ({ lean: async () => categories }) });
   Product.aggregate = async () => [{ _id: categories[0]._id, count: 6 }];
   const categoryApi = await request(app).get('/api/categories').expect(200);
@@ -74,9 +104,9 @@ const product = {
   Product.find = originalFind;
   Category.find = originalCategoryFind;
   Product.aggregate = originalProductAggregate;
-  if (!routedHome.text.includes('فلگ آزمایشی 1') || !routedHome.text.includes('/product/1')) throw new Error('Express EJS product route failed');
-  if (!routedHome.text.includes('فلگ دیواری') || !routedHome.text.includes('wall-flag')) throw new Error('Express dynamic category navbar route failed');
-  if (!routedReady.text.includes('<h3>فلگ آزمایشی 1</h3>') || routedReady.text.includes('<h3>فلگ آزمایشی 2</h3>')) throw new Error('Ready route database category filtering failed');
+  if (!routedHome.text.includes('پرچم آزمایشی 1') || !routedHome.text.includes('/product/1')) throw new Error('Express EJS product route failed');
+  if (!routedHome.text.includes('پرچم دیواری') || !routedHome.text.includes('wall-flag')) throw new Error('Express dynamic category navbar route failed');
+  if (!routedReady.text.includes('<h3>پرچم آزمایشی 1</h3>') || routedReady.text.includes('<h3>پرچم آزمایشی 2</h3>')) throw new Error('Ready route database category filtering failed');
 
   const html = await ejs.renderFile(path.join(__dirname, '..', 'views', 'index.ejs'), {
     products: [product, product, product, product, product],
@@ -95,8 +125,8 @@ const product = {
     toman: value => `${new Intl.NumberFormat('fa-IR').format(Number(value || 0))} تومان`,
     safeJson
   });
-  if (!html.includes('فلگ دیواری') || !html.includes('wall-flag')) throw new Error('Dynamic navbar submenu missing');
-  if (!html.includes('فلگ آزمایشی') || !html.includes('/product/1')) throw new Error('EJS product rendering failed');
+  if (!html.includes('پرچم دیواری') || !html.includes('wall-flag')) throw new Error('Dynamic navbar submenu missing');
+  if (!html.includes('پرچم آزمایشی') || !html.includes('/product/1')) throw new Error('EJS product rendering failed');
 
   const serializers = require('../services/serializers');
   const serializedOrder = serializers.order({
@@ -109,6 +139,11 @@ const product = {
   }
 
   const { calculateCustomPrice } = require('../utils/customPricing');
+  const { parsePersianDate } = require('../utils/formatters');
+  const parsedExpiry = parsePersianDate('۱۴۰۵/۰۵/۳۱');
+  if (!parsedExpiry || parsedExpiry.getUTCFullYear() !== 2026 || parsedExpiry.getUTCMonth() !== 7 || parsedExpiry.getUTCDate() !== 22) {
+    throw new Error('Persian coupon expiration parsing failed');
+  }
   const customPriceCases = [
     ['40 × 30 سانتی‌متر', true, 550000],
     ['70x50', true, 550000],
@@ -128,7 +163,7 @@ const product = {
     }
   }
 
-  console.log('Smoke OK: category API, dynamic routes, ready DB filtering, custom pricing, order serialization, and guards');
+  console.log('Smoke OK: category API, dynamic routes, ready DB filtering, custom pricing, order serialization, auth and origin guards');
 })().catch(error => {
   console.error(error);
   process.exit(1);

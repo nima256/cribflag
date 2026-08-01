@@ -2,8 +2,8 @@ const https = require('https');
 const env = require('../config/env');
 const { normalizeMobile } = require('../utils/formatters');
 
-const ORDER_REGISTERED_BODY_ID = 502826;
-const ORDER_ADMIN_MOBILES = ['09014968828', '09054243464'];
+const ORDER_REGISTERED_BODY_ID = 503938;
+const ORDER_ADMIN_MOBILES = ['09014968828'];
 
 function normalizeArgs(args) {
   return (Array.isArray(args) ? args : []).map(value => String(value ?? '').trim());
@@ -54,6 +54,7 @@ function sendPatternSmsWithBodyId(to, args, bodyId) {
         ? resolve({ mocked: false, to: recipient, body })
         : reject(new Error(`خطای سامانه پیامک برای ${recipient}: ${response.statusCode} ${body}`)));
     });
+    request.setTimeout(10_000, () => request.destroy(new Error('مهلت اتصال به سامانه پیامک تمام شد')));
     request.on('error', reject);
     request.write(payload, 'utf8');
     request.end();
@@ -64,17 +65,6 @@ function sendPatternSms(to, args) {
   return sendPatternSmsWithBodyId(to, args, env.melipayamakBodyId);
 }
 
-function formatOrderItems(items) {
-  return (Array.isArray(items) ? items : [])
-    .map(item => `${String(item?.title || 'کالا').trim()} (${Math.max(1, Number(item?.qty || 1))} عدد)`)
-    .join('، ');
-}
-
-function formatOrderAmount(amount) {
-  const numericAmount = Math.max(0, Number(amount) || 0);
-  return `${new Intl.NumberFormat('fa-IR').format(numericAmount)} تومان`;
-}
-
 async function sendOrderRegisteredSms(order, options = {}) {
   const customerMobile = normalizeRecipient(options.customerMobile || order.phone);
   const recipients = [...new Set([customerMobile, ...ORDER_ADMIN_MOBILES].map(normalizeRecipient))];
@@ -82,9 +72,7 @@ async function sendOrderRegisteredSms(order, options = {}) {
   const attemptedRecipients = recipients.filter(to => !alreadySentRecipients.has(to));
   const args = [
     order.customer,
-    order.orderNumber,
-    formatOrderItems(order.items),
-    formatOrderAmount(order.total)
+    order.orderNumber
   ];
 
   const results = await Promise.allSettled(

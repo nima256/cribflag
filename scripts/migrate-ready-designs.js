@@ -47,7 +47,7 @@ async function importLegacyReadyDesigns() {
       continue;
     }
 
-    const category = categoryAliases[design.category] || design.category || 'فلگ دیواری';
+    const category = categoryAliases[design.category] || design.category || 'پرچم دیواری';
     const existing = conflicting || await Product.findOne({ sku });
     if (existing) {
       const categories = [...new Set([existing.category, ...(existing.categories || []), category, 'طرح آماده'].filter(Boolean))];

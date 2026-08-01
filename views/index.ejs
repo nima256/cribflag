@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
-<meta content="Crib Flag؛ فروشگاه تخصصی فلگ و پرچم" name="description"/>
-<title>Crib Flag | فروشگاه تخصصی فلگ و پرچم</title>
+<meta content="Crib Flag؛ فروشگاه تخصصی پرچم" name="description"/>
+<title>Crib Flag | فروشگاه تخصصی پرچم</title>
 <link href="/assets/css/style.css?v=20260726-mobile-hero-v1" rel="stylesheet"/>
 <link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
 </head>
@@ -21,7 +21,7 @@
 <img alt="Crib Flag" src="/assets/images/logo.png"/>
 </span>
 <strong>Crib Flag </strong>
-<!-- <small>فروشگاه تخصصی فلگ و پرچم</small> -->
+<!-- <small>فروشگاه تخصصی پرچم</small> -->
 </a>
 <div class="search-wrap">
 <form action="/store" class="search-box search-form" method="get">
@@ -80,7 +80,7 @@
         </article>
 
         <article class="hero-slide slide-2">
-            <img src="/assets/images/banner2.webp" alt="بنر اسلاید ۲" class="hero-slide-image" width="1855" height="848" loading="lazy" decoding="async">
+            <img src="/assets/images/banner3.webp" alt="بنر اسلاید ۲" class="hero-slide-image" width="1855" height="848" loading="lazy" decoding="async">
         </article>
 
         <article class="hero-slide slide-3">
@@ -108,6 +108,21 @@
     </div>
 </div>
 </section>
+<%
+const normalizeHomeBadge = value => String(value || '')
+  .toLowerCase()
+  .replace(/[ي]/g, 'ی')
+  .replace(/[ك]/g, 'ک')
+  .replace(/[\u200c\u200d\u200e\u200f]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+const specialBadgeNames = new Set(['ویژه', 'پیشنهاد ویژه'].map(normalizeHomeBadge));
+const bestSellerBadgeNames = new Set(['پرفروش', 'پرفروش‌ترین', 'پرفروش ترین'].map(normalizeHomeBadge));
+const markedSpecialProducts = products.filter(product => specialBadgeNames.has(normalizeHomeBadge(product.badge)));
+const markedBestSellerProducts = products.filter(product => bestSellerBadgeNames.has(normalizeHomeBadge(product.badge)));
+const homeSpecialProducts = (markedSpecialProducts.length ? markedSpecialProducts : products.slice(0, 4)).slice(0, 4);
+const homeBestSellerProducts = (markedBestSellerProducts.length ? markedBestSellerProducts : products.slice(4, 12)).slice(0, 8);
+%>
 <section class="section">
 <div class="section-head">
 <div>
@@ -116,7 +131,7 @@
 </div>
 <button class="view-all" data-page-link="store">مشاهده همه ←</button>
 </div>
-<div class="products-grid" id="specialProducts"><% products.slice(0,4).forEach(product => { %><%- include("partials/product-card", { product, toman }) %><% }) %></div>
+<div class="products-grid" id="specialProducts"><% homeSpecialProducts.forEach(product => { %><%- include("partials/product-card", { product, toman }) %><% }) %></div>
 </section>
 <section class="section">
 <div class="section-head">
@@ -145,15 +160,15 @@
 <button class="round-control best-next">›</button>
 </div>
 </div>
-<div class="horizontal-slider" id="bestSellerSlider"><% products.slice(4,12).forEach(product => { %><%- include("partials/product-card", { product, toman }) %><% }) %></div>
+<div class="horizontal-slider" id="bestSellerSlider"><% homeBestSellerProducts.forEach(product => { %><%- include("partials/product-card", { product, toman }) %><% }) %></div>
 </section>
 <!-- <section class="section">
 <div class="promo-grid">
 <article class="promo-card">
-<div class="promo-card-media"><img alt="چاپ فلگ اختصاصی" src="/assets/images/home-image-9.svg"/></div>
+<div class="promo-card-media"><img alt="چاپ پرچم اختصاصی" src="/assets/images/home-image-9.svg"/></div>
 <div class="promo-body">
 <small>سفارش اختصاصی</small>
-<h3>چاپ هر طرح دلخواه روی فلگ</h3>
+<h3>چاپ هر طرح دلخواه روی پرچم</h3>
 <p>برای اتاق، دکور، کافه، باشگاه، شرکت و هدیه خاص.</p>
 </div>
 </article>
@@ -174,10 +189,10 @@
 </div>
 </article>
 <article class="promo-card">
-<div class="promo-card-media"><img alt="راهنمای خرید فلگ" src="/assets/images/home-image-12.svg"/></div>
+<div class="promo-card-media"><img alt="راهنمای خرید پرچم" src="/assets/images/home-image-12.svg"/></div>
 <div class="promo-body">
 <small>مجله Crib Flag</small>
-<h3>راهنمای انتخاب سایز و جنس فلگ</h3>
+<h3>راهنمای انتخاب سایز و جنس پرچم</h3>
 <p>مقاله‌های کوتاه و کاربردی برای خرید بهتر.</p>
 </div>
 </article>
@@ -203,7 +218,7 @@
 </img></span>
 <span class="logo-text">
 <strong> Crib Flag</strong>
-<!-- <small>فروشگاه تخصصی فلگ</small> -->
+<!-- <small>فروشگاه تخصصی پرچم</small> -->
 </span>
 </a>
 <button class="close-btn mobile-menu-close">×</button>

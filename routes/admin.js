@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const Admin = require('../models/Admin');
 const User = require('../models/User');
 const Product = require('../models/Product');
@@ -17,9 +18,61 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { prepareProductPricing, findVariantPricing, fallbackPricing } = require('../utils/productPricing');
+const { assertUploadedFile } = require('../utils/uploadValidation');
+const { applyInventory, releaseInventory } = require('../services/inventory');
+const { consumeCoupon } = require('../services/coupons');
 const upload = require('../middlewares/upload');
 const { buildAnalytics, isPaidSale } = require('../services/analytics');
 const { categoryPayload, ensureLegacyCategories, nextCategoryId, resolveCategorySelection, syncProductCategoryNames } = require('../services/categories');
+const { parsePersianDate } = require('../utils/formatters');
+
+const COUPON_SIZES = ['۱۵۰ × ۹۰ سانتی‌متر', '۱۰۰ × ۷۰ سانتی‌متر', '۵۰ × ۷۰ سانتی‌متر'];
+const COUPON_FABRICS = ['ساتن آمریکایی', 'ساتن براق', 'مخمل'];
+const COUPON_SIZE_SET = new Set(COUPON_SIZES);
+const COUPON_FABRIC_SET = new Set(COUPON_FABRICS);
+
+function normalizeCouponVariants(value) {
+  const unique = new Map();
+  for (const item of Array.isArray(value) ? value : []) {
+    const size = String(item?.size || '').trim();
+    const fabric = String(item?.fabric || '').trim();
+    if (!COUPON_SIZE_SET.has(size) || !COUPON_FABRIC_SET.has(fabric)) {
+      throw new AppError(400, 'یکی از ترکیب‌های سایز و جنس کد تخفیف معتبر نیست');
+    }
+    unique.set(`${size}\u0000${fabric}`, { size, fabric });
+  }
+  return [...unique.values()];
+}
+
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'تعداد تلاش ورود بیش از حد مجاز است؛ کمی بعد دوباره تلاش کنید.' }
+});
+const saveSession = req => new Promise((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
+const regenerateSession = req => new Promise((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
+const destroySession = req => new Promise((resolve, reject) => req.session.destroy(error => error ? reject(error) : resolve()));
+
+async function regenerateAdminSession(req) {
+  // ادمین و کاربر یک کوکی مشترک دارند؛ هنگام ورود ادمین، نشست فعال کاربر را حفظ می‌کنیم.
+  const userId = req.session?.userId;
+  await regenerateSession(req);
+  if (userId) req.session.userId = userId;
+}
+
+async function logoutAdminOnly(req, res) {
+  delete req.session.adminId;
+
+  if (req.session.userId) {
+    await saveSession(req);
+    return;
+  }
+
+  await destroySession(req);
+  res.clearCookie('cribflag.sid');
+}
 
 
 function booleanField(value, fallback = false) {
@@ -64,8 +117,30 @@ function selectedProductOption(product, value, field) {
   return selected;
 }
 
-router.post('/login',asyncHandler(async(req,res)=>{const admin=await Admin.findOne({email:String(req.body.email||'').toLowerCase()}).select('+password');if(!admin||!admin.isActive||!(await admin.comparePassword(req.body.password||'')))throw new AppError(401,'ایمیل یا رمز عبور اشتباه است');admin.lastLoginAt=new Date();admin.lastLoginIP=req.ip;await admin.save();req.session.adminId=admin._id.toString();await RecentAction.create({action:'admin_login',targetType:'admin',targetId:String(admin._id),targetName:admin.fullName,adminId:admin._id,adminName:admin.fullName,ipAddress:req.ip});ok(res,{admin:{fullName:admin.fullName,email:admin.email,role:admin.role,permissions:admin.permissions}});}));
-router.post('/logout',requireAdmin,asyncHandler(async(req,res)=>{const id=req.session.adminId;await RecentAction.create({action:'admin_logout',targetType:'admin',targetId:id,adminId:id,ipAddress:req.ip});delete req.session.adminId;await new Promise((resolve,reject)=>req.session.save(err=>err?reject(err):resolve()));ok(res,{message:'خارج شدید'});}));
+router.post('/login', adminLoginLimiter, asyncHandler(async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const password = String(req.body.password || '');
+  const admin = await Admin.findOne({ email }).select('+password');
+  if (!admin || !admin.isActive || !(await admin.comparePassword(password))) {
+    throw new AppError(401, 'ایمیل یا رمز عبور اشتباه است');
+  }
+
+  admin.lastLoginAt = new Date();
+  admin.lastLoginIP = req.ip;
+  await admin.save();
+  await regenerateAdminSession(req);
+  req.session.adminId = admin._id.toString();
+  await RecentAction.create({ action: 'admin_login', targetType: 'admin', targetId: String(admin._id), targetName: admin.fullName, adminId: admin._id, adminName: admin.fullName, ipAddress: req.ip });
+  await saveSession(req);
+  ok(res, { admin: { fullName: admin.fullName, email: admin.email, role: admin.role, permissions: admin.permissions } });
+}));
+
+router.post('/logout', requireAdmin, asyncHandler(async (req, res) => {
+  const id = req.session.adminId;
+  await RecentAction.create({ action: 'admin_logout', targetType: 'admin', targetId: id, adminId: id, ipAddress: req.ip });
+  await logoutAdminOnly(req, res);
+  ok(res, { message: 'خارج شدید' });
+}));
 router.use(requireAdmin);
 
 router.post('/products/upload-image', upload.fields([
@@ -76,13 +151,14 @@ router.post('/products/upload-image', upload.fields([
   if (!files.length) throw new AppError(400, 'حداقل یک تصویر محصول انتخاب کنید');
 
   const allowedImageTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
-  const invalid = files.find(file => !allowedImageTypes.has(file.mimetype));
-  if (invalid) {
+  try {
+    await Promise.all(files.map(file => assertUploadedFile(file, allowedImageTypes)));
+  } catch (error) {
     await Promise.all(files.map(file => fs.promises.unlink(file.path).catch(() => {})));
-    throw new AppError(400, 'فقط تصویر PNG، JPG یا WEBP مجاز است');
+    throw error;
   }
 
-  const images = files.map(file => `/uploads/${file.filename}`);
+  const images = files.map(file => `/uploads/products/${file.filename}`);
   ok(res, {
     message: `${images.length} تصویر محصول آپلود شد`,
     image: images[0],
@@ -139,7 +215,7 @@ router.get(
 async function getBootstrap() {
   await ensureLegacyCategories();
   const [products, categories, orders, users, coupons, tickets, custom] = await Promise.all([
-    Product.find().sort({ publicId: 1 }).lean(),
+    Product.find().sort({ publicId: -1 }).lean(),
     Category.find().sort({ sortOrder: 1, publicId: 1 }).lean(),
     Order.find().populate('user').sort({ createdAt: -1 }).lean(),
     User.find().sort({ publicId: 1 }).lean(),
@@ -228,46 +304,68 @@ router.delete('/categories/:id', asyncHandler(async (req, res) => {
   ok(res, { message: 'دسته‌بندی حذف شد' });
 }));
 
-router.post('/orders/manual',asyncHandler(async(req,res)=>{
-  const product = await Product.findOne({ publicId: Number(req.body.productId), status: 'active' });
+router.post('/orders/manual', asyncHandler(async (req, res) => {
+  const productId = Number(req.body.productId);
+  const qty = Number(req.body.qty ?? 1);
+  const shipping = Number(req.body.shipping ?? 0);
+  if (!Number.isFinite(productId)) throw new AppError(400, 'شناسه محصول معتبر نیست');
+  if (!Number.isInteger(qty) || qty < 1 || qty > 100) throw new AppError(400, 'تعداد باید عدد صحیح بین ۱ تا ۱۰۰ باشد');
+  if (!Number.isFinite(shipping) || shipping < 0) throw new AppError(400, 'هزینه ارسال معتبر نیست');
+
+  const product = await Product.findOne({ publicId: productId, status: 'active' });
   if (!product) throw new AppError(404, 'محصول یافت نشد');
-  const qty = Math.max(1, Math.min(100, Number(req.body.qty || 1)));
-  if (product.stock < qty) throw new AppError(400, 'موجودی محصول کافی نیست');
 
   const size = selectedProductOption(product, req.body.size, 'sizes');
   const fabric = selectedProductOption(product, req.body.fabric, 'fabrics');
   const variant = findVariantPricing(product, size, fabric);
   if (product.variantPrices?.length && !variant) throw new AppError(400, 'برای ترکیب سایز و جنس انتخاب‌شده قیمت ثبت نشده است');
   const pricing = variant || fallbackPricing(product);
+  const inventoryManaged = product.inventoryMode === 'managed';
+  if (inventoryManaged && product.stock < qty) throw new AppError(409, `فقط ${product.stock} عدد از این محصول موجود است`);
 
   const { orderNumber } = require('../utils/formatters');
-  const shipping = Number(req.body.shipping || 0);
   const subtotal = pricing.price * qty;
-  const order = await Order.create({
-    orderNumber: orderNumber(),
-    customer: req.body.customer || 'مشتری حضوری',
-    phone: req.body.phone || '00000000000',
-    email: req.body.email || '',
-    address: req.body.address || 'ثبت توسط مدیر',
-    items: [{ productId: product.publicId, title: product.title, category: product.category, categories: [...new Set([product.category, ...(product.categories || [])].filter(Boolean))], price: pricing.price, qty, size, fabric }],
-    subtotal,
-    shipping,
-    discount: 0,
-    total: subtotal + shipping,
-    status: 'processing',
-    payment: 'ثبت دستی مدیر',
-    paymentStatus: req.body.paymentStatus === 'paid' ? 'paid' : 'review',
-    shippingMethod: req.body.shippingMethod || 'تحویل حضوری',
-    inventoryApplied: true
-  });
-  product.stock -= qty;
-  product.sales += qty;
-  await product.save();
-  ok(res, { message: 'سفارش دستی ثبت شد', order: S.order(order) }, 201);
+  try {
+    const order = await Order.create({
+      orderNumber: orderNumber(),
+      customer: String(req.body.customer || 'مشتری حضوری').trim(),
+      phone: String(req.body.phone || '00000000000').trim(),
+      email: String(req.body.email || '').trim().toLowerCase(),
+      address: String(req.body.address || 'ثبت توسط مدیر').trim(),
+      items: [{ productId: product.publicId, title: product.title, category: product.category, categories: [...new Set([product.category, ...(product.categories || [])].filter(Boolean))], price: pricing.price, qty, size, fabric, inventoryManaged }],
+      subtotal,
+      shipping,
+      discount: 0,
+      total: subtotal + shipping,
+      status: 'processing',
+      payment: 'ثبت دستی مدیر',
+      paymentStatus: req.body.paymentStatus === 'paid' ? 'paid' : 'review',
+      shippingMethod: String(req.body.shippingMethod || 'تحویل حضوری').trim(),
+      inventoryApplied: false
+    });
+    if (order.paymentStatus === 'paid') {
+      try {
+        await applyInventory(order);
+      } catch (error) {
+        await Order.deleteOne({ _id: order._id });
+        throw error;
+      }
+    }
+    ok(res, { message: 'سفارش دستی ثبت شد', order: S.order(order) }, 201);
+  } catch (error) {
+    throw error;
+  }
 }));
 
-router.put('/sync/:name',asyncHandler(async(req,res)=>{
-  const name=req.params.name,value=Array.isArray(req.body.value)?req.body.value:[];
+router.put('/sync/:name', asyncHandler(async (req, res) => {
+  const name = req.params.name;
+  const allowed = new Set(['products', 'coupons', 'orders', 'users', 'tickets', 'custom']);
+  if (!allowed.has(name)) throw new AppError(400, 'نوع همگام‌سازی معتبر نیست');
+  if (!Array.isArray(req.body.value)) throw new AppError(400, 'داده همگام‌سازی باید آرایه باشد');
+  const value = req.body.value;
+  if (['products', 'coupons'].includes(name) && !value.length && req.body.confirmEmpty !== true) {
+    throw new AppError(400, 'برای حذف کامل اطلاعات باید confirmEmpty=true ارسال شود');
+  }
   if(name==='products'){
     const ids = [];
     for (const p of value) {
@@ -284,6 +382,11 @@ router.put('/sync/:name',asyncHandler(async(req,res)=>{
         throw new AppError(400, `قیمت همه ترکیب‌های سایز و جنس برای محصول ${p.title || id} باید ثبت شود`);
       }
       const sku = String(p.sku || '').trim().toUpperCase() || await generateUniqueSku();
+      const inventoryMode = p.inventoryMode === 'managed' ? 'managed' : 'unlimited';
+      const stock = inventoryMode === 'managed' ? Number(p.stock) : 0;
+      if (inventoryMode === 'managed' && (!Number.isInteger(stock) || stock < 0)) {
+        throw new AppError(400, `موجودی محصول ${p.title || id} باید عدد صحیح صفر یا بیشتر باشد`);
+      }
       const submittedImages = Array.isArray(p.images) ? p.images : [p.image];
       if (submittedImages.length > 12) throw new AppError(400, 'حداکثر ۱۲ تصویر برای هر محصول مجاز است');
       const images = [...new Set(submittedImages.map(item => String(item || '').trim()).filter(Boolean))];
@@ -307,20 +410,64 @@ router.put('/sync/:name',asyncHandler(async(req,res)=>{
           rate: Number(p.rate || 4.7),
           status: p.status || 'active',
           sales: Number(p.sales || 0),
+          inventoryMode,
+          stock,
           sizes,
           fabrics,
           image: images[0],
-          images,
-          description: p.description || ''
+          images
         } },
         { upsert: true, setDefaultsOnInsert: true, runValidators: true }
       );
     }
     await Product.deleteMany({ publicId: { $nin: ids } });
   }else if(name==='coupons'){
-    const ids=[];for(const c of value){const id=Number(c.id);if(!Number.isFinite(id))continue;ids.push(id);await Coupon.findOneAndUpdate({publicId:id},{$set:{code:String(c.code).toUpperCase(),type:c.type,value:Number(c.value),minOrderAmount:Number(c.min||0),usageLimit:Number(c.limit||0),usedCount:Number(c.used||0),displayExpires:c.expires||'',status:c.status||'active'}},{upsert:true,setDefaultsOnInsert:true});}await Coupon.deleteMany({publicId:{$nin:ids}});
+    const ids = [];
+    for (const submitted of value) {
+      const id = Number(submitted.id);
+      const code = String(submitted.code || '').trim().toUpperCase();
+      const type = submitted.type === 'fixed' ? 'fixed' : 'percent';
+      const amount = Number(submitted.value);
+      const minOrderAmount = Number(submitted.min || 0);
+      const applicability = submitted.applicability === 'variants' ? 'variants' : 'all';
+      const eligibleVariants = applicability === 'variants' ? normalizeCouponVariants(submitted.eligibleVariants) : [];
+      const usageLimit = Number(submitted.limit || 0);
+      const usedCount = Number(submitted.used || 0);
+      const displayExpires = String(submitted.expires || '').trim();
+      const expiresAt = displayExpires ? parsePersianDate(displayExpires) : null;
+      if (!Number.isInteger(id) || id < 1) throw new AppError(400, 'شناسه کد تخفیف معتبر نیست');
+      if (!/^[A-Z0-9_-]{3,32}$/.test(code)) throw new AppError(400, `کد تخفیف ${code || id} معتبر نیست`);
+      if (!Number.isFinite(amount) || amount <= 0 || (type === 'percent' && amount > 100)) throw new AppError(400, `مقدار کد ${code} معتبر نیست`);
+      if (!Number.isInteger(minOrderAmount) || minOrderAmount < 0) throw new AppError(400, `حداقل خرید کد ${code} باید عدد صحیح صفر یا بیشتر باشد`);
+      if (applicability === 'variants' && !eligibleVariants.length) throw new AppError(400, `حداقل یک ترکیب سایز و جنس برای کد ${code} انتخاب کنید`);
+      if (!Number.isInteger(usageLimit) || usageLimit < 0 || !Number.isInteger(usedCount) || usedCount < 0) throw new AppError(400, `سقف یا تعداد استفاده کد ${code} معتبر نیست`);
+      if (displayExpires && !expiresAt) throw new AppError(400, `تاریخ انقضای کد ${code} معتبر نیست`);
+      ids.push(id);
+      await Coupon.findOneAndUpdate(
+        { publicId: id },
+        { $set: { code, type, value: amount, minOrderAmount, applicability, eligibleVariants, usageLimit, usedCount, displayExpires, expiresAt, status: submitted.status === 'expired' ? 'expired' : 'active' } },
+        { upsert: true, setDefaultsOnInsert: true, runValidators: true }
+      );
+    }
+    await Coupon.deleteMany({ publicId: { $nin: ids } });
   }else if(name==='orders'){
-    for(const o of value)await Order.updateOne({orderNumber:o.id},{$set:{status:o.status,paymentStatus:o.paymentStatus,tracking:o.tracking||'',adminNote:o.adminNote||''}});
+    const validStatuses = new Set(['processing', 'design-review', 'shipped', 'delivered', 'cancelled']);
+    const validPaymentStatuses = new Set(['pending', 'review', 'paid', 'failed', 'refunded']);
+    for (const submitted of value) {
+      const order = await Order.findOne({ orderNumber: submitted.id });
+      if (!order) continue;
+      const status = validStatuses.has(submitted.status) ? submitted.status : order.status;
+      const paymentStatus = validPaymentStatuses.has(submitted.paymentStatus) ? submitted.paymentStatus : order.paymentStatus;
+      const shouldRelease = status === 'cancelled' || ['failed', 'refunded'].includes(paymentStatus);
+      const shouldApply = !shouldRelease && paymentStatus === 'paid';
+      if (shouldRelease) await releaseInventory(order);
+      else if (shouldApply) { await applyInventory(order); await consumeCoupon(order); }
+      order.status = status;
+      order.paymentStatus = paymentStatus;
+      order.tracking = String(submitted.tracking || '').trim().slice(0, 120);
+      order.adminNote = String(submitted.adminNote || '').trim().slice(0, 2000);
+      await order.save();
+    }
   }else if(name==='users'){
     for(const u of value)await User.updateOne({publicId:Number(u.id)},{$set:{fullName:u.name,mobile:u.phone,email:u.email||undefined,role:u.role||'customer',isActive:u.status!=='blocked'}});
   }else if(name==='tickets'){

@@ -53,6 +53,9 @@ const product = (p, categoryLookup = null) => {
   const categoryIds = categoryDetails.map(item => item.publicId);
   const categorySlugs = categoryDetails.map(item => item.slug);
 
+  const inventoryMode = p.inventoryMode === 'managed' ? 'managed' : 'unlimited';
+  const stock = inventoryMode === 'managed' ? Math.max(0, Number(p.stock || 0)) : null;
+
   return {
     id: p.publicId,
     title: p.title,
@@ -77,7 +80,9 @@ const product = (p, categoryLookup = null) => {
     image: images[0],
     images,
     description: p.description || '',
-    stock: p.stock
+    inventoryMode,
+    stock,
+    available: inventoryMode === 'unlimited' || stock > 0
   };
 };
 
@@ -101,6 +106,8 @@ const order = (o) => ({
 
 const coupon = (c) => ({
   id: c.publicId, code: c.code, type: c.type, value: c.value, min: c.minOrderAmount || 0,
+  applicability: c.applicability === 'variants' ? 'variants' : 'all',
+  eligibleVariants: (c.eligibleVariants || []).map(item => ({ size: item.size, fabric: item.fabric })),
   limit: c.usageLimit || 0, used: c.usedCount || 0, expires: c.displayExpires || (c.expiresAt ? faDate(c.expiresAt) : ''),
   status: c.status
 });

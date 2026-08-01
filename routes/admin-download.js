@@ -4,60 +4,28 @@ const fs = require('fs');
 
 const Order = require('../models/Order');
 const { requireAdmin } = require('../middlewares/auth');
+const { asyncHandler, AppError } = require('../utils/http');
 
 const router = express.Router();
+const uploadsDirectory = path.resolve(__dirname, '..', 'uploads');
 
+router.get('/custom-file/:orderId/:itemIndex', requireAdmin, asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.orderId);
+  if (!order) throw new AppError(404, 'سفارش پیدا نشد');
 
-router.get(
-'/custom-file/:orderId/:itemIndex',
-requireAdmin,
-async(req,res)=>{
+  const itemIndex = Number(req.params.itemIndex);
+  if (!Number.isInteger(itemIndex) || itemIndex < 0) throw new AppError(400, 'شماره آیتم معتبر نیست');
+  const item = order.items[itemIndex];
+  if (!item) throw new AppError(404, 'آیتم سفارش پیدا نشد');
+  if (!item.filePath) throw new AppError(404, 'فایل برای این سفارش وجود ندارد');
 
-    try {
+  const absolutePath = path.resolve(item.filePath);
+  if (absolutePath !== uploadsDirectory && !absolutePath.startsWith(`${uploadsDirectory}${path.sep}`)) {
+    throw new AppError(403, 'مسیر فایل معتبر نیست');
+  }
+  if (!fs.existsSync(absolutePath)) throw new AppError(404, 'فایل روی سرور پیدا نشد');
 
-        const order = await Order.findById(req.params.orderId);
-
-        if(!order){
-            return res.status(404).send('سفارش پیدا نشد');
-        }
-
-
-        const item = order.items[Number(req.params.itemIndex)];
-
-
-        if(!item){
-            return res.status(404).send('آیتم سفارش پیدا نشد');
-        }
-
-
-        if(!item.filePath){
-            return res.status(404).send('فایل برای این سفارش وجود ندارد');
-        }
-
-
-        const absolutePath = path.resolve(item.filePath);
-
-
-        if(!fs.existsSync(absolutePath)){
-            return res.status(404).send('فایل روی سرور حذف شده است');
-        }
-
-
-        res.download(
-            absolutePath,
-            item.fileName || 'customer-design-file'
-        );
-
-
-    }catch(error){
-
-        console.log(error);
-
-        res.status(500).send('خطا در دانلود فایل');
-
-    }
-
-});
-
+  return res.download(absolutePath, item.fileName || 'customer-design-file');
+}));
 
 module.exports = router;

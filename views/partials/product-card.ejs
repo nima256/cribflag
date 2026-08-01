@@ -6,9 +6,10 @@
   <div class="product-content">
     <a class="product-title-btn open-product" data-id="<%= product.id %>" href="/product/<%= product.id %>"><h3 class="product-title"><%= product.title %></h3></a>
     <div class="product-meta"><span><%= product.category %></span><span class="rating">★ <%= product.rate %></span></div>
+    <div class="product-stock <%= product.inventoryMode === 'managed' ? (product.stock > 0 ? 'limited' : 'out') : 'available' %>"><% if (product.inventoryMode === 'managed') { %><%= product.stock > 0 ? `فقط ${new Intl.NumberFormat('fa-IR').format(product.stock)} عدد موجود` : 'ناموجود' %><% } else { %>موجود<% } %></div>
     <div class="price-row">
       <div class="price"><% if (product.hasDiscount && product.old && product.old > product.price) { %><span class="old-price"><%= toman(product.old) %></span><% } %><strong class="new-price"><%= toman(product.price) %></strong></div>
-      <button class="add-btn add-cart" data-id="<%= product.id %>" aria-label="افزودن به سبد">+</button>
+      <button class="add-btn add-cart" data-id="<%= product.id %>" aria-label="افزودن به سبد" <%= product.inventoryMode === 'managed' && product.stock <= 0 ? 'disabled' : '' %>><%= product.inventoryMode === 'managed' && product.stock <= 0 ? '×' : '+' %></button>
     </div>
   </div>
 </article>

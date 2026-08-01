@@ -24,6 +24,29 @@ const validate = req => {
 const mobileRule = body('mobile').customSanitizer(normalizeMobile).matches(/^09\d{9}$/).withMessage('شماره موبایل معتبر نیست');
 const otpRule = body('otp').trim().matches(/^\d{5}$/).withMessage('کد تأیید باید ۵ رقم باشد');
 const saveSession = req => new Promise((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
+const regenerateSession = req => new Promise((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
+const destroySession = req => new Promise((resolve, reject) => req.session.destroy(error => error ? reject(error) : resolve()));
+
+async function regenerateUserSession(req) {
+  // ادمین و کاربر یک کوکی مشترک دارند؛ هنگام ورود کاربر، نشست فعال ادمین را حفظ می‌کنیم.
+  const adminId = req.session?.adminId;
+  await regenerateSession(req);
+  if (adminId) req.session.adminId = adminId;
+}
+
+async function logoutUserOnly(req, res) {
+  delete req.session.userId;
+  delete req.session.pendingSigninUserId;
+  delete req.session.pendingSigninMobile;
+
+  if (req.session.adminId) {
+    await saveSession(req);
+    return;
+  }
+
+  await destroySession(req);
+  res.clearCookie('cribflag.sid');
+}
 
 async function nextUserPublicId() {
   const last = await User.findOne().sort({ publicId: -1 }).select('publicId').lean();
@@ -99,9 +122,8 @@ router.post('/signup/verify', [...signupValidation, otpRule], asyncHandler(async
     fullName: req.body.fullName.trim(), mobile, email,
     password: await bcrypt.hash(req.body.password, 12)
   });
+  await regenerateUserSession(req);
   req.session.userId = user._id.toString();
-  delete req.session.pendingSigninUserId;
-  delete req.session.pendingSigninMobile;
   await saveSession(req);
   ok(res, { message: 'ثبت‌نام و تأیید شماره با موفقیت انجام شد', user: S.user(user) }, 201);
 }));
@@ -127,9 +149,8 @@ router.post('/signin/verify', [mobileRule, otpRule], asyncHandler(async (req, re
   if (!user || !user.isActive) throw new AppError(401, 'حساب کاربری در دسترس نیست');
   user.lastLoginAt = new Date();
   await user.save();
+  await regenerateUserSession(req);
   req.session.userId = user._id.toString();
-  delete req.session.pendingSigninUserId;
-  delete req.session.pendingSigninMobile;
   await saveSession(req);
   ok(res, { message: 'ورود با کد پیامکی موفق بود', user: S.user(user) });
 }));
@@ -138,16 +159,18 @@ router.post('/signin/verify', [mobileRule, otpRule], asyncHandler(async (req, re
 router.post('/signup', (_req, _res, next) => next(new AppError(400, 'برای ثبت‌نام ابتدا کد تأیید پیامکی دریافت کنید')));
 router.post('/signin', (_req, _res, next) => next(new AppError(400, 'برای ورود ابتدا کد ورود پیامکی دریافت کنید')));
 
-router.post('/logout', (req, res, next) => {
-  delete req.session.userId;
-  delete req.session.pendingSigninUserId;
-  delete req.session.pendingSigninMobile;
-  req.session.save(error => error ? next(error) : ok(res, { message: 'با موفقیت خارج شدید' }));
-});
+router.post('/logout', asyncHandler(async (req, res) => {
+  await logoutUserOnly(req, res);
+  ok(res, { message: 'با موفقیت خارج شدید' });
+}));
 router.get('/me', asyncHandler(async (req, res) => {
   if (!req.session?.userId) return ok(res, { authenticated: false, user: null });
   const user = await User.findById(req.session.userId);
-  if (!user) return ok(res, { authenticated: false, user: null });
+  if (!user?.isActive) {
+    delete req.session.userId;
+    await saveSession(req);
+    return ok(res, { authenticated: false, user: null });
+  }
   ok(res, { authenticated: true, user: S.user(user) });
 }));
 

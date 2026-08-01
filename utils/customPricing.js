@@ -1,7 +1,7 @@
 const CUSTOM_SIZE_TIERS = Object.freeze([
-  Object.freeze({ maxLongSide: 70, maxShortSide: 50, price: 550000 }),
-  Object.freeze({ maxLongSide: 100, maxShortSide: 70, price: 800000 }),
-  Object.freeze({ maxLongSide: 150, maxShortSide: 90, price: 950000 })
+  Object.freeze({ maxLongSide: 70, maxShortSide: 50, price: 550000, velvetPrice: 700000 }),
+  Object.freeze({ maxLongSide: 100, maxShortSide: 70, price: 800000, velvetPrice: 1000000 }),
+  Object.freeze({ maxLongSide: 150, maxShortSide: 90, price: 950000, velvetPrice: 1200000 })
 ]);
 
 const normalizeDigits = value => String(value ?? '')
@@ -21,7 +21,7 @@ function parseCustomDimensions(value) {
   return { width, height };
 }
 
-function calculateCustomPrice(widthOrSize, maybeHeight) {
+function calculateCustomPrice(widthOrSize, maybeHeight, fabric = 'ساتن آمریکایی') {
   const dimensions = maybeHeight === undefined
     ? parseCustomDimensions(widthOrSize)
     : { width: Number(widthOrSize), height: Number(maybeHeight) };
@@ -46,10 +46,12 @@ function calculateCustomPrice(widthOrSize, maybeHeight) {
     };
   }
 
+  const price = String(fabric || '').trim() === 'مخمل' ? tier.velvetPrice : tier.price;
+
   return {
     valid: true,
     reason: null,
-    price: tier.price,
+    price,
     width: dimensions.width,
     height: dimensions.height,
     longSide,

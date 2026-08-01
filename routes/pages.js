@@ -25,15 +25,19 @@ const iranProvinces = iranCity.allProvinces()
 const toFa = value => new Intl.NumberFormat('fa-IR').format(Number(value || 0));
 const toman = value => `${toFa(value)} تومان`;
 const safeJson = value => JSON.stringify(value).replace(/</g, '\\u003c');
+const safeNextUrl = value => {
+  const next = String(value || '').trim();
+  return next.startsWith('/') && !next.startsWith('//') && !next.includes('\\') ? next : '';
+};
 const normalizeAsset = value => {
-  const image = String(value || '/assets/images/ukflag.png');
-  if (/^(https?:|data:|\/)/.test(image)) return image;
+  const image = String(value || '/assets/images/ukflag.png').trim();
+  if (/^https?:\/\//i.test(image) || image.startsWith('/')) return image;
   return `/${image.replace(/^\.\//, '')}`;
 };
 
 async function common(req) {
   const [productDocs, categoryDocs] = await Promise.all([
-    Product.find({ status: 'active' }).sort({ publicId: 1 }).lean(),
+    Product.find({ status: 'active' }).sort({ publicId: -1 }).lean(),
     Category.find({ status: 'active' }).sort({ sortOrder: 1, publicId: 1 }).lean()
   ]);
   const categoryLookup = new Map(categoryDocs.map(category => [String(category._id), category]));
@@ -61,7 +65,7 @@ async function common(req) {
   let currentUser = null;
   if (req.session?.userId) {
     const user = await User.findById(req.session.userId).lean();
-    if (user) currentUser = S.user(user);
+    if (user?.isActive) currentUser = S.user(user);
   }
   return {
     products,
@@ -74,7 +78,8 @@ async function common(req) {
     readyDesigns,
     currentUser,
     product: null,
-    nextUrl: String(req.query.next || ''),
+    catalogPage: Math.max(1, Number.parseInt(req.query.page, 10) || 1),
+    nextUrl: safeNextUrl(req.query.next),
     toFa,
     toman,
     safeJson
@@ -85,10 +90,18 @@ async function render(req, res, view, extra = {}) {
   res.render(view, { ...(await common(req)), ...extra });
 }
 
-function requirePageUser(req, res, next) {
-  if (req.session?.userId) return next();
-  const nextUrl = encodeURIComponent(req.originalUrl || '/checkout');
-  return res.redirect(`/?auth=login&next=${nextUrl}`);
+async function requirePageUser(req, res, next) {
+  try {
+    if (req.session?.userId) {
+      const user = await User.findById(req.session.userId).select('_id isActive').lean();
+      if (user?.isActive) return next();
+      delete req.session.userId;
+    }
+    const nextUrl = encodeURIComponent(safeNextUrl(req.originalUrl) || '/checkout');
+    return res.redirect(`/?auth=login&next=${nextUrl}`);
+  } catch (error) {
+    next(error);
+  }
 }
 
 router.get('/', asyncHandler((req, res) => render(req, res, 'index')));

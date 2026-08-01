@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
-<meta content="Crib Flag؛ فروشگاه تخصصی فلگ و پرچم" name="description"/>
+<meta content="Crib Flag؛ فروشگاه تخصصی پرچم" name="description"/>
 <title>فروشگاه | Crib Flag</title>
 <link href="/assets/css/style.css" rel="stylesheet"/>
 <link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
@@ -21,7 +21,7 @@
 <img alt="Crib Flag" src="/assets/images/logo.png"/>
 </span>
 <strong>Crib Flag </strong>
-<!-- <small>فروشگاه تخصصی فلگ و پرچم</small> -->
+<!-- <small>فروشگاه تخصصی پرچم</small> -->
 </a>
 <div class="search-wrap">
 <form action="/store" class="search-box search-form" method="get">
@@ -73,7 +73,7 @@
 <div class="container">
 <div class="store-hero">
 <h1>فروشگاه  Crib Flag</h1>
-<p>همه فلگ‌ها و پرچم‌ها را با فیلتر قیمت، دسته‌بندی و جستجوی واقعی بررسی کنید.</p>
+<p>همه پرچم‌ها و پرچم‌ها را با فیلتر قیمت، دسته‌بندی و جستجوی واقعی بررسی کنید.</p>
 </div>
 <div class="chips">
 <button class="chip store-chip active" data-category="">همه محصولات</button>
@@ -112,7 +112,9 @@
 <option value="expensive">گران‌ترین</option>
 </select>
 </div>
-<div class="store-product-grid" id="storeProducts"><% products.forEach(product => { %><%- include("partials/product-card", { product, toman }) %><% }) %></div>
+<% const storePageCount = Math.max(1, Math.ceil(products.length / 12)); const initialStorePage = Math.min(Math.max(1, Number(typeof catalogPage === 'undefined' ? 1 : catalogPage)), storePageCount); const initialStoreStart = (initialStorePage - 1) * 12; %>
+<div class="store-product-grid" id="storeProducts"><% products.slice(initialStoreStart, initialStoreStart + 12).forEach(product => { %><%- include("partials/product-card", { product, toman }) %><% }) %></div>
+<nav class="catalog-pagination" id="storePagination" aria-label="صفحه‌بندی محصولات فروشگاه"></nav>
 </section>
 </div>
 </div>
@@ -135,7 +137,7 @@
 </span>
 <span class="logo-text">
 <strong> Crib Flag</strong>
-<!-- <small>فروشگاه تخصصی فلگ</small> -->
+<!-- <small>فروشگاه تخصصی پرچم</small> -->
 </span>
 </a>
 <button class="close-btn mobile-menu-close">×</button>
@@ -221,6 +223,6 @@
 <%- include("partials/page-data") %>
 <script src="/assets/js/api.js"></script>
 <script src="/assets/js/portal-data.js"></script>
-<script src="/assets/js/app.js?v=20260725-store-category-2"></script>
+<script src="/assets/js/app.js?v=20260728-pagination-1"></script>
 </body>
 </html>
