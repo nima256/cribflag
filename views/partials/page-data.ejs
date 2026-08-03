@@ -1,9 +1,13 @@
 <script>
 window.__SSR_DATA_READY__ = true;
 window.__INITIAL_PRODUCTS__ = <%- safeJson(products || []) %>;
-window.__READY_DESIGNS__ = <%- safeJson(readyDesigns || []) %>;
 window.__INITIAL_CATEGORIES__ = <%- safeJson(categories || []) %>;
 window.__READY_ROOT_CATEGORY__ = <%- safeJson(readyRootCategory || null) %>;
+window.__READY_DESIGNS__ = window.__INITIAL_PRODUCTS__.filter(function (product) {
+  var root = window.__READY_ROOT_CATEGORY__;
+  if (root && Array.isArray(product.categoryIds)) return product.categoryIds.includes(root.id);
+  return Array.isArray(product.categories) && product.categories.includes('طرح آماده');
+});
 window.__CURRENT_USER__ = <%- safeJson(currentUser || null) %>;
 window.__CURRENT_PRODUCT__ = <%- safeJson(product || null) %>;
 window.__PAYMENT_FAILED__ = <%- safeJson(typeof paymentFailed === "boolean" ? paymentFailed : false) %>;

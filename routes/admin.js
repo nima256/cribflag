@@ -19,6 +19,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { prepareProductPricing, findVariantPricing, fallbackPricing } = require('../utils/productPricing');
 const { assertUploadedFile } = require('../utils/uploadValidation');
+const { processUploadedImage, removeManagedImage, removeManagedImages, unlinkQuietly } = require('../utils/imageProcessing');
 const { applyInventory, releaseInventory } = require('../services/inventory');
 const { consumeCoupon } = require('../services/coupons');
 const upload = require('../middlewares/upload');
@@ -151,19 +152,46 @@ router.post('/products/upload-image', upload.fields([
   if (!files.length) throw new AppError(400, 'حداقل یک تصویر محصول انتخاب کنید');
 
   const allowedImageTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+  const processed = [];
   try {
-    await Promise.all(files.map(file => assertUploadedFile(file, allowedImageTypes)));
+    // پردازش عمداً ترتیبی است تا آپلود هم‌زمان چند عکس بزرگ، RAM هاست را پر نکند.
+    for (const file of files) {
+      await assertUploadedFile(file, allowedImageTypes);
+      processed.push(await processUploadedImage(file, 'product'));
+    }
   } catch (error) {
-    await Promise.all(files.map(file => fs.promises.unlink(file.path).catch(() => {})));
+    await Promise.all(files.map(file => unlinkQuietly(file.path)));
+    await removeManagedImages(processed.map(item => item.image));
     throw error;
   }
 
-  const images = files.map(file => `/uploads/products/${file.filename}`);
+  const images = processed.map(item => item.image);
+  const thumbnails = processed.map(item => item.thumbnail);
   ok(res, {
-    message: `${images.length} تصویر محصول آپلود شد`,
+    message: `${images.length} تصویر محصول بهینه و آپلود شد`,
     image: images[0],
-    images
+    thumbnail: thumbnails[0],
+    images,
+    thumbnails,
+    items: processed
   }, 201);
+}));
+
+router.post('/categories/upload-image', upload.single('image'), asyncHandler(async (req, res) => {
+  if (!req.file) throw new AppError(400, 'تصویر دسته‌بندی را انتخاب کنید');
+  const allowedImageTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+
+  try {
+    await assertUploadedFile(req.file, allowedImageTypes);
+    const processed = await processUploadedImage(req.file, 'category');
+    ok(res, {
+      message: 'تصویر دسته‌بندی بهینه و آپلود شد',
+      ...processed
+    }, 201);
+  } catch (error) {
+    await unlinkQuietly(req.file?.path);
+    throw error;
+  }
 }));
 
 router.get(
@@ -279,8 +307,10 @@ router.put('/categories/:id', asyncHandler(async (req, res) => {
   const oldName = category.name;
   const data = await categoryData(req.body, category);
   if (data.isReadyRoot) await Category.updateMany({ _id: { $ne: category._id } }, { $set: { isReadyRoot: false } });
+  const oldImage = category.image;
   Object.assign(category, data);
   await category.save();
+  if (oldImage && oldImage !== category.image) await removeManagedImage(oldImage);
   if (oldName !== category.name) await syncProductCategoryNames();
   await RecentAction.create({ action: 'category_update', targetType: 'category', targetId: String(category._id), targetName: category.name, adminId: req.session.adminId, ipAddress: req.ip });
   const productCount = await Product.countDocuments({ $or: [{ categoryRefs: category._id }, { primaryCategory: category._id }] });
@@ -299,7 +329,9 @@ router.delete('/categories/:id', asyncHandler(async (req, res) => {
     ]
   });
   if (productCount) throw new AppError(409, `این دسته‌بندی به ${productCount} محصول متصل است؛ ابتدا دسته محصولات را تغییر دهید`);
+  const categoryImage = category.image;
   await category.deleteOne();
+  await removeManagedImage(categoryImage);
   await RecentAction.create({ action: 'category_delete', targetType: 'category', targetId: String(category._id), targetName: category.name, adminId: req.session.adminId, ipAddress: req.ip });
   ok(res, { message: 'دسته‌بندی حذف شد' });
 }));
@@ -367,6 +399,13 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
     throw new AppError(400, 'برای حذف کامل اطلاعات باید confirmEmpty=true ارسال شود');
   }
   if(name==='products'){
+    const existingProducts = await Product.find().select('publicId image images').lean();
+    const previouslyManagedImages = new Set(existingProducts.flatMap(product =>
+      (Array.isArray(product.images) && product.images.length ? product.images : [product.image])
+        .map(item => String(item || '').split('?')[0].trim())
+        .filter(Boolean)
+    ));
+    const submittedManagedImages = new Set();
     const ids = [];
     for (const p of value) {
       const id = Number(p.id);
@@ -391,6 +430,7 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
       if (submittedImages.length > 12) throw new AppError(400, 'حداکثر ۱۲ تصویر برای هر محصول مجاز است');
       const images = [...new Set(submittedImages.map(item => String(item || '').trim()).filter(Boolean))];
       if (!images.length) images.push('assets/images/ukflag.png');
+      images.forEach(image => submittedManagedImages.add(String(image).split('?')[0].trim()));
 
       await Product.findOneAndUpdate(
         { publicId: id },
@@ -421,6 +461,8 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
       );
     }
     await Product.deleteMany({ publicId: { $nin: ids } });
+    const removedImages = [...previouslyManagedImages].filter(image => !submittedManagedImages.has(image));
+    await removeManagedImages(removedImages);
   }else if(name==='coupons'){
     const ids = [];
     for (const submitted of value) {

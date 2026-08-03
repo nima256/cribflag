@@ -129,7 +129,7 @@
 <div class="product-image-editor">
 <span class="product-editor-kicker">گالری تصاویر محصول</span>
 <h3>برای هر محصول چند تصویر جداگانه اضافه کنید</h3>
-<p>حداکثر ۱۲ تصویر PNG، JPG یا WEBP انتخاب کنید. اولین تصویر، عکس اصلی فروشگاه است؛ ترتیب و تصویر اصلی را از پایین تغییر دهید.</p>
+<p>حداکثر ۱۲ تصویر PNG، JPG یا WEBP انتخاب کنید. سرور همه تصاویر را به WEBP تبدیل می‌کند، نسخه اصلی را تا ۱۶۰۰ پیکسل و Thumbnail را تا ۶۴۰ پیکسل می‌سازد. اولین تصویر، عکس اصلی فروشگاه است.</p>
 <input id="productImage" type="hidden"/>
 <label class="product-image-upload" for="productImageFile">
 <span>انتخاب چند تصویر</span>
@@ -216,7 +216,17 @@
 <div class="field"><label>اسلاگ</label><input id="categorySlug" required placeholder="wall-flag"/><small class="field-help">برای آدرس و فیلتر سایت استفاده می‌شود.</small></div>
 <div class="field"><label>ترتیب نمایش</label><input id="categorySortOrder" type="number" value="0"/></div>
 <div class="field"><label>وضعیت</label><select id="categoryStatus"><option value="active">فعال</option><option value="draft">پیش‌نویس</option></select></div>
-<div class="field full"><label>مسیر تصویر دسته</label><input id="categoryImage" placeholder="/assets/images/category.png"/></div>
+<div class="field full"><label>تصویر دسته‌بندی</label>
+<div class="category-image-editor">
+<div class="category-image-preview"><img id="categoryImagePreview" alt="پیش‌نمایش تصویر دسته‌بندی" hidden/><span id="categoryImageEmpty">بدون تصویر</span></div>
+<div class="category-image-controls">
+<input id="categoryImage" type="hidden"/>
+<label class="product-image-upload" for="categoryImageFile"><span>انتخاب تصویر</span><input accept="image/png,image/jpeg,image/webp" id="categoryImageFile" name="image" type="file"/></label>
+<small id="categoryImageFileName">هنوز تصویری انتخاب نشده است.</small>
+<p class="field-help">فایل روی سرور خودکار به WEBP تبدیل می‌شود؛ نسخه اصلی حداکثر ۱۰۰۰ پیکسل و Thumbnail حداکثر ۴۰۰ پیکسل خواهد بود.</p>
+</div>
+</div>
+</div>
 <div class="field full"><label>توضیحات</label><textarea id="categoryDescription" placeholder="توضیح کوتاه دسته‌بندی"></textarea></div>
 </div>
 <div class="category-placement-grid">
@@ -236,6 +246,6 @@
 <div class="portal-modal-backdrop" id="customAdminModal"><div class="portal-modal"><div class="portal-modal-head"><h3>مدیریت درخواست طراحی</h3><button class="portal-modal-close" data-close-modal="">×</button></div><div class="portal-modal-body" id="customAdminModalBody"></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="">بستن</button><button class="portal-btn portal-btn-primary" id="saveCustomChanges">ذخیره تغییرات</button></div></div></div>
 <script src="/assets/js/api.js?v=20260725-categories-1"></script>
 <script src="/assets/js/portal-data.js?v=20260730-inventory-1"></script>
-<script src="/assets/js/admin.js?v=20260730-coupon-variants-1"></script>
+<script src="/assets/js/admin.js?v=20260801-final-scroll-v3"></script>
 </body>
 </html>

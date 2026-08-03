@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
@@ -6,6 +8,7 @@ const Admin = require('../models/Admin');
 const S = require('../services/serializers');
 const { asyncHandler } = require('../utils/http');
 const iranCity = require('iran-city');
+const { performance } = require('node:perf_hooks');
 
 const router = express.Router();
 
@@ -35,47 +38,131 @@ const normalizeAsset = value => {
   return `/${image.replace(/^\.\//, '')}`;
 };
 
+const PUBLIC_ASSET_VERSION = String(process.env.PUBLIC_ASSET_VERSION || '20260801-final-scroll-v3').trim();
+const versionLocalAsset = value => {
+  const image = normalizeAsset(value);
+  if (/^https?:\/\//i.test(image) || !PUBLIC_ASSET_VERSION) return image;
+  if (!image.startsWith('/uploads/') && !image.startsWith('/assets/images/')) return image;
+  const separator = image.includes('?') ? '&' : '?';
+  return `${image}${separator}v=${encodeURIComponent(PUBLIC_ASSET_VERSION)}`;
+};
+
+const thumbnailRoots = [
+  { prefix: '/uploads/products/', directory: path.join(__dirname, '..', 'uploads', 'products', 'thumbs') },
+  { prefix: '/uploads/categories/', directory: path.join(__dirname, '..', 'uploads', 'categories', 'thumbs') },
+  { prefix: '/uploads/', directory: path.join(__dirname, '..', 'uploads', 'thumbs') },
+  { prefix: '/assets/images/', directory: path.join(__dirname, '..', 'public', 'assets', 'images', 'thumbs') }
+];
+
+function cardThumbnailAsset(value) {
+  const image = normalizeAsset(value);
+  if (/^https?:\/\//i.test(image)) return image;
+  if (image.includes('/thumbs/')) return versionLocalAsset(image);
+  if (!/\.(?:png|jpe?g|webp)$/i.test(image)) return versionLocalAsset(image);
+
+  const root = thumbnailRoots.find(item => image.startsWith(item.prefix));
+  if (!root) return versionLocalAsset(image);
+
+  const sourceName = path.posix.basename(image);
+  const thumbnailName = `${path.parse(sourceName).name}.webp`;
+  const thumbnailFile = path.join(root.directory, thumbnailName);
+  if (!fs.existsSync(thumbnailFile)) return versionLocalAsset(image);
+
+  return versionLocalAsset(`${root.prefix}thumbs/${thumbnailName}`);
+}
+
+const PUBLIC_CATALOG_CACHE_MS = Math.max(0, Number(process.env.PUBLIC_CATALOG_CACHE_MS || 15000));
+const catalogCache = { value: null, expiresAt: 0, pending: null };
+
+async function loadPublicCatalog(req) {
+  const now = Date.now();
+  if (catalogCache.value && now < catalogCache.expiresAt) {
+    req.catalogCacheHit = true;
+    return catalogCache.value;
+  }
+  if (catalogCache.pending) {
+    req.catalogCacheHit = true;
+    return catalogCache.pending;
+  }
+
+  req.catalogCacheHit = false;
+  catalogCache.pending = (async () => {
+    const [productDocs, categoryDocs] = await Promise.all([
+      Product.find({ status: 'active' })
+        .select('-__v -createdAt -updatedAt')
+        .sort({ publicId: -1 })
+        .lean(),
+      Category.find({ status: 'active' })
+        .sort({ sortOrder: 1, publicId: 1 })
+        .lean()
+    ]);
+    const categoryLookup = new Map(categoryDocs.map(category => [String(category._id), category]));
+    const categories = categoryDocs.map(category => {
+      const sourceImage = category.image ? normalizeAsset(category.image) : '';
+      const image = sourceImage ? versionLocalAsset(sourceImage) : '';
+      return {
+      id: category.publicId,
+      name: category.name,
+      slug: category.slug,
+      description: category.description || '',
+      image,
+      thumbnail: sourceImage ? cardThumbnailAsset(sourceImage) : '',
+      sortOrder: Number(category.sortOrder || 0),
+      showInMenu: Boolean(category.showInMenu),
+      showInStore: Boolean(category.showInStore),
+      showInHome: Boolean(category.showInHome),
+      showInReady: Boolean(category.showInReady),
+      isReadyRoot: Boolean(category.isReadyRoot)
+      };
+    });
+    const products = productDocs.map(product => S.product(product, categoryLookup)).map(item => {
+      const sourceImages = (Array.isArray(item.images) ? item.images : [item.image]).map(normalizeAsset);
+      const images = sourceImages.map(versionLocalAsset);
+      return {
+        ...item,
+        image: images[0],
+        thumbnail: cardThumbnailAsset(sourceImages[0]),
+        images
+      };
+    });
+    const readyRoot = categories.find(category => category.isReadyRoot);
+    const readyDesigns = products.filter(item => readyRoot
+      ? item.categoryIds.includes(readyRoot.id)
+      : Array.isArray(item.categories) && item.categories.includes('طرح آماده'));
+
+    const value = {
+      products,
+      categories,
+      navCategories: categories.filter(category => category.showInMenu && !category.isReadyRoot),
+      storeCategories: categories.filter(category => category.showInStore && !category.isReadyRoot),
+      homeCategories: categories.filter(category => category.showInHome && !category.isReadyRoot),
+      readyCategories: categories.filter(category => category.showInReady && !category.isReadyRoot),
+      readyRootCategory: readyRoot || null,
+      readyDesigns
+    };
+    catalogCache.value = value;
+    catalogCache.expiresAt = Date.now() + PUBLIC_CATALOG_CACHE_MS;
+    return value;
+  })();
+
+  try {
+    return await catalogCache.pending;
+  } finally {
+    catalogCache.pending = null;
+  }
+}
+
 async function common(req) {
-  const [productDocs, categoryDocs] = await Promise.all([
-    Product.find({ status: 'active' }).sort({ publicId: -1 }).lean(),
-    Category.find({ status: 'active' }).sort({ sortOrder: 1, publicId: 1 }).lean()
-  ]);
-  const categoryLookup = new Map(categoryDocs.map(category => [String(category._id), category]));
-  const categories = categoryDocs.map(category => ({
-    id: category.publicId,
-    name: category.name,
-    slug: category.slug,
-    description: category.description || '',
-    image: category.image ? normalizeAsset(category.image) : '',
-    sortOrder: Number(category.sortOrder || 0),
-    showInMenu: Boolean(category.showInMenu),
-    showInStore: Boolean(category.showInStore),
-    showInHome: Boolean(category.showInHome),
-    showInReady: Boolean(category.showInReady),
-    isReadyRoot: Boolean(category.isReadyRoot)
-  }));
-  const products = productDocs.map(product => S.product(product, categoryLookup)).map(item => {
-    const images = (Array.isArray(item.images) ? item.images : [item.image]).map(normalizeAsset);
-    return { ...item, image: images[0], images };
-  });
-  const readyRoot = categories.find(category => category.isReadyRoot);
-  const readyDesigns = products.filter(item => readyRoot
-    ? item.categoryIds.includes(readyRoot.id)
-    : Array.isArray(item.categories) && item.categories.includes('طرح آماده'));
+  const catalog = await loadPublicCatalog(req);
   let currentUser = null;
   if (req.session?.userId) {
-    const user = await User.findById(req.session.userId).lean();
+    const user = await User.findById(req.session.userId)
+      .select('publicId fullName mobile email role isActive createdAt')
+      .lean();
     if (user?.isActive) currentUser = S.user(user);
   }
   return {
-    products,
-    categories,
-    navCategories: categories.filter(category => category.showInMenu && !category.isReadyRoot),
-    storeCategories: categories.filter(category => category.showInStore && !category.isReadyRoot),
-    homeCategories: categories.filter(category => category.showInHome && !category.isReadyRoot),
-    readyCategories: categories.filter(category => category.showInReady && !category.isReadyRoot),
-    readyRootCategory: readyRoot || null,
-    readyDesigns,
+    ...catalog,
     currentUser,
     product: null,
     catalogPage: Math.max(1, Number.parseInt(req.query.page, 10) || 1),
@@ -87,7 +174,10 @@ async function common(req) {
 }
 
 async function render(req, res, view, extra = {}) {
-  res.render(view, { ...(await common(req)), ...extra });
+  const startedAt = performance.now();
+  const data = await common(req);
+  res.set('Server-Timing', `page-data;dur=${(performance.now() - startedAt).toFixed(1)};desc="catalog-${req.catalogCacheHit ? 'hit' : 'miss'}"`);
+  res.render(view, { ...data, ...extra });
 }
 
 async function requirePageUser(req, res, next) {
@@ -135,7 +225,9 @@ router.get('/admin', asyncHandler(async (req, res) => {
 router.get('/payment/success', asyncHandler((req, res) => render(req, res, 'success', { paymentFailed: false })));
 router.get('/payment/failed', asyncHandler((req, res) => render(req, res, 'success', { paymentFailed: true })));
 router.get('/product/:id', asyncHandler(async (req, res) => {
+  const startedAt = performance.now();
   const data = await common(req);
+  res.set('Server-Timing', `page-data;dur=${(performance.now() - startedAt).toFixed(1)};desc="catalog-${req.catalogCacheHit ? 'hit' : 'miss'}"`);
   const product = data.products.find(item => Number(item.id) === Number(req.params.id));
   if (!product) return res.status(404).render('404', { ...data, message: 'محصول موردنظر پیدا نشد.' });
   res.render('product', { ...data, product });

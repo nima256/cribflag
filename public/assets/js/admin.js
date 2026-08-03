@@ -24,6 +24,8 @@ const ORDER_STATUS_CHART=[
 ];
 let activeOrder=null,activeCustomer=null,activeTicket=null,activeCustom=null;
 let productImageItems=[];
+let categoryImageFile=null;
+let categoryImagePreviewUrl='';
 const PRODUCT_IMAGE_LIMIT=12;
 const ADMIN_PRODUCT_PAGE_SIZE=12;
 let adminProductPage=1;
@@ -38,9 +40,63 @@ const DEFAULT_VELVET_PRODUCT_SIZE_PRICES=Object.freeze({
   '70x50':700000
 });
 
+async function optimizeProductUpload(file){
+  if(!file||!String(file.type||'').startsWith('image/'))return file;
+  if(!('createImageBitmap' in window))return file;
+
+  let bitmap;
+  try{
+    bitmap=await createImageBitmap(file,{imageOrientation:'from-image'});
+    const maxDimension=1600;
+    const largest=Math.max(bitmap.width,bitmap.height);
+    if(largest<=maxDimension)return file;
+
+    const scale=maxDimension/largest;
+    const width=Math.max(1,Math.round(bitmap.width*scale));
+    const height=Math.max(1,Math.round(bitmap.height*scale));
+    const canvas=document.createElement('canvas');
+    canvas.width=width;
+    canvas.height=height;
+    const context=canvas.getContext('2d',{alpha:true});
+    if(!context)return file;
+    context.imageSmoothingEnabled=true;
+    context.imageSmoothingQuality='high';
+    context.drawImage(bitmap,0,0,width,height);
+
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',.86));
+    if(!blob)return file;
+    const baseName=String(file.name||'product').replace(/\.[^.]+$/,'');
+    return new File([blob],`${baseName}.webp`,{
+      type:'image/webp',
+      lastModified:file.lastModified||Date.now()
+    });
+  }catch(error){
+    console.warn('بهینه‌سازی تصویر در مرورگر انجام نشد؛ فایل اصلی ارسال می‌شود.',error);
+    return file;
+  }finally{
+    bitmap?.close?.();
+  }
+}
+
 function releaseProductImageItems(){
   productImageItems.forEach(item=>{if(item.type==='file'&&item.preview)URL.revokeObjectURL(item.preview);});
   productImageItems=[];
+}
+function releaseCategoryImageSelection(){
+  if(categoryImagePreviewUrl)URL.revokeObjectURL(categoryImagePreviewUrl);
+  categoryImagePreviewUrl='';
+  categoryImageFile=null;
+  const input=q('#categoryImageFile');
+  if(input)input.value='';
+}
+function renderCategoryImagePreview(source=''){
+  const preview=q('#categoryImagePreview');
+  const empty=q('#categoryImageEmpty');
+  const label=q('#categoryImageFileName');
+  const resolved=source||q('#categoryImage')?.value||'';
+  if(preview){preview.src=resolved||D.PRODUCT_IMAGE;preview.hidden=!resolved;}
+  if(empty)empty.hidden=Boolean(resolved);
+  if(label)label.textContent=categoryImageFile?categoryImageFile.name:(resolved?'تصویر فعلی دسته‌بندی':'هنوز تصویری انتخاب نشده است.');
 }
 function existingProductImages(product){
   const list=Array.isArray(product?.images)&&product.images.length?product.images:[product?.image];
@@ -69,7 +125,7 @@ function renderProductImageEditor(){
 
 function status(value){return `<span class="portal-status status-${D.esc(value)}">${D.esc(labels[value]||value)}</span>`;}
 function openModal(selector){q(selector)?.classList.add('open');}
-function closeModals(){const productWasOpen=q('#productModal')?.classList.contains('open');qa('.portal-modal-backdrop').forEach(item=>item.classList.remove('open'));if(productWasOpen)releaseProductImageItems();}
+function closeModals(){const productWasOpen=q('#productModal')?.classList.contains('open');const categoryWasOpen=q('#categoryModal')?.classList.contains('open');qa('.portal-modal-backdrop').forEach(item=>item.classList.remove('open'));if(productWasOpen)releaseProductImageItems();if(categoryWasOpen)releaseCategoryImageSelection();}
 function productThumb(title='محصول',image=D.PRODUCT_IMAGE){
   return `<span class="product-mini-img"><img src="${D.esc(image||D.PRODUCT_IMAGE)}" alt="${D.esc(title)}"></span>`;
 }
@@ -829,6 +885,7 @@ function renderProductCategoryOptions(product=null){
 }
 function categoryModal(id=null){
   const category=id?D.get('categories').find(item=>Number(item.id)===Number(id)):null;
+  releaseCategoryImageSelection();
   q('#categoryForm')?.reset();
   q('#categoryModalTitle').textContent=category?'ویرایش دسته‌بندی':'افزودن دسته‌بندی';
   q('#categoryId').value=category?.id||'';
@@ -837,6 +894,7 @@ function categoryModal(id=null){
   q('#categorySortOrder').value=category?.sortOrder??0;
   q('#categoryStatus').value=category?.status||'active';
   q('#categoryImage').value=category?.image||'';
+  renderCategoryImagePreview(category?.image||'');
   q('#categoryDescription').value=category?.description||'';
   q('#categoryShowInMenu').checked=category?Boolean(category.showInMenu):true;
   q('#categoryShowInStore').checked=category?Boolean(category.showInStore):true;
@@ -1133,7 +1191,7 @@ qa('[data-close-modal]').forEach(button=>button.addEventListener('click',closeMo
 qa('.portal-modal-backdrop').forEach(backdrop=>backdrop.addEventListener('click',event=>{if(event.target===backdrop)closeModals();}));
 q('#adminNotificationBtn')?.addEventListener('click',event=>{event.stopPropagation();q('#adminNotificationPanel')?.classList.toggle('open');});
 q('#productSkuGenerate')?.addEventListener('click',()=>{q('#productSku').value=generateRandomSku(q('#productId')?.value);});
-q('#productImageFile')?.addEventListener('change',event=>{
+q('#productImageFile')?.addEventListener('change',async event=>{
   const selected=[...(event.target.files||[])];
   event.target.value='';
   if(!selected.length)return;
@@ -1142,11 +1200,15 @@ q('#productImageFile')?.addEventListener('change',event=>{
   if(selected.some(file=>file.size>20*1024*1024))return D.toast('حجم هر تصویر باید کمتر از ۲۰ مگابایت باشد.','error');
   const remaining=Math.max(0,PRODUCT_IMAGE_LIMIT-productImageItems.length);
   if(!remaining)return D.toast(`حداکثر ${D.fa(PRODUCT_IMAGE_LIMIT)} تصویر می‌توانید ثبت کنید.`,'error');
-  selected.slice(0,remaining).forEach(file=>{
+
+  const candidates=selected.slice(0,remaining);
+  const optimizedFiles=await Promise.all(candidates.map(optimizeProductUpload));
+  optimizedFiles.forEach(file=>{
     const duplicate=productImageItems.some(item=>item.type==='file'&&item.file.name===file.name&&item.file.size===file.size&&item.file.lastModified===file.lastModified);
     if(!duplicate)productImageItems.push({type:'file',file,preview:URL.createObjectURL(file),value:''});
   });
   renderProductImageEditor();
+  if(optimizedFiles.some((file,index)=>file!==candidates[index]))D.toast('تصاویر بزرگ پیش از آپلود برای سرعت سایت بهینه شدند.');
   if(selected.length>remaining)D.toast(`فقط ${D.fa(remaining)} تصویر اول اضافه شد؛ سقف گالری ${D.fa(PRODUCT_IMAGE_LIMIT)} تصویر است.`,'error');
 });
 q('#productImagesEditor')?.addEventListener('click',event=>{
@@ -1274,18 +1336,45 @@ q('#categoryName')?.addEventListener('input',event=>{
 });
 q('#categorySlug')?.addEventListener('input',event=>{event.target.dataset.manual='true';});
 q('#categorySlug')?.addEventListener('blur',event=>{event.target.value=normalizeCategorySlug(event.target.value);});
+q('#categoryImageFile')?.addEventListener('change',event=>{
+  const file=event.target.files?.[0];
+  if(!file)return;
+  if(!['image/png','image/jpeg','image/webp'].includes(file.type)){
+    releaseCategoryImageSelection();
+    renderCategoryImagePreview();
+    return D.toast('فرمت تصویر دسته باید PNG، JPG یا WEBP باشد.','error');
+  }
+  if(file.size>20*1024*1024){
+    releaseCategoryImageSelection();
+    renderCategoryImagePreview();
+    return D.toast('حجم تصویر دسته باید کمتر از ۲۰ مگابایت باشد.','error');
+  }
+  if(categoryImagePreviewUrl)URL.revokeObjectURL(categoryImagePreviewUrl);
+  categoryImageFile=file;
+  categoryImagePreviewUrl=URL.createObjectURL(file);
+  renderCategoryImagePreview(categoryImagePreviewUrl);
+});
 q('#categoryForm')?.addEventListener('submit',async event=>{
   event.preventDefault();
   const id=Number(q('#categoryId').value||0);
-  const payload={
-    name:q('#categoryName').value.trim(),slug:normalizeCategorySlug(q('#categorySlug').value||q('#categoryName').value),
-    sortOrder:Number(q('#categorySortOrder').value||0),status:q('#categoryStatus').value,
-    image:q('#categoryImage').value.trim(),description:q('#categoryDescription').value.trim(),
-    showInMenu:q('#categoryShowInMenu').checked,showInStore:q('#categoryShowInStore').checked,
-    showInHome:q('#categoryShowInHome').checked,showInReady:q('#categoryShowInReady').checked,
-    isReadyRoot:q('#categoryIsReadyRoot').checked
-  };
+  let categoryImage=q('#categoryImage').value.trim();
   try{
+    if(categoryImageFile){
+      const formData=new FormData();
+      formData.append('image',categoryImageFile);
+      const uploaded=await window.CribAPI.request('/api/admin/categories/upload-image',{method:'POST',body:formData});
+      categoryImage=uploaded.image||'';
+      if(!categoryImage)throw new Error('مسیر تصویر بهینه‌شده دریافت نشد.');
+      q('#categoryImage').value=categoryImage;
+    }
+    const payload={
+      name:q('#categoryName').value.trim(),slug:normalizeCategorySlug(q('#categorySlug').value||q('#categoryName').value),
+      sortOrder:Number(q('#categorySortOrder').value||0),status:q('#categoryStatus').value,
+      image:categoryImage,description:q('#categoryDescription').value.trim(),
+      showInMenu:q('#categoryShowInMenu').checked,showInStore:q('#categoryShowInStore').checked,
+      showInHome:q('#categoryShowInHome').checked,showInReady:q('#categoryShowInReady').checked,
+      isReadyRoot:q('#categoryIsReadyRoot').checked
+    };
     await window.CribAPI.request(id?`/api/admin/categories/${id}`:'/api/admin/categories',{method:id?'PUT':'POST',body:JSON.stringify(payload)});
     await D.syncFromApi('admin');closeModals();renderAll();D.toast(id?'دسته‌بندی ویرایش شد.':'دسته‌بندی ایجاد شد.');
   }catch(error){D.toast(error.message||'ذخیره دسته‌بندی انجام نشد.','error');}

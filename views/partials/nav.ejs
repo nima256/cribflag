@@ -4,17 +4,10 @@
 <div class="nav-item">
 <button onclick="window.location.href='/store'" class="nav-link nav-dropdown-toggle" type="button">
   فروشگاه
-  <span>⌄</span>
 </button>
-<div class="dropdown">
-<% (navCategories || []).forEach(category => { %>
-<a class="dropdown-link store-category-link" data-category="<%= category.slug %>" href="/store?category=<%= encodeURIComponent(category.slug) %>"><%= category.name %></a>
-<% }) %>
-<% if (!(navCategories || []).length) { %><a class="dropdown-link" href="/store">همه محصولات</a><% } %>
-</div>
 </div>
 <a class="nav-link" data-page-link="custom" href="/custom">طرح دلخواه</a>
-<a class="nav-link" data-page-link="ready" href="/ready">طرح‌های آماده</a>
+<a class="nav-link" data-page-link="ready" href="/ready">طرح های آماده</a>
 <a class="nav-link" data-page-link="faq" href="/faq">سوالات متداول</a>
 <a class="nav-link" data-page-link="blog" href="/blog">مجله Crib Flag</a>
 </nav>

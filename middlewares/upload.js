@@ -13,8 +13,9 @@ const MIME_EXTENSIONS = new Map([
 const uploadsRoot = path.join(__dirname, '..', 'uploads');
 const storage = multer.diskStorage({
   destination: (_req, file, cb) => {
-    // فایل‌های اختصاصی مشتری نباید از مسیر عمومی /uploads قابل دریافت باشند.
-    const folder = file.fieldname === 'file' ? 'custom' : 'products';
+    // فایل‌های اختصاصی مشتری خصوصی می‌مانند. تصاویر محصول و دسته ابتدا
+    // وارد پوشه موقت می‌شوند و پس از اعتبارسنجی توسط Sharp پردازش می‌شوند.
+    const folder = file.fieldname === 'file' ? 'custom' : '.incoming';
     const destination = path.join(uploadsRoot, folder);
     fs.mkdir(destination, { recursive: true }, error => cb(error, destination));
   },

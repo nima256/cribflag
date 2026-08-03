@@ -77,8 +77,16 @@ app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), {
 app.use('/uploads/custom', (_req, res) => res.status(404).end());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
   fallthrough: false,
+  // فایل‌ها نام یکتا دارند، اما immutable یک‌ساله باعث می‌شد نسخه‌های بهینه‌شده
+  // با همان URL تا مدت طولانی از کش قدیمی مرورگر خوانده شوند.
   maxAge: env.isProduction ? '7d' : 0,
-  setHeaders(res) { res.setHeader('X-Content-Type-Options', 'nosniff'); }
+  etag: true,
+  setHeaders(res) {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', env.isProduction
+      ? 'public, max-age=604800, stale-while-revalidate=86400'
+      : 'no-cache');
+  }
 }));
 
 app.get('/api/health', (_req, res) => res.json({

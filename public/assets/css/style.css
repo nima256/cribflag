@@ -4423,3 +4423,126 @@ button.view-all { font-family: inherit; }
 .product-stock{margin-top:9px;font-size:12px;font-weight:900;line-height:1.7}.product-stock.available{color:#087443}.product-stock.limited{color:#b54708}.product-stock.out{color:#b4233d}.add-btn:disabled,.detail-add-cart:disabled{cursor:not-allowed;opacity:.55;filter:grayscale(.25)}
 .detail-stock-status{display:inline-flex;align-items:center;min-height:34px;margin-bottom:13px;padding:6px 11px;border-radius:12px;font-size:12px;font-weight:950}.detail-stock-status.available{background:#ecfdf3;color:#087443;border:1px solid #a8e7c2}.detail-stock-status.limited{background:#fff7ed;color:#b54708;border:1px solid #fed7aa}.detail-stock-status.out{background:#fff2f3;color:#b4233d;border:1px solid #ffc7ce}
 .discount-row:has(.discount-remove-btn:not([hidden])){grid-template-columns:minmax(0,1fr) auto auto}.discount-row .discount-remove-btn{background:#fff;color:#b4233d;border:1px solid #ffc7ce}.discount-row .discount-remove-btn:hover{background:#fff2f3}
+
+/* Performance pass: keep scrolling on the compositor instead of repainting large blur layers. */
+body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle at top right, rgba(20, 87, 255, .08), transparent 28%),
+    radial-gradient(circle at 15% 5%, rgba(255, 183, 3, .12), transparent 25%);
+  background-repeat: no-repeat;
+  background-size: 100% 760px, 100% 620px;
+}
+
+.site-header {
+  background: rgba(246, 247, 251, .985);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transform: translateZ(0);
+}
+
+.product-card,
+.ready-card,
+.category-card,
+.blog-card,
+.promo-card,
+.cart-page-item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 460px;
+}
+
+@media (max-width: 900px) {
+  .mobile-bottom-nav,
+  .custom-mobile-toolbar {
+    background: rgba(255, 255, 255, .985);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    transform: translateZ(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .page { animation: none; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* Final scroll stability pass — 2026-08-01 */
+html {
+  scroll-behavior: auto;
+}
+
+.site-header {
+  transform: none;
+  /* Search suggestions extend below the sticky header; paint containment clipped them. */
+  contain: none;
+  overflow: visible;
+}
+
+.product-card,
+.ready-card,
+.category-card,
+.blog-card,
+.promo-card,
+.cart-page-item {
+  /* این صفحه DOM کوچکی دارد؛ آشکارسازی content-visibility هنگام ورود به viewport
+     می‌تواند یک فریم سنگین ایجاد کند، بنابراین رندر کارت‌ها پایدار نگه داشته می‌شود. */
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+  contain: layout paint style;
+}
+
+.hero-track {
+  will-change: auto;
+}
+
+body.is-scrolling .hero-track,
+body.is-scrolling .product-card,
+body.is-scrolling .ready-card,
+body.is-scrolling .category-card,
+body.is-scrolling .blog-card,
+body.is-scrolling .promo-card,
+body.is-scrolling .product-card *,
+body.is-scrolling .ready-card *,
+body.is-scrolling .category-card * {
+  transition: none !important;
+  animation: none !important;
+}
+
+body.is-scrolling .product-card,
+body.is-scrolling .ready-card,
+body.is-scrolling .category-card,
+body.is-scrolling .blog-card,
+body.is-scrolling .promo-card {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+body.is-scrolling .products-grid,
+body.is-scrolling .horizontal-slider,
+body.is-scrolling .categories-grid {
+  pointer-events: none;
+}
+
+@media (hover: hover) {
+  .product-card,
+  .ready-card,
+  .category-card {
+    transform: translateZ(0);
+  }
+}
+
+.image-lightbox:not(.open),
+.custom-preview-overlay:not(.open),
+.filter-drawer:not(.open),
+.mobile-menu:not(.open),
+.cart-drawer:not(.open),
+.auth-modal:not(.open),
+.overlay:not(.open) {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
