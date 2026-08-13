@@ -3,12 +3,27 @@
 const D=window.CribData;D.ensure();
 let users=D.get('users'),session=D.get('session'),currentUser=users.find(u=>u.id===Number(session.userId))||users[0];
 let currentOrderId=null,currentTicketId=null;
-const statusLabels={processing:'در حال آماده‌سازی','design-review':'بررسی طراحی',shipped:'ارسال شده',delivered:'تحویل شده',cancelled:'لغو شده',open:'باز',answered:'پاسخ داده شده',closed:'بسته',review:'در حال بررسی','preview-ready':'پیش‌نمایش آماده',approved:'تأیید شده',draft:'پیش‌نویس سبد'};
+const statusLabels={processing:'در حال آماده‌سازی','design-review':'بررسی طراحی','print-preparation':'آماده‌سازی برای چاپ',shipped:'ارسال شده',delivered:'تحویل شده',cancelled:'لغو شده',open:'باز',answered:'پاسخ داده شده',closed:'بسته',review:'در حال بررسی','preview-ready':'پیش‌نمایش آماده',approved:'تأیید شده',draft:'پیش‌نویس سبد'};
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];
 function isManagedProduct(product){return product?.inventoryMode==='managed';}
 function stockOf(product){return isManagedProduct(product)?Math.max(0,Math.trunc(Number(product?.stock||0))):Infinity;}
 function cartQty(cart,productId){return cart.filter(item=>Number(item.id)===Number(productId)&&!item.customRequestId).reduce((sum,item)=>sum+Math.max(1,Number(item.qty||1)),0);}
 function stockLabel(product){return isManagedProduct(product)?(stockOf(product)>0?`فقط ${D.fa(stockOf(product))} عدد موجود`:'ناموجود'):'موجود';}
+function parsePillowSelection(value){
+  const text=String(value||'').trim();if(!text||(!text.includes('کاور')&&!text.includes('الیاف')))return null;
+  const option=text.includes('با الیاف')?'با الیاف':'فقط کاور';
+  const size=text.replace(/^.*?—\s*/,'').trim();
+  return size?{option,size}:null;
+}
+function orderItemOptions(item){
+  const pillow=parsePillowSelection(item?.size),parts=[];
+  if(pillow)parts.push(`نوع سفارش: ${D.esc(pillow.option)}`,`سایز: ${D.esc(pillow.size)}`);
+  else if(item?.size)parts.push(`سایز: ${D.esc(item.size)}`);
+  if(item?.fabric)parts.push(`جنس: ${D.esc(item.fabric)}`);
+  parts.push(`تعداد ${D.fa(item?.qty||1)}`);
+  return parts.join(' — ');
+}
+function customDisplaySize(item){return parsePillowSelection(item?.size)?.size||item?.size||'—';}
 function status(v){return `<span class="portal-status status-${D.esc(v)}">${D.esc(statusLabels[v]||v)}</span>`;}
 function openModal(id){q(id)?.classList.add('open');}
 function closeModals(){qa('.portal-modal-backdrop').forEach(x=>x.classList.remove('open'));}
@@ -27,7 +42,7 @@ function renderOverview(){const orders=[...userOrders()].sort((a,b)=>String(b.cr
 function renderOrders(){const term=(q('#accountOrderSearch')?.value||'').trim().toLowerCase(),st=q('#accountOrderStatus')?.value||'';let list=[...userOrders()].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));if(term)list=list.filter(o=>`${o.id} ${(o.items||[]).map(i=>i.title).join(' ')}`.toLowerCase().includes(term));if(st)list=list.filter(o=>o.status===st);q('#accountOrdersTable').innerHTML=list.map(o=>orderRow(o)).join('')||`<tr><td colspan="6"><div class="empty-panel"><h3>سفارشی پیدا نشد</h3><p>فیلترها را تغییر دهید.</p></div></td></tr>`;}
 function orderDetail(id){
   const o=userOrders().find(x=>x.id===id);if(!o)return;currentOrderId=id;
-  const steps=['processing','design-review','shipped','delivered'];const active=Math.max(0,steps.indexOf(o.status));
+  const activeStage=({processing:1,'design-review':1,'print-preparation':2,shipped:3,delivered:4})[o.status]??0;
   const discount=Number(o.discount||0),shipping=Number(o.shipping||0),subtotal=Number.isFinite(Number(o.subtotal))?Number(o.subtotal):Math.max(0,Number(o.total||0)+discount-shipping);
   const couponText=o.couponCode?`کد ${D.esc(o.couponCode)}`:'بدون کد تخفیف';
   q('#accountOrderModalBody').innerHTML=`
@@ -39,7 +54,7 @@ function orderDetail(id){
     </div>
     <div class="portal-grid-equal"><div>
       <h4>اقلام سفارش</h4>
-      <div class="order-items-mini">${(o.items||[]).map(i=>`<div class="order-item-mini"><span class="product-mini-img"><img src="${D.esc(productImage(i.id))}" alt="${D.esc(i.title)}"></span><span><strong>${D.esc(i.title)}</strong><small>${i.size?D.esc(i.size)+' — ':''}${i.fabric?D.esc(i.fabric)+' — ':''}تعداد ${D.fa(i.qty)}</small>${i.notes?`<small>یادداشت کالا: ${D.esc(i.notes)}</small>`:''}</span><b>${D.toman(i.price*i.qty)}</b></div>`).join('')}</div>
+      <div class="order-items-mini">${(o.items||[]).map(i=>`<div class="order-item-mini"><span class="product-mini-img"><img src="${D.esc(productImage(i.id))}" alt="${D.esc(i.title)}"></span><span><strong>${D.esc(i.title)}</strong><small>${orderItemOptions(i)}</small>${i.notes?`<small>یادداشت کالا: ${D.esc(i.notes)}</small>`:''}</span><b>${D.toman(i.price*i.qty)}</b></div>`).join('')}</div>
       <h4 style="margin-top:18px">صورتحساب</h4>
       <div class="order-payment-breakdown">
         <div><span>جمع محصولات</span><strong>${D.toman(subtotal)}</strong></div>
@@ -51,10 +66,10 @@ function orderDetail(id){
       ${o.customerNote?`<h4 style="margin-top:18px">یادداشت سفارش</h4><p class="order-customer-note">${D.esc(o.customerNote)}</p>`:''}
       <h4 style="margin-top:18px">تحویل و پرداخت</h4>
       <p style="font-size:11px;line-height:2;color:var(--portal-muted)"><b style="color:var(--portal-text)">${D.esc(o.shippingMethod)}</b><br>${D.esc(o.address)}<br>${o.tracking?`کد رهگیری: <b>${D.esc(o.tracking)}</b>`:'کد رهگیری پس از تحویل مرسوله ثبت می‌شود.'}</p>
-    </div><div><h4>روند سفارش</h4><div class="timeline">${['ثبت و پرداخت سفارش','بررسی و آماده‌سازی فایل','چاپ و بسته‌بندی','تحویل به شرکت حمل','تحویل به مشتری'].map((x,i)=>`<div class="timeline-item" style="opacity:${i<=active+1?1:.42}"><strong>${x}</strong><small>${i<=active+1?'انجام شده / در حال انجام':'در انتظار'}</small></div>`).join('')}</div></div></div>`;
+    </div><div><h4>روند سفارش</h4><div class="timeline">${['ثبت و پرداخت سفارش','بررسی و آماده‌سازی فایل','چاپ و بسته‌بندی','تحویل به شرکت حمل','تحویل به مشتری'].map((x,i)=>`<div class="timeline-item" style="opacity:${i<=activeStage?1:.42}"><strong>${x}</strong><small>${i<=activeStage?'انجام شده / در حال انجام':'در انتظار'}</small></div>`).join('')}</div></div></div>`;
   openModal('#accountOrderModal');
 }
-function renderCustom(){const list=userCustom();q('#accountCustomTable').innerHTML=list.map(x=>`<tr><td><b>${D.esc(x.id)}</b><span class="table-secondary">${D.esc(x.date)}</span></td><td><span class="table-primary">${D.esc(x.fileName)}</span><span class="table-secondary">${D.esc(x.fabric||'ساتن آمریکایی')}</span></td><td>${D.esc(x.size)}</td><td>${D.esc(x.notes||'بدون توضیح')}</td><td>${status(x.status)}</td><td><button class="portal-btn portal-btn-soft custom-action" data-id="${x.id}">${x.status==='preview-ready'?'تأیید پیش‌نمایش':'مشاهده'}</button></td></tr>`).join('')||`<tr><td colspan="6"><div class="empty-panel"><h3>طرحی ثبت نشده است</h3><p>فایل خود را ارسال کنید تا تیم طراحی بررسی کند.</p></div></td></tr>`;}
+function renderCustom(){const list=userCustom();q('#accountCustomTable').innerHTML=list.map(x=>`<tr><td><b>${D.esc(x.id)}</b><span class="table-secondary">${D.esc(x.date)}</span></td><td><span class="table-primary">${D.esc(x.fileName)}</span><span class="table-secondary">${D.esc(x.requestType||'پرچم')} — ${D.esc(x.fabric||'ساتن آمریکایی')}</span></td><td>${D.esc(customDisplaySize(x))}${parsePillowSelection(x.size)?`<span class="table-secondary">${D.esc(parsePillowSelection(x.size).option)}</span>`:''}</td><td>${D.esc(x.notes||'بدون توضیح')}</td><td>${status(x.status)}</td><td><button class="portal-btn portal-btn-soft custom-action" data-id="${x.id}">${x.status==='preview-ready'?'تأیید پیش‌نمایش':'مشاهده'}</button></td></tr>`).join('')||`<tr><td colspan="6"><div class="empty-panel"><h3>طرحی ثبت نشده است</h3><p>فایل خود را ارسال کنید تا تیم طراحی بررسی کند.</p></div></td></tr>`;}
 function renderWishlist(){const products=D.get('products'),ids=D.get('wishlist'),list=products.filter(p=>ids.includes(Number(p.id)));q('#accountWishlistGrid').innerHTML=list.map(p=>`<article class="wishlist-card"><div class="wishlist-media"><img src="${D.esc(p.image||D.PRODUCT_IMAGE)}" alt="${D.esc(p.title)}"></div><div class="wishlist-body"><h3>${D.esc(p.title)}</h3><div class="wishlist-price">${D.toman(p.price)}</div><div class="product-stock ${isManagedProduct(p)?(stockOf(p)>0?'limited':'out'):'available'}">${D.esc(stockLabel(p))}</div><div class="wishlist-actions"><button class="portal-btn portal-btn-primary wishlist-add-cart" data-id="${p.id}" ${isManagedProduct(p)&&stockOf(p)<=0?'disabled':''}>${isManagedProduct(p)&&stockOf(p)<=0?'ناموجود':'افزودن به سبد'}</button><button class="portal-btn portal-btn-danger wishlist-remove" data-id="${p.id}">حذف</button></div></div></article>`).join('')||'<div class="empty-panel"><h3>لیست علاقه‌مندی خالی است</h3><p>از فروشگاه محصولی ذخیره کنید.</p></div>';}
 function renderProfile(){q('#profileName').value=currentUser.name||'';q('#profilePhone').value=currentUser.phone||'';q('#profileEmail').value=currentUser.email||'';q('#profileJoined').value=currentUser.joined||'';}
 function renderAddresses(){const list=D.get('addresses').filter(a=>Number(a.userId)===Number(currentUser.id));q('#accountAddressGrid').innerHTML=list.map(a=>`<article class="address-card ${a.default?'default':''}"><span class="address-label">${D.esc(a.title)}${a.default?' — پیش‌فرض':''}</span><h3>${D.esc(a.receiver)}</h3><p>${D.esc(a.province)}، ${D.esc(a.city)}، ${D.esc(a.address)}<br>کد پستی: ${D.esc(a.postal)} — ${D.esc(a.phone)}</p><div class="address-actions"><button class="portal-btn portal-btn-soft edit-address" data-id="${a.id}">ویرایش</button>${!a.default?`<button class="portal-btn portal-btn-light set-default-address" data-id="${a.id}">پیش‌فرض</button>`:''}<button class="portal-btn portal-btn-danger delete-address" data-id="${a.id}">حذف</button></div></article>`).join('')||'<div class="empty-panel"><h3>آدرسی ثبت نشده است</h3></div>';}

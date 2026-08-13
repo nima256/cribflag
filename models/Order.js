@@ -8,6 +8,7 @@ const itemSchema = new mongoose.Schema({
   qty: Number,
   size: String,
   fabric: String,
+  requestType: String,
   notes: String,
   fileName: String,
   filePath: String,
@@ -31,7 +32,7 @@ const orderSchema = new mongoose.Schema({
   total: Number,
   couponCode: String,
   customerNote: { type: String, trim: true, default: '' },
-  status: { type: String, enum: ['processing','design-review','shipped','delivered','cancelled'], default: 'processing' },
+  status: { type: String, enum: ['processing','design-review','print-preparation','shipped','delivered','cancelled'], default: 'processing' },
   payment: { type: String, default: 'پرداخت آنلاین' },
   paymentStatus: { type: String, enum: ['pending','review','paid','failed','refunded'], default: 'pending' },
   shippingMethod: String,
@@ -46,7 +47,12 @@ const orderSchema = new mongoose.Schema({
     url: String,
     refId: String,
     cardPan: String,
-    paidAt: Date
+    paidAt: Date,
+    torobPaymentToken: String,
+    torobTransactionId: String,
+    torobStatus: String,
+    torobVerifiedAt: Date,
+    torobSettledAt: Date
   }
 }, { timestamps: true });
 module.exports = mongoose.model('Order', orderSchema);

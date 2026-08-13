@@ -1,5 +1,20 @@
 const faDate = (date = new Date()) => new Intl.DateTimeFormat('fa-IR').format(new Date(date));
 
+const faDateTime = (date = new Date()) => {
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return '';
+
+  return new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: 'Asia/Tehran'
+  }).format(value).replace(/[،,]/, ' -');
+};
+
 const normalizeDigits = (value = '') => String(value)
   .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
   .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
@@ -57,4 +72,4 @@ const normalizeMobile = (value = '') => {
   return mobile;
 };
 
-module.exports = { faDate, orderNumber, publicCode, normalizeMobile, normalizeDigits, parsePersianDate };
+module.exports = { faDate, faDateTime, orderNumber, publicCode, normalizeMobile, normalizeDigits, parsePersianDate };

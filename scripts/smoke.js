@@ -101,12 +101,16 @@ const product = {
   if (categoryApi.body.categories?.[0]?.slug !== 'wall-flag' || categoryApi.body.categories[0].productCount !== 6) throw new Error('Category API failed');
   const routedHome = await request(app).get('/').expect(200);
   const routedReady = await request(app).get('/ready').expect(200);
+  const routedCustom = await request(app).get('/custom').expect(200);
   Product.find = originalFind;
   Category.find = originalCategoryFind;
   Product.aggregate = originalProductAggregate;
   if (!routedHome.text.includes('پرچم آزمایشی 1') || !routedHome.text.includes('/product/1')) throw new Error('Express EJS product route failed');
   if (!routedHome.text.includes('پرچم دیواری') || !routedHome.text.includes('wall-flag')) throw new Error('Express dynamic category navbar route failed');
   if (!routedReady.text.includes('<h3>پرچم آزمایشی 1</h3>') || routedReady.text.includes('<h3>پرچم آزمایشی 2</h3>')) throw new Error('Ready route database category filtering failed');
+  if (!routedCustom.text.includes('data-page=\"custom\"') || !routedCustom.text.includes('customFileInput') || routedCustom.text.includes('checkoutProvince')) {
+    throw new Error('Custom page route/template regression failed');
+  }
 
   const html = await ejs.renderFile(path.join(__dirname, '..', 'views', 'index.ejs'), {
     products: [product, product, product, product, product],
@@ -138,7 +142,53 @@ const product = {
     throw new Error('Order discount/note serialization failed');
   }
 
-  const { calculateCustomPrice } = require('../utils/customPricing');
+  const serializedCustom = serializers.custom({
+    publicId: 'DS-PAY-1',
+    user: { publicId: 1 },
+    customer: 'کاربر تست',
+    createdAt: new Date(),
+    price: 990000,
+    paymentStatus: 'failed',
+    payment: 'پرداخت آنلاین زرین‌پال',
+    orderNumber: 'KR-CUSTOM-1'
+  });
+  if (serializedCustom.paymentStatus !== 'failed' || serializedCustom.orderNumber !== 'KR-CUSTOM-1') {
+    throw new Error('Custom request payment serialization failed');
+  }
+
+  const { hydrateCustomRequestsWithOrders } = require('../services/customOrderSync');
+  const hydratedCustom = hydrateCustomRequestsWithOrders(
+    [{ publicId: 'DS-LEGACY-1', paymentStatus: 'unpaid' }],
+    [{
+      orderNumber: 'KR-LEGACY-1',
+      customer: 'کاربر سفارش اختصاصی',
+      phone: '09121111111',
+      province: 'البرز',
+      city: 'کرج',
+      postalCode: '3199999999',
+      address: 'کرج، نشانی کامل سفارش اختصاصی',
+      shippingMethod: 'تیپاکس',
+      customerNote: 'قبل از ارسال تماس بگیرید',
+      paymentStatus: 'paid',
+      payment: 'پرداخت آنلاین',
+      createdAt: new Date(),
+      items: [{ customRequestId: 'DS-LEGACY-1' }]
+    }]
+  );
+  if (
+    hydratedCustom[0].paymentStatus !== 'paid' ||
+    hydratedCustom[0].orderNumber !== 'KR-LEGACY-1' ||
+    hydratedCustom[0].address !== 'کرج، نشانی کامل سفارش اختصاصی' ||
+    hydratedCustom[0].postalCode !== '3199999999' ||
+    hydratedCustom[0].deliveryNote !== 'قبل از ارسال تماس بگیرید'
+  ) {
+    throw new Error('Legacy custom request order hydration failed');
+  }
+
+  const { calculateCustomPrice, CUSTOM_FLAG_FABRICS } = require('../utils/customPricing');
+  if (!CUSTOM_FLAG_FABRICS.includes('ساتن براق') || CUSTOM_FLAG_FABRICS.length !== 3) {
+    throw new Error('Custom flag fabric allowlist is out of sync');
+  }
   const { parsePersianDate } = require('../utils/formatters');
   const parsedExpiry = parsePersianDate('۱۴۰۵/۰۵/۳۱');
   if (!parsedExpiry || parsedExpiry.getUTCFullYear() !== 2026 || parsedExpiry.getUTCMonth() !== 7 || parsedExpiry.getUTCDate() !== 22) {
@@ -149,12 +199,12 @@ const product = {
     ['70x50', true, 550000],
     ['71x50', true, 800000],
     ['100x70', true, 800000],
-    ['101x70', true, 950000],
-    ['150x90', true, 950000],
-    ['90x150', true, 950000],
+    ['101x70', true, 990000],
+    ['150x90', true, 990000],
+    ['90x150', true, 990000],
     ['151x90', false, 0],
     ['150x91', false, 0],
-    ['۱۵۰ × ۹۰ سانتی‌متر', true, 950000]
+    ['۱۵۰ × ۹۰ سانتی‌متر', true, 990000]
   ];
   for (const [size, valid, price] of customPriceCases) {
     const result = calculateCustomPrice(size);
@@ -163,7 +213,34 @@ const product = {
     }
   }
 
-  console.log('Smoke OK: category API, dynamic routes, ready DB filtering, custom pricing, order serialization, auth and origin guards');
+  const pillowPriceCases = [
+    ['روبالشتی', 'فقط کاور — ۵۰ × ۷۰ سانتی‌متر', 1000],
+    ['روبالشتی', 'با الیاف — ۵۰ × ۷۰ سانتی‌متر', 950000],
+    ['داکیماکورا بالشت قدی', 'فقط کاور — ۳۵ × ۱۰۰ سانتی‌متر', 700000],
+    ['داکیماکورا بالشت قدی', 'با الیاف — ۳۵ × ۱۰۰ سانتی‌متر', 1050000],
+    ['داکیماکورا بالشت قدی', 'فقط کاور — ۵۰ × ۱۵۰ سانتی‌متر', 990000],
+    ['داکیماکورا بالشت قدی', 'با الیاف — ۵۰ × ۱۵۰ سانتی‌متر', 1450000]
+  ];
+  for (const [requestType, size, price] of pillowPriceCases) {
+    const result = calculateCustomPrice(size, undefined, 'مخمل', requestType);
+    if (!result.valid || result.price !== price || result.fabric !== 'مخمل') {
+      throw new Error(`Pillow pricing failed for ${requestType}: ${size}`);
+    }
+  }
+  if (calculateCustomPrice('فقط کاور — ۷۰ × ۱۰۰ سانتی‌متر', undefined, 'مخمل', 'روبالشتی').valid) {
+    throw new Error('Invalid pillow size was accepted');
+  }
+  const serializedPillow = serializers.product({
+    publicId: 99, title: 'روبالشتی تست', sku: 'PILLOW-99', category: 'رو بالشتی', categories: ['رو بالشتی'],
+    price: 777000, hasDiscount: true, oldPrice: 888000,
+    variantPrices: [{ size: 'فقط کاور — ۵۰ × ۷۰ سانتی‌متر', fabric: 'مخمل', price: 777000, oldPrice: 888000 }],
+    sizes: ['فقط کاور — ۵۰ × ۷۰ سانتی‌متر'], fabrics: ['مخمل'], images: [], status: 'active'
+  });
+  if (serializedPillow.price !== 777000 || !serializedPillow.hasDiscount || serializedPillow.old !== 888000 || serializedPillow.variantPrices.length !== 1) {
+    throw new Error('Serialized pillow product did not preserve editable stored pricing');
+  }
+
+  console.log('Smoke OK: category API, dynamic routes, ready/custom templates, custom payment hydration, flag/pillow custom pricing, editable product serialization, order serialization, auth and origin guards');
 })().catch(error => {
   console.error(error);
   process.exit(1);

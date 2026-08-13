@@ -98,12 +98,32 @@ const PAGE_ROUTES = {
   cart: "/cart", checkout: "/checkout", success: "/payment/success"
 };
 const CART_KEY = "cribFlagCartV2";
-const CUSTOM_PRICING_VERSION = "20260730-v4";
+const CUSTOM_PRICING_VERSION = "20260803-pillow-pricing-v2";
+const CUSTOM_PRODUCT_TYPES = Object.freeze(['پرچم', 'روبالشتی', 'داکیماکورا بالشت قدی']);
 const CUSTOM_SIZE_TIERS = Object.freeze([
-  Object.freeze({ maxLong: 70, maxShort: 50, price: 550000, velvetPrice: 700000 }),
-  Object.freeze({ maxLong: 100, maxShort: 70, price: 800000, velvetPrice: 1000000 }),
-  Object.freeze({ maxLong: 150, maxShort: 90, price: 950000, velvetPrice: 1200000 })
+  Object.freeze({ maxLong: 70, maxShort: 50, price: 550000, americanSatinPrice: 550000, velvetPrice: 700000 }),
+  Object.freeze({ maxLong: 100, maxShort: 70, price: 800000, americanSatinPrice: 1000, velvetPrice: 1000000 }),
+  Object.freeze({ maxLong: 150, maxShort: 90, price: 990000, americanSatinPrice: 2000, velvetPrice: 1200000 })
 ]);
+const PILLOW_CUSTOM_CONFIGS = Object.freeze({
+  pillowcase:Object.freeze({
+    title:'روبالشتی',
+    variants:Object.freeze([
+      Object.freeze({option:'فقط کاور',size:'۵۰ × ۷۰ سانتی‌متر',price:650000}),
+      Object.freeze({option:'با الیاف',size:'۵۰ × ۷۰ سانتی‌متر',price:950000})
+    ])
+  }),
+  dakimakura:Object.freeze({
+    title:'داکیماکورا بالشت قدی',
+    variants:Object.freeze([
+      Object.freeze({option:'فقط کاور',size:'۳۵ × ۱۰۰ سانتی‌متر',price:700000}),
+      Object.freeze({option:'با الیاف',size:'۳۵ × ۱۰۰ سانتی‌متر',price:1050000}),
+      Object.freeze({option:'فقط کاور',size:'۵۰ × ۱۵۰ سانتی‌متر',price:990000}),
+      Object.freeze({option:'با الیاف',size:'۵۰ × ۱۵۰ سانتی‌متر',price:1450000})
+    ])
+  })
+});
+const makePillowVariantSize=(option,size)=>`${option} — ${size}`;
 
 function normalizeCustomDigits(value) {
   return String(value ?? '')
@@ -121,7 +141,50 @@ function parseCustomDimensions(value) {
   return { width, height };
 }
 
-function calculateCustomTierPrice(width, height, fabric = 'ساتن آمریکایی') {
+function compactCustomType(value=''){
+  return String(value||'').trim().toLowerCase()
+    .replace(/[ي]/g,'ی').replace(/[ك]/g,'ک')
+    .replace(/[\u200c\u200d\u200e\u200f]/g,'')
+    .replace(/[^a-z0-9\u0600-\u06FF]+/g,'');
+}
+function customPillowMode(requestType){
+  const compact=compactCustomType(requestType);
+  if(compact.includes('داکیماکورا')||compact.includes('قدی'))return 'dakimakura';
+  if(compact.includes('روبالشتی')||compact.includes('بالشتی'))return 'pillowcase';
+  return null;
+}
+function normalizeCustomProductType(value) {
+  const type = String(value || '').trim();
+  if (!type || type === 'چاپ مستقیم') return 'پرچم';
+  const mode=customPillowMode(type);
+  if(mode==='pillowcase')return 'روبالشتی';
+  if(mode==='dakimakura')return 'داکیماکورا بالشت قدی';
+  return 'پرچم';
+}
+
+function isCustomPillow(requestType) {
+  return Boolean(customPillowMode(normalizeCustomProductType(requestType)));
+}
+function dimensionsKey(value){
+  const dimensions=parseCustomDimensions(value);if(!dimensions)return '';
+  return `${Math.min(dimensions.width,dimensions.height)}x${Math.max(dimensions.width,dimensions.height)}`;
+}
+function findCustomPillowVariant(requestType,sizeValue,optionValue=''){
+  const mode=customPillowMode(requestType),config=PILLOW_CUSTOM_CONFIGS[mode];if(!config)return null;
+  const option=String(optionValue||'').trim()||(String(sizeValue||'').includes('با الیاف')?'با الیاف':String(sizeValue||'').includes('کاور')?'فقط کاور':'');
+  const key=dimensionsKey(sizeValue);
+  return config.variants.find(item=>item.option===option&&dimensionsKey(item.size)===key)||null;
+}
+
+function calculateCustomTierPrice(width, height, fabric = 'ساتن آمریکایی', requestType = 'پرچم', pillowOption = '') {
+  const normalizedType=normalizeCustomProductType(requestType);
+  if(isCustomPillow(normalizedType)){
+    const sizeValue=height===undefined?width:`${width} × ${height}`;
+    const variant=findCustomPillowVariant(normalizedType,sizeValue,pillowOption);
+    return variant
+      ?{valid:true,reason:null,price:variant.price,pillowOption:variant.option,size:variant.size,variantSize:makePillowVariantSize(variant.option,variant.size)}
+      :{valid:false,reason:'invalid-pillow-variant',price:0};
+  }
   const parsedWidth = Number(normalizeCustomDigits(width));
   const parsedHeight = Number(normalizeCustomDigits(height));
   if (!Number.isFinite(parsedWidth) || !Number.isFinite(parsedHeight) || parsedWidth <= 0 || parsedHeight <= 0) {
@@ -131,7 +194,12 @@ function calculateCustomTierPrice(width, height, fabric = 'ساتن آمریکا
   const shortSide = Math.min(parsedWidth, parsedHeight);
   const tier = CUSTOM_SIZE_TIERS.find(item => longSide <= item.maxLong && shortSide <= item.maxShort);
   if (!tier) return { valid: false, reason: 'too-large', price: 0, longSide, shortSide };
-  const price = String(fabric || '').trim() === 'مخمل' ? tier.velvetPrice : tier.price;
+  const normalizedFabric = String(fabric || '').trim();
+  const price = normalizedFabric === 'مخمل'
+    ? tier.velvetPrice
+    : normalizedFabric === 'ساتن آمریکایی'
+      ? tier.americanSatinPrice
+      : tier.price;
   return { valid: true, reason: null, price, longSide, shortSide };
 }
 
@@ -141,11 +209,20 @@ function isCustomCartItem(item) {
 
 function normalizeStoredCustomItem(item) {
   if (!isCustomCartItem(item)) return item;
+  const pillow=isCustomPillow(item?.requestType);
   const dimensions = parseCustomDimensions(item?.size);
   if (!dimensions) return item;
-  const pricing = calculateCustomTierPrice(dimensions.width, dimensions.height, item.fabric);
+  const pricing = pillow
+    ? calculateCustomTierPrice(item.size, undefined, 'مخمل', item.requestType, item.pillowOption)
+    : calculateCustomTierPrice(dimensions.width, dimensions.height, item.fabric, item.requestType);
   if (!pricing.valid) return item;
-  return { ...item, price: pricing.price, old: pricing.price };
+  return {
+    ...item,
+    pillowOption: pricing.pillowOption || item.pillowOption || '',
+    displaySize: pricing.size || item.displaySize || item.size,
+    price: pricing.price,
+    old: pricing.price
+  };
 }
 
 window.__CUSTOM_PRICING_VERSION__ = CUSTOM_PRICING_VERSION;
@@ -248,6 +325,27 @@ function productCategoryKeys(product={}) {
   ];
   return [...new Set(raw.flatMap(categoryKeyVariants))];
 }
+function parsePillowProductVariant(value){
+  const text=String(value||'').trim();
+  const option=text.includes('با الیاف')?'با الیاف':(text.includes('کاور')?'فقط کاور':'');
+  if(!option)return null;
+  const parts=text.split(' — ');
+  const size=(parts.length>1?parts.slice(1).join(' — '):text.replace(option,'')).trim();
+  return size?{option,size,variantSize:makePillowVariantSize(option,size)}:null;
+}
+function pillowProductSelections(product){
+  return [...new Map((product?.sizes||[]).map(value=>parsePillowProductVariant(value)).filter(Boolean).map(item=>[item.variantSize,item])).values()];
+}
+function itemDisplaySize(item){return item?.displaySize||parsePillowProductVariant(item?.size)?.size||item?.size||'';}
+function itemPillowOption(item){return item?.pillowOption||parsePillowProductVariant(item?.size)?.option||'';}
+function cartVariantText(item){
+  const parts=[];
+  if(item?.requestType)parts.push(`نوع محصول: ${escapeHTML(item.requestType)}`);
+  const option=itemPillowOption(item);if(option)parts.push(`نوع سفارش: ${escapeHTML(option)}`);
+  const size=itemDisplaySize(item);if(size)parts.push(`سایز: ${escapeHTML(size)}`);
+  if(item?.fabric)parts.push(`پارچه: ${escapeHTML(item.fabric)}`);
+  return parts.join(' — ');
+}
 function getVariantPricing(product,size,fabric) {
   const normalized=normalizeProductPricing(product);
   const variant=normalized.variantPrices.find(item=>item.size===size&&item.fabric===fabric);
@@ -347,12 +445,12 @@ function scrollToCatalog(gridId){
 }
 
 function cartSubtotal(){ return cart.reduce((s,i)=>s+Number(i.price)*Number(i.qty||1),0); }
-function discountableCartSubtotal(){ return cart.filter(item=>!isCustomCartItem(item)).reduce((s,i)=>s+Number(i.price)*Number(i.qty||1),0); }
+function discountableCartSubtotal(){ return cart.reduce((s,i)=>s+Number(i.price)*Number(i.qty||1),0); }
 function renderCart(){
   saveCart(); const qty=cart.reduce((sum,item)=>sum+Number(item.qty||1),0); document.querySelectorAll(".cart-count").forEach(x=>x.textContent=toFa(qty));
   const box=document.getElementById("cartBody"), total=document.getElementById("cartTotal"); if(total)total.textContent=toman(cartSubtotal()); if(!box)return;
   if(!cart.length){box.innerHTML='<div class="empty-state"><div><div class="empty-icon">🛒</div><h4>سبد خرید خالی است</h4><p>محصولات موردنظر خود را انتخاب کنید.</p></div></div>';renderCartPage();if(document.getElementById('checkoutSummaryItems'))renderCheckout();return;}
-  box.innerHTML=cart.map(item=>`<div class="cart-item"><div class="cart-thumb">${item.preview?`<img src="${item.preview}" alt="${escapeHTML(item.title)}">`:productImageBox(item.title,item.image)}</div><div class="cart-info"><h4>${escapeHTML(item.title)}</h4><small>${toman(item.price)}</small><small class="cart-variant">${item.size?`سایز: ${escapeHTML(item.size)}`:""}${item.size&&item.fabric?" — ":""}${item.fabric?`پارچه: ${escapeHTML(item.fabric)}`:""}</small><div class="cart-row">${isCustomCartItem(item)?'<div class="mini-qty"><span>۱ درخواست</span></div>':`<div class="mini-qty"><button class="cart-plus" data-id="${item.cartId}">+</button><span>${toFa(item.qty)}</span><button class="cart-minus" data-id="${item.cartId}">−</button></div>`}<button class="remove-btn cart-remove" data-id="${item.cartId}">×</button></div></div></div>`).join("");
+  box.innerHTML=cart.map(item=>`<div class="cart-item"><div class="cart-thumb">${item.preview?`<img src="${item.preview}" alt="${escapeHTML(item.title)}">`:productImageBox(item.title,item.image)}</div><div class="cart-info"><h4>${escapeHTML(item.title)}</h4><small>${toman(item.price)}</small><small class="cart-variant">${cartVariantText(item)}</small><div class="cart-row">${isCustomCartItem(item)?'<div class="mini-qty"><span>۱ درخواست</span></div>':`<div class="mini-qty"><button class="cart-plus" data-id="${item.cartId}">+</button><span>${toFa(item.qty)}</span><button class="cart-minus" data-id="${item.cartId}">−</button></div>`}<button class="remove-btn cart-remove" data-id="${item.cartId}">×</button></div></div></div>`).join("");
   renderCartPage(); if(document.getElementById('checkoutSummaryItems'))renderCheckout();
 }
 function addToCartFromProduct(product,qty=1,options={}){
@@ -364,7 +462,8 @@ function addToCartFromProduct(product,qty=1,options={}){
   const size=options.size||live.size||(Array.isArray(live.sizes)?live.sizes[0]:DEFAULT_SIZES[0]);
   const fabric=options.fabric||live.fabric||(Array.isArray(live.fabrics)?live.fabrics[0]:DEFAULT_FABRICS[0]);
   const pricing=getVariantPricing(live,size,fabric);
-  cart.push({...live,image:productImageSrc(live),size,fabric,price:pricing.price,hasDiscount:pricing.hasDiscount,old:pricing.oldPrice,cartId:`${live.id}-${Date.now()}-${Math.random()}`,qty:requested});
+  const pillowSelection=parsePillowProductVariant(size);
+  cart.push({...live,image:productImageSrc(live),size,fabric,pillowOption:options.pillowOption||pillowSelection?.option||'',displaySize:options.displaySize||pillowSelection?.size||'',price:pricing.price,hasDiscount:pricing.hasDiscount,old:pricing.oldPrice,cartId:`${live.id}-${Date.now()}-${Math.random()}`,qty:requested});
   invalidateDiscountAfterCartChange();renderCart();showToast("محصول به سبد خرید اضافه شد.");return true;
 }
 
@@ -538,8 +637,12 @@ function initProduct(){
   selectedProduct=normalizeProductPricing(window.__CURRENT_PRODUCT__||products.find(product=>product.id===id)||ready||products[0]);
   selectedProduct.sizes=Array.isArray(selectedProduct.sizes)&&selectedProduct.sizes.length?selectedProduct.sizes:[...DEFAULT_SIZES];
   selectedProduct.fabrics=Array.isArray(selectedProduct.fabrics)&&selectedProduct.fabrics.length?selectedProduct.fabrics:[...DEFAULT_FABRICS];
+  const torobInitial=window.__TOROB_PRODUCT_META__||{};
+  const requestedTorobSize=String(torobInitial.requestedSize||'').trim();
+  const requestedTorobFabric=String(torobInitial.requestedFabric||'').trim();
   detailQty=1; const set=(id,value)=>{const element=document.getElementById(id);if(element)element.textContent=value};
-  set('breadcrumbProduct',selectedProduct.title);set('detailCategory',(selectedProduct.categories||[selectedProduct.category]).join('، '));set('detailTitle',selectedProduct.title);set('detailDescription',selectedProduct.description);set('detailQty',toFa(detailQty));set('detailFabricSummary',selectedProduct.fabrics.join('، '));set('detailSizeSummary',selectedProduct.sizes.join('، '));
+  const initialTorobTitle=String(torobInitial.title||selectedProduct.title);
+  set('breadcrumbProduct',initialTorobTitle);set('detailCategory',(selectedProduct.categories||[selectedProduct.category]).join('، '));set('detailTitle',initialTorobTitle);set('detailDescription',selectedProduct.description);set('detailQty',toFa(detailQty));set('detailFabricSummary',selectedProduct.fabrics.join('، '));set('detailSizeSummary',selectedProduct.sizes.join('، '));
   const stockStatus=document.getElementById('detailStockStatus');if(stockStatus){stockStatus.textContent=inventoryText(selectedProduct);stockStatus.className=`detail-stock-status ${inventoryClass(selectedProduct)}`;}
   const galleryImages=Array.isArray(selectedProduct.images)&&selectedProduct.images.length?selectedProduct.images:[selectedProduct.image||PRODUCT_IMAGE];
   const main=document.getElementById('productMainImageImg'),light=document.getElementById('lightboxProductImg');
@@ -592,22 +695,71 @@ function initProduct(){
   lightFrame?.addEventListener('touchend',event=>{if(touchStartX==null)return;const delta=(event.changedTouches?.[0]?.clientX??touchStartX)-touchStartX;touchStartX=null;if(Math.abs(delta)>45)moveGallery(delta>0?-1:1);},{passive:true});
   document.addEventListener('keydown',event=>{const box=document.querySelector('.image-lightbox');if(!box?.classList.contains('open'))return;if(event.key==='ArrowLeft')moveGallery(1);if(event.key==='ArrowRight')moveGallery(-1);});
   setGallery(0);
-  const renderOptions=(containerId,name,values)=>{const box=document.getElementById(containerId);if(!box)return;box.innerHTML=values.map((value,index)=>`<label class="detail-option"><input type="radio" name="${name}" value="${escapeHTML(value)}" ${index===0?'checked':''}><span>${escapeHTML(value)}</span></label>`).join('');};
-  renderOptions('detailSizeOptions','detailSize',selectedProduct.sizes);renderOptions('detailFabricOptions','detailFabric',selectedProduct.fabrics);
+  const renderOptions=(containerId,name,values,selectedValue='')=>{const box=document.getElementById(containerId);if(!box)return;const selected=values.includes(selectedValue)?selectedValue:values[0];box.innerHTML=values.map(value=>`<label class="detail-option"><input type="radio" name="${name}" value="${escapeHTML(value)}" ${value===selected?'checked':''}><span>${escapeHTML(value)}</span></label>`).join('');};
+  const pillowSelections=pillowProductSelections(selectedProduct),isPillowProduct=pillowSelections.length>0;
+  const requestedPillowSelection=isPillowProduct?parsePillowProductVariant(requestedTorobSize):null;
+  const pillowGroup=document.getElementById('detailPillowOptionGroup'),pillowBox=document.getElementById('detailPillowOptions'),fabricGroup=document.getElementById('detailFabricGroup');
+  if(pillowGroup)pillowGroup.hidden=!isPillowProduct;
+  if(fabricGroup)fabricGroup.hidden=false;
+  const sizeGuideButton=document.querySelector('.size-guide-btn');if(sizeGuideButton)sizeGuideButton.hidden=isPillowProduct;
+  const renderPillowSizes=()=>{
+    if(!isPillowProduct){renderOptions('detailSizeOptions','detailSize',selectedProduct.sizes,requestedTorobSize);return;}
+    const option=document.querySelector('input[name="detailPillowOption"]:checked')?.value||requestedPillowSelection?.option||pillowSelections[0].option;
+    const sizes=[...new Set(pillowSelections.filter(item=>item.option===option).map(item=>item.size))];
+    const requestedDisplaySize=requestedPillowSelection?.option===option?requestedPillowSelection.size:'';
+    renderOptions('detailSizeOptions','detailSize',sizes,requestedDisplaySize);
+  };
+  if(isPillowProduct&&pillowBox){
+    const options=[...new Set(pillowSelections.map(item=>item.option))];
+    const selectedPillowOption=options.includes(requestedPillowSelection?.option)?requestedPillowSelection.option:options[0];
+    pillowBox.innerHTML=options.map(value=>`<label class="detail-option"><input type="radio" name="detailPillowOption" value="${escapeHTML(value)}" ${value===selectedPillowOption?'checked':''}><span>${escapeHTML(value)}</span></label>`).join('');
+    const help=document.getElementById('detailSizeHelp');if(help)help.textContent='سایزهای مربوط به نوع سفارش انتخاب‌شده را مشخص کنید';
+    set('detailFabricSummary','مخمل');
+    set('detailSizeSummary',[...new Set(pillowSelections.map(item=>item.size))].join('، '));
+  }
+  renderPillowSizes();renderOptions('detailFabricOptions','detailFabric',selectedProduct.fabrics,requestedTorobFabric);
+  const selectedVariantSize=()=>{
+    const rawSize=document.querySelector('input[name="detailSize"]:checked')?.value||(isPillowProduct?pillowSelections[0].size:selectedProduct.sizes[0]);
+    if(!isPillowProduct)return rawSize;
+    const option=document.querySelector('input[name="detailPillowOption"]:checked')?.value||pillowSelections[0].option;
+    return makePillowVariantSize(option,rawSize);
+  };
+  let torobFirstSync=true;
+  const torobVariantTitle=(size,fabric)=>[selectedProduct.title,size?`سایز ${size}`:'',fabric?`پارچه ${fabric}`:''].filter(Boolean).join(' - ');
+  const upsertTorobSpec=(id,label,value)=>{let meta=document.getElementById(id);if(!value){meta?.remove();return;}if(!meta){meta=document.createElement('meta');meta.id=id;meta.name='spec';document.head.appendChild(meta);}meta.setAttribute('content',`${label}: ${value}`);};
+  const syncTorobProductMeta=(size,fabric,pricing)=>{
+    const title=torobVariantTitle(size,fabric);
+    set('breadcrumbProduct',title);set('detailTitle',title);
+    document.title=`${title} | Crib Flag`;
+    document.getElementById('product-name-meta')?.setAttribute('content',title);
+    document.getElementById('product-price-meta')?.setAttribute('content',String(Math.max(0,Math.trunc(Number(pricing.price||0)))));
+    document.getElementById('og-title-meta')?.setAttribute('content',title);
+    upsertTorobSpec('torob-size-spec','سایز',size);upsertTorobSpec('torob-fabric-spec','جنس پارچه',fabric);
+    const canonical=new URL(location.pathname,location.origin);if(size)canonical.searchParams.set('size',size);if(fabric)canonical.searchParams.set('fabric',fabric);
+    document.getElementById('torob-canonical')?.setAttribute('href',canonical.toString());
+    document.getElementById('og-url-meta')?.setAttribute('content',canonical.toString());
+    const schemaElement=document.getElementById('torob-product-jsonld');
+    if(schemaElement){try{const schema=JSON.parse(schemaElement.textContent||'{}');schema.name=title;schema.size=size||undefined;schema.material=fabric||undefined;if(schema.offers){schema.offers.price=String(Math.max(0,Math.trunc(Number(pricing.price||0)))*10);schema.offers.url=canonical.toString();}schemaElement.textContent=JSON.stringify(schema).replace(/</g,'\\u003c');}catch{}}
+    const shouldWriteUrl=!torobFirstSync||Boolean(requestedTorobSize||requestedTorobFabric);torobFirstSync=false;
+    if(shouldWriteUrl){const current=new URL(location.href);if(size)current.searchParams.set('size',size);else current.searchParams.delete('size');if(fabric)current.searchParams.set('fabric',fabric);else current.searchParams.delete('fabric');history.replaceState({},'',`${current.pathname}${current.search}${current.hash}`);}
+  };
   const updateDetailPrice=()=>{
-    const size=document.querySelector('input[name="detailSize"]:checked')?.value||selectedProduct.sizes[0];
+    const size=selectedVariantSize();
     const fabric=document.querySelector('input[name="detailFabric"]:checked')?.value||selectedProduct.fabrics[0];
     const pricing=getVariantPricing(selectedProduct,size,fabric);
     set('detailPrice',toman(pricing.price));
     const oldElement=document.getElementById('detailOldPrice');
     if(oldElement){oldElement.textContent=pricing.hasDiscount&&pricing.oldPrice>pricing.price?toman(pricing.oldPrice):'';oldElement.hidden=!(pricing.hasDiscount&&pricing.oldPrice>pricing.price);}
+    syncTorobProductMeta(size,fabric,pricing);
   };
-  document.querySelectorAll('input[name="detailSize"],input[name="detailFabric"]').forEach(input=>input.addEventListener('change',updateDetailPrice));
+  document.getElementById('detailSizeOptions')?.addEventListener('change',updateDetailPrice);
+  document.getElementById('detailFabricOptions')?.addEventListener('change',updateDetailPrice);
+  pillowBox?.addEventListener('change',()=>{renderPillowSizes();updateDetailPrice();});
   updateDetailPrice();
   const detailAddButton=document.querySelector('.detail-add-cart');const detailMax=()=>isManagedInventory(selectedProduct)?remainingProductStock(selectedProduct):50;
   if(detailAddButton){const unavailable=detailMax()<=0;detailAddButton.disabled=unavailable;detailAddButton.textContent=unavailable?'ناموجود':'افزودن به سبد خرید';}
   document.querySelector('.detail-plus')?.addEventListener('click',()=>{const max=detailMax();if(detailQty>=max){showToast(isManagedInventory(selectedProduct)?`فقط ${toFa(productStock(selectedProduct))} عدد از این محصول موجود است.`:'حداکثر تعداد قابل سفارش ۵۰ عدد است.');return;}detailQty=Math.min(50,detailQty+1);set('detailQty',toFa(detailQty));});document.querySelector('.detail-minus')?.addEventListener('click',()=>{detailQty=Math.max(1,detailQty-1);set('detailQty',toFa(detailQty));});
-  detailAddButton?.addEventListener('click',()=>{const size=document.querySelector('input[name="detailSize"]:checked')?.value;const fabric=document.querySelector('input[name="detailFabric"]:checked')?.value;if(!size||!fabric){showToast('سایز و جنس پارچه را انتخاب کنید.');return;}if(addToCartFromProduct(selectedProduct,detailQty,{size,fabric})){detailQty=1;set('detailQty',toFa(detailQty));const unavailable=detailMax()<=0;detailAddButton.disabled=unavailable;detailAddButton.textContent=unavailable?'تمام موجودی در سبد':'افزودن به سبد خرید';}});
+  detailAddButton?.addEventListener('click',()=>{const size=selectedVariantSize();const fabric=document.querySelector('input[name="detailFabric"]:checked')?.value;if(!size||!fabric){showToast('سایز و جنس پارچه را انتخاب کنید.');return;}const parsed=parsePillowProductVariant(size);if(addToCartFromProduct(selectedProduct,detailQty,{size,fabric,pillowOption:parsed?.option,displaySize:parsed?.size})){detailQty=1;set('detailQty',toFa(detailQty));const unavailable=detailMax()<=0;detailAddButton.disabled=unavailable;detailAddButton.textContent=unavailable?'تمام موجودی در سبد':'افزودن به سبد خرید';}});
   document.querySelector('.size-guide-btn')?.addEventListener('click',()=>openOverlayLayer(document.querySelector('.size-guide-modal')));
   document.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.tab-btn').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));btn.classList.add('active');document.getElementById(`tab-${btn.dataset.tab}`)?.classList.add('active');}));
 }
@@ -636,41 +788,145 @@ function renderCartPage(){
   const box=document.getElementById('cartPageItems');if(!box)return;const qty=cart.reduce((sum,item)=>sum+Number(item.qty||1),0);
   document.getElementById('cartPageCount').textContent=toFa(qty);document.getElementById('cartPageTotal').textContent=toman(cartSubtotal());
   const checkoutLink=document.getElementById('cartCheckoutLink');if(checkoutLink)checkoutLink.classList.toggle('disabled',!cart.length);
-  box.innerHTML=cart.length?cart.map(item=>`<article class="cart-page-item"><div class="cart-page-image">${item.preview?`<img src="${item.preview}" alt="${escapeHTML(item.title)}">`:productImageBox(item.title,item.image)}</div><div class="cart-page-info"><span>${escapeHTML(item.category||'محصول')}</span><h3>${escapeHTML(item.title)}</h3>${item.size?`<small>سایز: ${escapeHTML(item.size)}</small>`:''}${item.fabric?`<small>جنس پارچه: ${escapeHTML(item.fabric)}</small>`:''}${item.notes?`<p>${escapeHTML(item.notes)}</p>`:''}</div><div class="cart-page-controls"><strong>${toman(item.price*item.qty)}</strong>${isCustomCartItem(item)?'<div class="mini-qty"><span>۱ درخواست</span></div>':`<div class="mini-qty"><button class="cart-plus" data-id="${item.cartId}">+</button><span>${toFa(item.qty)}</span><button class="cart-minus" data-id="${item.cartId}">−</button></div>`}<button class="cart-page-remove cart-remove" data-id="${item.cartId}">حذف</button></div></article>`).join(''):'<div class="cart-page-empty"><div class="empty-bag"></div><h3>سبد خرید شما خالی است</h3><p>از فروشگاه یا بخش طرح‌های آماده محصولی انتخاب کنید.</p><a class="btn btn-primary" href="/store">رفتن به فروشگاه</a></div>';
+  box.innerHTML=cart.length?cart.map(item=>`<article class="cart-page-item"><div class="cart-page-image">${item.preview?`<img src="${item.preview}" alt="${escapeHTML(item.title)}">`:productImageBox(item.title,item.image)}</div><div class="cart-page-info"><span>${escapeHTML(item.category||'محصول')}</span><h3>${escapeHTML(item.title)}</h3>${item.requestType?`<small>نوع محصول: ${escapeHTML(item.requestType)}</small>`:''}${itemPillowOption(item)?`<small>نوع سفارش: ${escapeHTML(itemPillowOption(item))}</small>`:''}${itemDisplaySize(item)?`<small>سایز: ${escapeHTML(itemDisplaySize(item))}</small>`:''}${item.fabric?`<small>جنس پارچه: ${escapeHTML(item.fabric)}</small>`:''}${item.notes?`<p>${escapeHTML(item.notes)}</p>`:''}</div><div class="cart-page-controls"><strong>${toman(item.price*item.qty)}</strong>${isCustomCartItem(item)?'<div class="mini-qty"><span>۱ درخواست</span></div>':`<div class="mini-qty"><button class="cart-plus" data-id="${item.cartId}">+</button><span>${toFa(item.qty)}</span><button class="cart-minus" data-id="${item.cartId}">−</button></div>`}<button class="cart-page-remove cart-remove" data-id="${item.cartId}">حذف</button></div></article>`).join(''):'<div class="cart-page-empty"><div class="empty-bag"></div><h3>سبد خرید شما خالی است</h3><p>از فروشگاه یا بخش طرح‌های آماده محصولی انتخاب کنید.</p><a class="btn btn-primary" href="/store">رفتن به فروشگاه</a></div>';
 }
 function initCart(){renderCartPage();document.getElementById('cartCheckoutLink')?.addEventListener('click',e=>{if(!cart.length){e.preventDefault();showToast('سبد خرید خالی است.');return;}if(!currentUser){e.preventDefault();requireLogin('/checkout');return;}window.CribLoader?.show('در حال آماده‌سازی تسویه حساب...');});}
 
 function initCustomOrder(){
-  const input=document.getElementById('customFileInput'), preview=document.getElementById('customUploadPreview'), nameBox=document.getElementById('customFileName'), dims=document.getElementById('customDimensionFields'), priceBox=document.getElementById('customOrderPrice'), addButton=document.getElementById('addCustomOrder'), fabricSelect=document.getElementById('customOrderFabric');let uploadData='';let fileName='';let customDimensionError='';
-  const selected=()=>document.querySelector('input[name="customOrderSize"]:checked');
-  const calcPrice=()=>{const radio=selected(),fabric=fabricSelect?.value||DEFAULT_FABRICS[0];let price=0;customDimensionError='';if(radio?.value==='custom'){const w=document.getElementById('customOrderWidth').value,h=document.getElementById('customOrderHeight').value,pricing=calculateCustomTierPrice(w,h,fabric);if(!pricing.valid){customDimensionError=pricing.reason==='too-large'?'حداکثر سایز قابل ثبت ۱۵۰ × ۹۰ سانتی‌متر است.':'ابعاد معتبر را وارد کنید.';}else price=pricing.price;}else if(radio){const dimensions=parseCustomDimensions(radio.value),pricing=dimensions?calculateCustomTierPrice(dimensions.width,dimensions.height,fabric):{valid:false,reason:'invalid-dimensions'};if(pricing.valid)price=pricing.price;}if(addButton)addButton.disabled=Boolean(radio?.value==='custom'&&customDimensionError);priceBox.textContent=customDimensionError&&radio?.value==='custom'?customDimensionError:(price?toman(price):'پس از ورود ابعاد');return price;};
-  document.querySelectorAll('input[name="customOrderSize"]').forEach(r=>r.addEventListener('change',()=>{dims.classList.toggle('show',r.value==='custom'&&r.checked);calcPrice();}));document.querySelectorAll('#customOrderWidth,#customOrderHeight').forEach(x=>x.addEventListener('input',calcPrice));fabricSelect?.addEventListener('change',calcPrice);
-  input?.addEventListener('change',()=>{const file=input.files?.[0];if(!file)return;if(file.size>20*1024*1024){showToast('حجم فایل باید کمتر از ۲۰ مگابایت باشد.');input.value='';return;}fileName=file.name;nameBox.textContent=`${file.name} — ${toFa((file.size/1024/1024).toFixed(2))} مگابایت`;if(file.type.startsWith('image/')){const reader=new FileReader();reader.onload=()=>{uploadData=String(reader.result);preview.innerHTML=`<img src="${uploadData}" alt="پیش‌نمایش طرح آپلودشده">`;};reader.readAsDataURL(file);}else{uploadData='';preview.innerHTML='<div class="pdf-preview"><span>PDF</span><strong>فایل PDF آماده ثبت است</strong></div>';}});
+  const input=document.getElementById('customFileInput'),preview=document.getElementById('customUploadPreview'),nameBox=document.getElementById('customFileName'),dims=document.getElementById('customDimensionFields'),priceBox=document.getElementById('customOrderPrice'),addButton=document.getElementById('addCustomOrder'),fabricSelect=document.getElementById('customOrderFabric'),fabricHint=document.getElementById('customFabricHint'),fabricDescription=document.getElementById('customFabricDescription'),sizeBox=document.getElementById('customSizeOptions'),optionSection=document.getElementById('customPillowOptionSection'),optionBox=document.getElementById('customPillowOptions');
+  const CUSTOM_DESIGN_MAX_FILE_SIZE=3*1024*1024;
+  let uploadData='';let fileName='';let customDimensionError='';
+  const resetCustomFile=()=>{
+    uploadData='';fileName='';
+    if(input)input.value='';
+    if(nameBox)nameBox.textContent='هنوز فایلی انتخاب نشده است.';
+    if(preview)preview.innerHTML='<div class="upload-placeholder"><span class="upload-icon">↑</span><strong>فایل را انتخاب کنید</strong><small>یا آن را داخل این کادر رها کنید</small></div>';
+  };
+  const selectedSize=()=>document.querySelector('input[name="customOrderSize"]:checked');
+  const selectedPillowOption=()=>document.querySelector('input[name="customPillowOption"]:checked')?.value||'فقط کاور';
+  const selectedProductType=()=>normalizeCustomProductType(document.querySelector('input[name="customProductType"]:checked')?.value);
+  const syncStepNumbers=pillow=>{
+    const sizeStep=document.getElementById('customSizeStep'),fabricStep=document.getElementById('customFabricStep'),notesStep=document.getElementById('customNotesStep');
+    if(sizeStep)sizeStep.textContent=pillow?'۴':'۳';
+    if(fabricStep)fabricStep.textContent=pillow?'۵':'۴';
+    if(notesStep)notesStep.textContent=pillow?'۶':'۵';
+  };
+  const renderCustomOptions=()=>{
+    const requestType=selectedProductType(),mode=customPillowMode(requestType),pillow=Boolean(mode),currentOption=selectedPillowOption();
+    if(optionSection)optionSection.hidden=!pillow;
+    if(optionBox&&pillow){
+      optionBox.innerHTML=['فقط کاور','با الیاف'].map((option,index)=>`<label class="order-size-option"><input name="customPillowOption" type="radio" value="${option}" ${(currentOption===option||(!currentOption&&index===0))?'checked':''}/><strong>${option}</strong><small>${option==='با الیاف'?'کاور مخمل همراه با الیاف داخلی':'فقط کاور مخمل بدون الیاف'}</small></label>`).join('');
+    }
+    if(sizeBox){
+      if(pillow){
+        const config=PILLOW_CUSTOM_CONFIGS[mode],option=selectedPillowOption();
+        const variants=config.variants.filter(item=>item.option===option);
+        sizeBox.innerHTML=variants.map((item,index)=>`<label class="order-size-option${index===0?' recommended':''}"><input name="customOrderSize" type="radio" value="${item.size}" ${index===0?'checked':''}/>${index===0?'<span class="recommend-badge">پیشنهادی</span>':''}<strong>${item.size.replace(' سانتی‌متر','')}</strong><small>${toman(item.price)}</small></label>`).join('');
+      }else{
+        sizeBox.innerHTML=`<label class="order-size-option recommended"><input name="customOrderSize" type="radio" value="150x90"/><span class="recommend-badge">پیشنهادی</span><strong>۱۵۰ × ۹۰</strong><small>بزرگ و چشمگیر</small></label><label class="order-size-option recommended"><input checked name="customOrderSize" type="radio" value="100x70"/><span class="recommend-badge">پیشنهادی</span><strong>۱۰۰ × ۷۰</strong><small>متعادل و پرکاربرد</small></label><label class="order-size-option"><input name="customOrderSize" type="radio" value="70x50"/><strong>۷۰ × ۵۰</strong><small>جمع‌وجور</small></label><label class="order-size-option"><input name="customOrderSize" type="radio" value="custom"/><strong>سایز دلخواه</strong><small>ابعاد را وارد کنید</small></label>`;
+      }
+    }
+    if(fabricSelect){if(pillow)fabricSelect.value='مخمل';fabricSelect.disabled=pillow;}
+    if(fabricHint)fabricHint.textContent=pillow?'جنس این محصول فقط مخمل است و قابل تغییر نیست.':'برای پرچم می‌توانید جنس پارچه را انتخاب کنید.';
+    if(fabricDescription)fabricDescription.textContent=pillow?'جنس مخمل به‌صورت خودکار انتخاب می‌شود.':'جنس مناسب سفارش خود را انتخاب کنید.';
+    const sizeDescription=document.getElementById('customSizeDescription');if(sizeDescription)sizeDescription.textContent=pillow?'فقط سایزهای استاندارد همین محصول قابل انتخاب هستند.':'یکی از سایزهای پرچم یا ابعاد دلخواه را انتخاب کنید.';
+    syncStepNumbers(pillow);
+    dims?.classList.remove('show');
+  };
+  const calcPrice=()=>{
+    const radio=selectedSize(),requestType=selectedProductType(),pillow=isCustomPillow(requestType),fabric=pillow?'مخمل':(fabricSelect?.value||DEFAULT_FABRICS[0]);
+    let price=0;customDimensionError='';
+    if(pillow){
+      const pricing=radio?calculateCustomTierPrice(radio.value,undefined,fabric,requestType,selectedPillowOption()):{valid:false,reason:'invalid-pillow-variant'};
+      if(pricing.valid)price=pricing.price;else customDimensionError='نوع سفارش و سایز معتبر را انتخاب کنید.';
+    }else if(radio?.value==='custom'){
+      const w=document.getElementById('customOrderWidth').value,h=document.getElementById('customOrderHeight').value,pricing=calculateCustomTierPrice(w,h,fabric,requestType);
+      if(!pricing.valid)customDimensionError=pricing.reason==='too-large'?'حداکثر سایز قابل ثبت ۱۵۰ × ۹۰ سانتی‌متر است.':'ابعاد معتبر را وارد کنید.';else price=pricing.price;
+    }else if(radio){
+      const dimensions=parseCustomDimensions(radio.value),pricing=dimensions?calculateCustomTierPrice(dimensions.width,dimensions.height,fabric,requestType):{valid:false,reason:'invalid-dimensions'};
+      if(pricing.valid)price=pricing.price;
+    }
+    if(addButton)addButton.disabled=Boolean(customDimensionError);
+    if(priceBox)priceBox.textContent=customDimensionError?customDimensionError:(price?toman(price):'پس از ورود ابعاد');
+    return price;
+  };
+  document.querySelectorAll('input[name="customProductType"]').forEach(r=>r.addEventListener('change',()=>{renderCustomOptions();calcPrice();}));
+  optionBox?.addEventListener('change',event=>{if(event.target.matches('input[name="customPillowOption"]')){renderCustomOptions();calcPrice();}});
+  sizeBox?.addEventListener('change',event=>{if(!event.target.matches('input[name="customOrderSize"]'))return;dims?.classList.toggle('show',event.target.value==='custom'&&event.target.checked&&!isCustomPillow(selectedProductType()));calcPrice();});
+  document.querySelectorAll('#customOrderWidth,#customOrderHeight').forEach(x=>x.addEventListener('input',calcPrice));fabricSelect?.addEventListener('change',calcPrice);
+  input?.addEventListener('change',()=>{const file=input.files?.[0];if(!file)return;if(file.size>CUSTOM_DESIGN_MAX_FILE_SIZE){resetCustomFile();showToast('حجم فایل باید حداکثر ۳ مگابایت باشد.');return;}fileName=file.name;nameBox.textContent=`${file.name} — ${toFa((file.size/1024/1024).toFixed(2))} مگابایت`;if(file.type.startsWith('image/')){const reader=new FileReader();reader.onload=()=>{uploadData=String(reader.result);preview.innerHTML=`<img src="${uploadData}" alt="پیش‌نمایش طرح آپلودشده">`;};reader.readAsDataURL(file);}else{uploadData='';preview.innerHTML='<div class="pdf-preview"><span>PDF</span><strong>فایل PDF آماده ثبت است</strong></div>';}});
   document.getElementById('addCustomOrder')?.addEventListener('click',async()=>{
-    if(!fileName){showToast('ابتدا فایل طرح را انتخاب کنید.');return;}
-    if(!currentUser){showToast('برای ثبت و نگهداری فایل طرح ابتدا وارد حساب شوید.');openOverlayLayer(document.querySelector('.auth-modal'));return;}
-    const radio=selected(),price=calcPrice();if(!radio||!price){showToast(customDimensionError||'ابعاد معتبر را وارد کنید.');return;}
-    const size=radio.value==='custom'?`${document.getElementById('customOrderWidth').value} × ${document.getElementById('customOrderHeight').value} سانتی‌متر`:radio.value.replace('x',' × ')+' سانتی‌متر';
-    const notes=document.getElementById('customOrderNotes').value.trim(),fabric=document.getElementById('customOrderFabric')?.value||DEFAULT_FABRICS[0],safePreview=uploadData.length<450000?uploadData:'';
+    const selectedFile=input.files?.[0];
+    if(!fileName||!selectedFile){showToast('ابتدا فایل طرح را انتخاب کنید.');return;}
+    if(selectedFile.size>CUSTOM_DESIGN_MAX_FILE_SIZE){resetCustomFile();showToast('حجم فایل باید حداکثر ۳ مگابایت باشد.');return;}
+    if(!currentUser){requireLogin('/custom');return;}
+    const radio=selectedSize(),requestType=selectedProductType(),pillow=isCustomPillow(requestType),price=calcPrice();if(!radio||!price){showToast(customDimensionError||'ابعاد معتبر را وارد کنید.');return;}
+    const pillowOption=pillow?selectedPillowOption():'';
+    const pricing=pillow?calculateCustomTierPrice(radio.value,undefined,'مخمل',requestType,pillowOption):null;
+    const size=pillow?pricing.variantSize:(radio.value==='custom'?`${document.getElementById('customOrderWidth').value} × ${document.getElementById('customOrderHeight').value} سانتی‌متر`:radio.value.replace('x',' × ')+' سانتی‌متر');
+    const displaySize=pillow?pricing.size:size;
+    const notes=document.getElementById('customOrderNotes').value.trim(),fabric=pillow?'مخمل':(document.getElementById('customOrderFabric')?.value||DEFAULT_FABRICS[0]),safePreview=uploadData.length<450000?uploadData:'';
     let customId=`DS-${Math.floor(10000+Math.random()*89999)}`;
-    if(currentUser&&input.files?.[0]){try{const fd=new FormData();fd.append('file',input.files[0]);fd.append('size',size);fd.append('fabric',fabric);fd.append('notes',notes);fd.append('requestType','چاپ مستقیم');const saved=await api('/api/account/custom',{method:'POST',body:fd});customId=saved.request.id;}catch(error){showToast(error.message||'آپلود فایل انجام نشد.');return;}}
-    cart.push({id:`custom-${Date.now()}`,cartId:`custom-${Date.now()}-${Math.random()}`,title:`چاپ طرح اختصاصی — ${fileName}`,category:'طرح دلخواه',price,old:price,qty:1,size,fabric,notes,preview:safePreview,fileName,customRequestId:customId});
-    renderCart();showToast(currentUser?'فایل و سفارش اختصاصی ثبت شد.':'سفارش به سبد اضافه شد؛ برای ذخیره فایل وارد حساب شوید.');setTimeout(()=>location.href='/cart',500);
+    if(currentUser&&input.files?.[0]){try{const fd=new FormData();fd.append('file',selectedFile);fd.append('size',size);fd.append('fabric',fabric);fd.append('notes',notes);fd.append('requestType',requestType);const saved=await api('/api/account/custom',{method:'POST',body:fd});customId=saved.request.id;}catch(error){showToast(error.message||'آپلود فایل انجام نشد.');return;}}
+    const now=Date.now();cart.push({id:`custom-${now}`,cartId:`custom-${now}-${Math.random()}`,title:`${requestType} طرح دلخواه — ${fileName}`,category:'طرح دلخواه',requestType,pillowOption,displaySize,price,old:price,qty:1,size,fabric,notes,preview:safePreview,fileName,customRequestId:customId});
+    renderCart();showToast('فایل و سفارش اختصاصی ثبت شد.');setTimeout(()=>location.href='/cart',500);
   });
-  calcPrice();
+  renderCustomOptions();calcPrice();
 }
 
 function renderCheckout(){
   const box=document.getElementById('checkoutSummaryItems');if(!box)return;const sub=cartSubtotal(),discountableSubtotal=discountableCartSubtotal(),total=Math.max(0,sub-discountAmount);
-  box.innerHTML=cart.length?cart.map(item=>`<div class="summary-item"><div class="summary-thumb">${item.preview?`<img src="${item.preview}" alt="${escapeHTML(item.title)}">`:productImageBox(item.title,item.image)}</div><span><h4>${escapeHTML(item.title)}</h4><small>تعداد: ${toFa(item.qty)}${item.size?` — سایز: ${escapeHTML(item.size)}`:''}${item.fabric?` — پارچه: ${escapeHTML(item.fabric)}`:''}</small></span><strong class="summary-price">${toman(item.price*item.qty)}</strong></div>`).join(''):'<div class="empty-state"><p>سبد خرید خالی است.</p></div>';
+  box.innerHTML=cart.length?cart.map(item=>`<div class="summary-item"><div class="summary-thumb">${item.preview?`<img src="${item.preview}" alt="${escapeHTML(item.title)}">`:productImageBox(item.title,item.image)}</div><span><h4>${escapeHTML(item.title)}</h4><small>تعداد: ${toFa(item.qty)}${item.requestType?` — محصول: ${escapeHTML(item.requestType)}`:''}${itemPillowOption(item)?` — نوع سفارش: ${escapeHTML(itemPillowOption(item))}`:''}${itemDisplaySize(item)?` — سایز: ${escapeHTML(itemDisplaySize(item))}`:''}${item.fabric?` — پارچه: ${escapeHTML(item.fabric)}`:''}</small></span><strong class="summary-price">${toman(item.price*item.qty)}</strong></div>`).join(''):'<div class="empty-state"><p>سبد خرید خالی است.</p></div>';
   document.getElementById('checkoutSubtotal').textContent=toman(sub);document.getElementById('checkoutDiscount').textContent=discountAmount?`− ${toman(discountAmount)}`:toman(0);document.getElementById('checkoutShipping').textContent='پرداخت جداگانه';document.getElementById('checkoutTotal').textContent=toman(total);
   const code=sessionStorage.getItem('cribFlagActiveCoupon')||'';
-  const feedback=document.getElementById('discountFeedback');if(feedback){feedback.className=`discount-feedback ${discountFeedbackType}`;feedback.textContent=discountableSubtotal===0?'کد تخفیف روی درخواست طرح اختصاصی اعمال نمی‌شود.':(discountFeedbackMessage||(code&&discountAmount?`کد ${code} اعمال شد و ${toman(discountAmount)} از سفارش کم شد.`:'هنوز کد تخفیفی اعمال نشده است.'));}
+  const feedback=document.getElementById('discountFeedback');if(feedback){feedback.className=`discount-feedback ${discountFeedbackType}`;feedback.textContent=discountFeedbackMessage||(code&&discountAmount?`کد ${code} اعمال شد و ${toman(discountAmount)} از سفارش کم شد.`:'هنوز کد تخفیفی اعمال نشده است.');}
   const removeButton=document.getElementById('removeDiscountBtn');if(removeButton)removeButton.hidden=!code;
 }
 function initCheckout(){
   let current=1;
   const get=id=>document.getElementById(id);
+  let torobEligibilitySequence=0;
+
+  const refreshTorobPayEligibility=async()=>{
+    const option=get('torobPayOption');
+    const info=get('torobPayAvailability');
+    if(!option)return false;
+
+    const total=Math.max(0,cartSubtotal()-discountAmount);
+    const switchAway=()=>{
+      const torobInput=option.querySelector('input[name="payment"]');
+      if(torobInput?.checked){
+        const zarinpal=document.querySelector('input[name="payment"][value="zarinpal"]');
+        if(zarinpal)zarinpal.checked=true;
+      }
+    };
+
+    // طبق مستندات ترب‌پی، بازه مبلغ مجاز ۲۰۰,۰۰۰ تا ۱,۰۰۰,۰۰۰,۰۰۰ ریال است.
+    if(total<20000||total>100000000){
+      option.hidden=true;switchAway();
+      if(info)info.textContent=total<20000?'حداقل مبلغ خرید برای ترب‌پی ۲۰ هزار تومان است.':'مبلغ سفارش از سقف مجاز ترب‌پی بیشتر است.';
+      return false;
+    }
+
+    const sequence=++torobEligibilitySequence;
+    if(info)info.textContent='در حال بررسی امکان پرداخت اقساطی ترب‌پی...';
+    try{
+      const result=await api(`/api/orders/torobpay/eligibility?amount=${encodeURIComponent(total)}`);
+      if(sequence!==torobEligibilitySequence)return false;
+      const eligible=result.eligible===true;
+      option.hidden=!eligible;
+      if(!eligible)switchAway();
+      const title=get('torobPayTitle');if(title&&result.messageTitle)title.textContent=result.messageTitle;
+      const description=get('torobPayDescription');if(description&&result.description)description.textContent=result.description;
+      if(info)info.textContent=eligible?'ترب‌پی برای مبلغ این سفارش فعال است.':(result.message||'ترب‌پی برای مبلغ این سفارش در دسترس نیست.');
+      return eligible;
+    }catch(error){
+      if(sequence!==torobEligibilitySequence)return false;
+      option.hidden=true;switchAway();
+      if(info)info.textContent='امکان بررسی ترب‌پی فعلاً وجود ندارد؛ می‌توانید روش پرداخت دیگری را انتخاب کنید.';
+      return false;
+    }
+  };
 
   const showStep=n=>{
     current=n;
@@ -681,6 +937,7 @@ function initCheckout(){
       indicator.classList.toggle('done',value<n);
     });
     window.scrollTo({top:0,behavior:'smooth'});
+    if(n===2)refreshTorobPayEligibility();
 
     if(n===3){
       const review=get('checkoutCustomerReview');
@@ -731,9 +988,9 @@ function initCheckout(){
     const normalized=String(code||'').trim();
     if(!normalized){discountAmount=0;sessionStorage.removeItem('cribFlagActiveCoupon');discountFeedbackType='error';discountFeedbackMessage='ابتدا کد تخفیف را وارد کنید.';renderCheckout();if(!silent)showToast(discountFeedbackMessage);return false;}
     const subtotal=discountableCartSubtotal();
-    if(subtotal<=0){discountAmount=0;sessionStorage.removeItem('cribFlagActiveCoupon');discountFeedbackType='neutral';discountFeedbackMessage='کد تخفیف روی درخواست طرح اختصاصی اعمال نمی‌شود.';renderCheckout();if(!silent)showToast(discountFeedbackMessage);return false;}
+    if(subtotal<=0){discountAmount=0;sessionStorage.removeItem('cribFlagActiveCoupon');discountFeedbackType='neutral';discountFeedbackMessage='سبد خرید برای اعمال کد تخفیف خالی است.';renderCheckout();if(!silent)showToast(discountFeedbackMessage);return false;}
     try{
-      const discountItems=cart.filter(item=>!isCustomCartItem(item)).map(item=>({id:item.id,qty:item.qty,size:item.size,fabric:item.fabric}));
+      const discountItems=cart.map(item=>isCustomCartItem(item)?{customRequestId:item.customRequestId,qty:1}:{id:item.id,qty:item.qty,size:item.size,fabric:item.fabric});
       const request=()=>api('/api/discounts/validate',{method:'POST',body:JSON.stringify({code:normalized,subtotal,items:discountItems})});
       const result=silent?await request():await window.CribLoader.during(request,'در حال بررسی کد تخفیف...');
       discountAmount=Number(result.discount||0);
@@ -754,9 +1011,9 @@ function initCheckout(){
       renderCheckout();return false;
     }
   };
-  get('applyDiscountBtn')?.addEventListener('click',()=>validateDiscount(get('discountCodeInput').value));
-  get('removeDiscountBtn')?.addEventListener('click',()=>{clearAppliedDiscount('کد تخفیف از سفارش حذف شد.','neutral');showToast('کد تخفیف حذف شد.');});
-  const savedCoupon=sessionStorage.getItem('cribFlagActiveCoupon');if(savedCoupon){get('discountCodeInput').value=savedCoupon;validateDiscount(savedCoupon,{silent:true});}
+  get('applyDiscountBtn')?.addEventListener('click',async()=>{await validateDiscount(get('discountCodeInput').value);await refreshTorobPayEligibility();});
+  get('removeDiscountBtn')?.addEventListener('click',()=>{clearAppliedDiscount('کد تخفیف از سفارش حذف شد.','neutral');showToast('کد تخفیف حذف شد.');refreshTorobPayEligibility();});
+  const savedCoupon=sessionStorage.getItem('cribFlagActiveCoupon');if(savedCoupon){get('discountCodeInput').value=savedCoupon;validateDiscount(savedCoupon,{silent:true}).then(refreshTorobPayEligibility);}
 
   get('finalPaymentBtn')?.addEventListener('click',async()=>{
     if(!currentUser){requireLogin('/checkout');return;}
@@ -769,7 +1026,7 @@ function initCheckout(){
 
     try{
       const shippingMethod=document.querySelector('input[name="shipping"]:checked')?.value||'tipax';
-      const paymentMethod=document.querySelector('input[name="payment"]:checked')?.value||'online';
+      const paymentMethod=document.querySelector('input[name="payment"]:checked')?.value||'zarinpal';
       const province=get('checkoutProvince')?.value.trim()||'';
       const city=get('checkoutCity')?.value.trim()||'';
       const addressLine=get('checkoutAddress')?.value.trim()||'';
@@ -785,6 +1042,9 @@ function initCheckout(){
         paymentMethod,
         note:get('checkoutNote')?.value.trim()||'',
         couponCode:sessionStorage.getItem('cribFlagActiveCoupon')||'',
+        expectedItemCount:cart.length,
+        expectedCustomRequestIds:cart.filter(isCustomCartItem).map(item=>item.customRequestId).filter(Boolean),
+        expectedSubtotal:cartSubtotal(),
         items:cart.map(item=>({
           id:item.id,
           title:item.title,
@@ -795,7 +1055,8 @@ function initCheckout(){
           fabric:item.fabric,
           notes:item.notes,
           fileName:item.fileName,
-          customRequestId:item.customRequestId
+          customRequestId:item.customRequestId,
+          requestType:item.requestType
         }))
       };
 

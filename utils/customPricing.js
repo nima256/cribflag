@@ -1,7 +1,16 @@
+const {
+  PILLOW_FABRIC,
+  customRequestPillowMode,
+  findPillowVariant
+} = require('./pillowPricing');
+
+const CUSTOM_PRODUCT_TYPES = Object.freeze(['پرچم', 'روبالشتی', 'داکیماکورا بالشت قدی']);
+const CUSTOM_FLAG_FABRICS = Object.freeze(['ساتن آمریکایی', 'ساتن براق', 'مخمل']);
+
 const CUSTOM_SIZE_TIERS = Object.freeze([
-  Object.freeze({ maxLongSide: 70, maxShortSide: 50, price: 550000, velvetPrice: 700000 }),
-  Object.freeze({ maxLongSide: 100, maxShortSide: 70, price: 800000, velvetPrice: 1000000 }),
-  Object.freeze({ maxLongSide: 150, maxShortSide: 90, price: 950000, velvetPrice: 1200000 })
+  Object.freeze({ maxLongSide: 70, maxShortSide: 50, price: 550000, americanSatinPrice: 550000, velvetPrice: 700000 }),
+  Object.freeze({ maxLongSide: 100, maxShortSide: 70, price: 800000, americanSatinPrice: 1000, velvetPrice: 1000000 }),
+  Object.freeze({ maxLongSide: 150, maxShortSide: 90, price: 990000, americanSatinPrice: 2000, velvetPrice: 1200000 })
 ]);
 
 const normalizeDigits = value => String(value ?? '')
@@ -21,7 +30,43 @@ function parseCustomDimensions(value) {
   return { width, height };
 }
 
-function calculateCustomPrice(widthOrSize, maybeHeight, fabric = 'ساتن آمریکایی') {
+function normalizeCustomProductType(value) {
+  const type = String(value || '').trim();
+  if (!type || type === 'چاپ مستقیم') return 'پرچم';
+  const pillowMode = customRequestPillowMode(type);
+  if (pillowMode === 'pillowcase') return 'روبالشتی';
+  if (pillowMode === 'dakimakura') return 'داکیماکورا بالشت قدی';
+  return 'پرچم';
+}
+
+function isCustomPillow(requestType) {
+  return normalizeCustomProductType(requestType) !== 'پرچم';
+}
+
+function calculateCustomPrice(widthOrSize, maybeHeight, fabric = CUSTOM_FLAG_FABRICS[0], requestType = 'پرچم', pillowOption = '') {
+  const normalizedType = normalizeCustomProductType(requestType);
+  const pillowMode = customRequestPillowMode(normalizedType);
+
+  if (pillowMode) {
+    const sizeValue = maybeHeight === undefined ? widthOrSize : `${widthOrSize} × ${maybeHeight}`;
+    const variant = findPillowVariant(pillowMode, sizeValue, pillowOption);
+    if (!variant) {
+      return { valid: false, reason: 'invalid-pillow-variant', price: 0 };
+    }
+    return {
+      valid: true,
+      reason: null,
+      price: variant.price,
+      width: parseCustomDimensions(variant.size)?.width,
+      height: parseCustomDimensions(variant.size)?.height,
+      fabric: PILLOW_FABRIC,
+      pillowOption: variant.option,
+      size: variant.size,
+      variantSize: variant.variantSize,
+      pillowMode
+    };
+  }
+
   const dimensions = maybeHeight === undefined
     ? parseCustomDimensions(widthOrSize)
     : { width: Number(widthOrSize), height: Number(maybeHeight) };
@@ -46,7 +91,12 @@ function calculateCustomPrice(widthOrSize, maybeHeight, fabric = 'ساتن آم�
     };
   }
 
-  const price = String(fabric || '').trim() === 'مخمل' ? tier.velvetPrice : tier.price;
+  const normalizedFabric = String(fabric || '').trim();
+  const price = normalizedFabric === 'مخمل'
+    ? tier.velvetPrice
+    : normalizedFabric === 'ساتن آمریکایی'
+      ? tier.americanSatinPrice
+      : tier.price;
 
   return {
     valid: true,
@@ -61,7 +111,11 @@ function calculateCustomPrice(widthOrSize, maybeHeight, fabric = 'ساتن آم�
 }
 
 module.exports = {
+  CUSTOM_PRODUCT_TYPES,
+  CUSTOM_FLAG_FABRICS,
   CUSTOM_SIZE_TIERS,
+  normalizeCustomProductType,
+  isCustomPillow,
   normalizeDigits,
   parseCustomDimensions,
   calculateCustomPrice

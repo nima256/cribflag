@@ -79,7 +79,6 @@
 <button class="chip store-chip active" data-category="">همه محصولات</button>
 <% (storeCategories || []).forEach(category => { %><button class="chip store-chip" data-category="<%= category.slug %>"><%= category.name %></button><% }) %>
 <button class="chip" data-page-link="custom">طرح دلخواه</button>
-<button class="chip" data-page-link="ready">طرح‌های آماده</button>
 </div>
 <button class="mobile-filter-btn filter-open">فیلتر محصولات</button>
 <div class="store-layout">
@@ -223,6 +222,6 @@
 <%- include("partials/page-data") %>
 <script src="/assets/js/api.js"></script>
 <script src="/assets/js/portal-data.js"></script>
-<script src="/assets/js/app.js?v=20260801-final-scroll-v3"></script>
+<script src="/assets/js/app.js?v=20260813-custom-orders-v2"></script>
 </body>
 </html>

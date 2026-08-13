@@ -9,6 +9,7 @@ const S = require('../services/serializers');
 const { asyncHandler } = require('../utils/http');
 const iranCity = require('iran-city');
 const { performance } = require('node:perf_hooks');
+const { buildProductPageMeta } = require('../helper/torobProductMeta');
 
 const router = express.Router();
 
@@ -164,6 +165,8 @@ async function common(req) {
   return {
     ...catalog,
     currentUser,
+    // Compatibility alias for templates that still reference `user`.
+    user: currentUser,
     product: null,
     catalogPage: Math.max(1, Number.parseInt(req.query.page, 10) || 1),
     nextUrl: safeNextUrl(req.query.next),
@@ -222,15 +225,17 @@ router.get('/admin', asyncHandler(async (req, res) => {
   if (req.session?.adminId) admin = await Admin.findById(req.session.adminId).lean();
   await render(req, res, 'admin', { admin });
 }));
-router.get('/payment/success', asyncHandler((req, res) => render(req, res, 'success', { paymentFailed: false })));
-router.get('/payment/failed', asyncHandler((req, res) => render(req, res, 'success', { paymentFailed: true })));
+router.get('/payment/success', asyncHandler((req, res) => render(req, res, 'success', { paymentFailed: false, paymentPending: false })));
+router.get('/payment/failed', asyncHandler((req, res) => render(req, res, 'success', { paymentFailed: true, paymentPending: false })));
+router.get('/payment/pending', asyncHandler((req, res) => render(req, res, 'success', { paymentFailed: false, paymentPending: true })));
 router.get('/product/:id', asyncHandler(async (req, res) => {
   const startedAt = performance.now();
   const data = await common(req);
   res.set('Server-Timing', `page-data;dur=${(performance.now() - startedAt).toFixed(1)};desc="catalog-${req.catalogCacheHit ? 'hit' : 'miss'}"`);
   const product = data.products.find(item => Number(item.id) === Number(req.params.id));
   if (!product) return res.status(404).render('404', { ...data, message: 'محصول موردنظر پیدا نشد.' });
-  res.render('product', { ...data, product });
+  const torobMeta = buildProductPageMeta(product, req.query.size, req.query.fabric);
+  res.render('product', { ...data, product, torobMeta });
 }));
 
 const legacy = {

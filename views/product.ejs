@@ -4,8 +4,42 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
-<meta content="Crib Flag؛ فروشگاه تخصصی پرچم" name="description"/>
-<title>جزئیات محصول | Crib Flag</title>
+<title><%= torobMeta.title %> | Crib Flag</title>
+<meta name="description" content="<%= torobMeta.description %>"/>
+<meta name="product_id" content="<%= product.id %>"/>
+<meta id="product-name-meta" name="product_name" content="<%= torobMeta.title %>"/>
+<meta id="product-price-meta" name="product_price" content="<%= torobMeta.currentPrice %>"/>
+<meta name="availability" content="<%= torobMeta.availability ? 'instock' : 'outofstock' %>"/>
+<meta id="torob-variant-id" name="product_variant_id" content="<%= torobMeta.pageUnique %>"/>
+<% if (torobMeta.requestedSize) { %><meta id="torob-size-spec" name="spec" content="سایز: <%= torobMeta.requestedSize %>"/><% } %>
+<% if (torobMeta.requestedFabric) { %><meta id="torob-fabric-spec" name="spec" content="جنس پارچه: <%= torobMeta.requestedFabric %>"/><% } %>
+<meta name="guarantee" content="تضمین سلامت و کیفیت کالا"/>
+<meta id="og-title-meta" property="og:title" content="<%= torobMeta.title %>"/>
+<meta property="og:description" content="<%= torobMeta.description %>"/>
+<meta id="og-image-meta" property="og:image" content="<%= torobMeta.image %>"/>
+<meta id="og-url-meta" property="og:url" content="<%= torobMeta.canonicalUrl %>"/>
+<meta property="og:type" content="product"/>
+<link id="torob-canonical" rel="canonical" href="<%= torobMeta.canonicalUrl %>"/>
+<script id="torob-product-jsonld" type="application/ld+json"><%- safeJson({
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: torobMeta.title,
+  image: [torobMeta.image],
+  description: torobMeta.description,
+  sku: product.sku || torobMeta.pageUnique,
+  mpn: torobMeta.pageUnique,
+  brand: { '@type': 'Brand', name: 'Crib Flag' },
+  size: torobMeta.requestedSize || undefined,
+  material: torobMeta.requestedFabric || undefined,
+  offers: {
+    '@type': 'Offer',
+    price: String(Number(torobMeta.currentPrice || 0) * 10),
+    priceCurrency: 'IRR',
+    availability: torobMeta.availability ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+    url: torobMeta.canonicalUrl,
+    seller: { '@type': 'Organization', name: 'Crib Flag' }
+  }
+}) %></script>
 <link href="/assets/css/style.css?v=20260801-final-scroll-v3" rel="stylesheet"/>
 <link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
 </head>
@@ -72,7 +106,7 @@
 </header>
 <main class="main"><section class="page active" id="page-product">
 <div class="container">
-<div class="breadcrumb"><a href="/">خانه</a><span>/</span><a href="/store">فروشگاه</a><span>/</span><span id="breadcrumbProduct"><%= product.title %></span></div>
+<div class="breadcrumb"><a href="/">خانه</a><span>/</span><a href="/store">فروشگاه</a><span>/</span><span id="breadcrumbProduct"><%= torobMeta.title %></span></div>
 <div class="product-detail-layout">
 <section class="detail-card gallery-card">
 <div class="main-image" id="productMainImage">
@@ -89,13 +123,16 @@
 <button aria-label="نمایش تصویر <%= index + 1 %>" class="thumb <%= index===0 ? 'active' : '' %>" data-gallery-index="<%= index %>" type="button"><div class="static-image-box"><img alt="<%= product.title %> - نمای <%= index + 1 %>" class="product-thumb-img" src="<%= image %>"/></div></button>
 <% }) %>
 </div></section>
-<section class="detail-card info-card"><span class="product-category-tag" id="detailCategory"><%= product.category %></span><h1 class="detail-title" id="detailTitle"><%= product.title %></h1>
+<section class="detail-card info-card"><span class="product-category-tag" id="detailCategory"><%= product.category %></span><h1 class="detail-title" id="detailTitle"><%= torobMeta.title %></h1>
 <div class="features-list"><div class="feature-item"><span>✓</span><div><strong>جنس پارچه</strong><small id="detailFabricSummary">ساتن آمریکایی، ساتن براق یا مخمل</small></div></div><div class="feature-item"><span>✓</span><div><strong>نوع چاپ</strong><small>تک‌رو، شفاف و تمیز</small></div></div><div class="feature-item"><span>✓</span><div><strong>ابعاد</strong><small id="detailSizeSummary">قابل انتخاب در چند سایز</small></div></div><div class="feature-item"><span>✓</span><div><strong>ارسال</strong><small>تا ۴ روز کاری با تیپاکس</small></div></div></div>
 <button aria-controls="sizeGuideModal" aria-expanded="false" class="size-guide-btn" type="button">مشاهده راهنمای سایز</button></section>
-<aside class="detail-card purchase-card"><div class="detail-stock-status <%= product.inventoryMode === 'managed' ? (product.stock > 0 ? 'limited' : 'out') : 'available' %>" id="detailStockStatus"><% if (product.inventoryMode === 'managed') { %><%= product.stock > 0 ? `فقط ${toFa(product.stock)} عدد موجود` : 'ناموجود' %><% } else { %>موجود<% } %></div><div class="purchase-price"><small>قیمت محصول</small><span class="old-price" id="detailOldPrice" <%= product.hasDiscount && product.old && product.old > product.price ? "" : "hidden" %>><%= product.hasDiscount && product.old && product.old > product.price ? toman(product.old) : "" %></span><strong id="detailPrice"><%= toman(product.price) %></strong></div><div class="product-option-group">
-<div class="product-option-label"><strong>انتخاب سایز</strong><small>یکی از ابعاد قابل چاپ را انتخاب کنید</small></div>
-<div class="detail-option-list" id="detailSizeOptions"><% product.sizes.forEach((value,index) => { %><label class="detail-option"><input type="radio" name="detailSize" value="<%= value %>" <%= index===0 ? "checked" : "" %>><span><%= value %></span></label><% }) %></div>
+<aside class="detail-card purchase-card"><div class="detail-stock-status <%= product.inventoryMode === 'managed' ? (product.stock > 0 ? 'limited' : 'out') : 'available' %>" id="detailStockStatus"><% if (product.inventoryMode === 'managed') { %><%= product.stock > 0 ? `فقط ${toFa(product.stock)} عدد موجود` : 'ناموجود' %><% } else { %>موجود<% } %></div><div class="purchase-price"><small>قیمت محصول</small><span class="old-price" id="detailOldPrice" <%= torobMeta.oldPrice && torobMeta.oldPrice > torobMeta.currentPrice ? "" : "hidden" %>><%= torobMeta.oldPrice && torobMeta.oldPrice > torobMeta.currentPrice ? toman(torobMeta.oldPrice) : "" %></span><strong id="detailPrice"><%= toman(torobMeta.currentPrice) %></strong></div><div class="product-option-group" id="detailPillowOptionGroup" hidden>
+<div class="product-option-label"><strong>انتخاب نوع سفارش</strong><small>فقط کاور یا همراه با الیاف</small></div>
+<div class="detail-option-list" id="detailPillowOptions"></div>
 </div><div class="product-option-group">
+<div class="product-option-label"><strong>انتخاب سایز</strong><small id="detailSizeHelp">یکی از ابعاد قابل چاپ را انتخاب کنید</small></div>
+<div class="detail-option-list" id="detailSizeOptions"><% product.sizes.forEach((value,index) => { %><label class="detail-option"><input type="radio" name="detailSize" value="<%= value %>" <%= index===0 ? "checked" : "" %>><span><%= value %></span></label><% }) %></div>
+</div><div class="product-option-group" id="detailFabricGroup">
 <div class="product-option-label"><strong>انتخاب جنس پارچه</strong><small>نوع پارچه موردنظر را مشخص کنید</small></div>
 <div class="detail-option-list" id="detailFabricOptions"><% product.fabrics.forEach((value,index) => { %><label class="detail-option"><input type="radio" name="detailFabric" value="<%= value %>" <%= index===0 ? "checked" : "" %>><span><%= value %></span></label><% }) %></div>
 </div><div class="qty-box"><label>تعداد</label><div class="qty-control"><button class="detail-plus" type="button">+</button><span id="detailQty">۱</span><button class="detail-minus" type="button">−</button></div></div><button class="btn btn-primary detail-add-cart" type="button" <%= product.inventoryMode === 'managed' && product.stock <= 0 ? 'disabled' : '' %>><%= product.inventoryMode === 'managed' && product.stock <= 0 ? 'ناموجود' : 'افزودن به سبد خرید' %></button><a class="btn btn-ghost product-cart-link" href="/cart">مشاهده سبد خرید</a><div class="installment-box">خرید قسطی برای سفارش‌های عمده و سازمانی با هماهنگی پشتیبانی امکان‌پذیر است.</div></aside>
@@ -224,9 +261,10 @@
 </div><div class="size-guide-tip">قبل از سفارش، محدوده ابعاد را با چسب کاغذی روی دیوار علامت بزنید تا انتخاب دقیق‌تری داشته باشید.</div></div></div>
 <div class="overlay"></div>
 <div class="toast" id="toast">محصول به سبد خرید اضافه شد.</div>
+<script>window.__TOROB_PRODUCT_META__ = <%- safeJson(torobMeta || null) %>;</script>
 <%- include("partials/page-data") %>
 <script src="/assets/js/api.js"></script>
 <script src="/assets/js/portal-data.js"></script>
-<script src="/assets/js/app.js?v=20260801-final-scroll-v3"></script>
+<script src="/assets/js/app.js?v=20260813-custom-orders-v2"></script>
 </body>
 </html>

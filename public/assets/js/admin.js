@@ -11,13 +11,14 @@ D.ensure();
 const q=selector=>document.querySelector(selector);
 const qa=selector=>[...document.querySelectorAll(selector)];
 const labels={
-  processing:'در حال آماده‌سازی','design-review':'بررسی طراحی',shipped:'ارسال شده',delivered:'تحویل شده',cancelled:'لغو شده',
+  processing:'در حال آماده‌سازی','design-review':'بررسی طراحی','print-preparation':'آماده‌سازی برای چاپ',shipped:'ارسال شده',delivered:'تحویل شده',cancelled:'لغو شده',
   active:'فعال',draft:'پیش‌نویس',expired:'منقضی',open:'باز',answered:'پاسخ داده شده',closed:'بسته',review:'در حال بررسی',
-  'preview-ready':'پیش‌نمایش آماده',approved:'تأیید شده',paid:'پرداخت شده',refunded:'مسترد شده'
+  'preview-ready':'پیش‌نمایش آماده',approved:'تأیید شده',unpaid:'پرداخت نشده',pending:'در انتظار پرداخت',paid:'پرداخت شده',failed:'پرداخت ناموفق',refunded:'مسترد شده'
 };
 const ORDER_STATUS_CHART=[
   {key:'processing',label:'در حال آماده‌سازی',color:'#f2a51a'},
   {key:'design-review',label:'بررسی طراحی',color:'#8b5cf6'},
+  {key:'print-preparation',label:'آماده‌سازی برای چاپ',color:'#0ea5a4'},
   {key:'shipped',label:'ارسال شده',color:'#3157d5'},
   {key:'delivered',label:'تحویل شده',color:'#22a881'},
   {key:'cancelled',label:'لغو شده',color:'#e95b70'}
@@ -30,15 +31,39 @@ const PRODUCT_IMAGE_LIMIT=12;
 const ADMIN_PRODUCT_PAGE_SIZE=12;
 let adminProductPage=1;
 const DEFAULT_PRODUCT_SIZE_PRICES=Object.freeze({
-  '150x90':950000,
+  '150x90':990000,
   '100x70':800000,
   '70x50':550000
 });
 const DEFAULT_VELVET_PRODUCT_SIZE_PRICES=Object.freeze({
-  '150x90':1200000,
-  '100x70':1000000,
+  '150x90':2000,
+  '100x70':1000,
   '70x50':700000
 });
+const STANDARD_PRODUCT_SIZES=Object.freeze([
+  Object.freeze({value:'۱۵۰ × ۹۰ سانتی‌متر',title:'۱۵۰ × ۹۰',hint:'بزرگ و چشمگیر'}),
+  Object.freeze({value:'۱۰۰ × ۷۰ سانتی‌متر',title:'۱۰۰ × ۷۰',hint:'سایز متعادل'}),
+  Object.freeze({value:'۵۰ × ۷۰ سانتی‌متر',title:'۵۰ × ۷۰',hint:'جمع‌وجور'})
+]);
+const STANDARD_PRODUCT_FABRICS=Object.freeze([
+  Object.freeze({value:'ساتن آمریکایی',title:'ساتن آمریکایی',hint:'مناسب چاپ و استفاده عمومی'}),
+  Object.freeze({value:'ساتن براق',title:'ساتن براق',hint:'ظاهر درخشان‌تر'}),
+  Object.freeze({value:'مخمل',title:'مخمل',hint:'ظاهر رسمی و سنگین'})
+]);
+const PILLOW_PRODUCT_CONFIGS=Object.freeze({
+  pillowcase:Object.freeze({title:'روبالشتی',variants:Object.freeze([
+    Object.freeze({option:'فقط کاور',size:'۵۰ × ۷۰ سانتی‌متر',price:650000}),
+    Object.freeze({option:'با الیاف',size:'۵۰ × ۷۰ سانتی‌متر',price:990000})
+  ])}),
+  dakimakura:Object.freeze({title:'داکیماکورا بالشت قدی',variants:Object.freeze([
+    Object.freeze({option:'فقط کاور',size:'۳۵ × ۱۰۰ سانتی‌متر',price:700000}),
+    Object.freeze({option:'با الیاف',size:'۳۵ × ۱۰۰ سانتی‌متر',price:1050000}),
+    Object.freeze({option:'فقط کاور',size:'۵۰ × ۱۵۰ سانتی‌متر',price:990000}),
+    Object.freeze({option:'با الیاف',size:'۵۰ × ۱۵۰ سانتی‌متر',price:1450000})
+  ])})
+});
+const pillowVariantSize=(option,size)=>`${option} — ${size}`;
+let activeProductPillowMode=null;
 
 async function optimizeProductUpload(file){
   if(!file||!String(file.type||'').startsWith('image/'))return file;
@@ -124,64 +149,161 @@ function renderProductImageEditor(){
 }
 
 function status(value){return `<span class="portal-status status-${D.esc(value)}">${D.esc(labels[value]||value)}</span>`;}
+function registrationDateTime(item={}){
+  const formatted=String(item.dateTime||item.registeredAt||'').trim();
+  if(formatted)return formatted;
+
+  const raw=String(item.createdAt||'').trim();
+  if(raw){
+    const value=new Date(raw);
+    if(!Number.isNaN(value.getTime())){
+      try{
+        return new Intl.DateTimeFormat('fa-IR-u-ca-persian',{
+          year:'numeric',month:'2-digit',day:'2-digit',
+          hour:'2-digit',minute:'2-digit',hourCycle:'h23',
+          timeZone:'Asia/Tehran'
+        }).format(value).replace(/[،,]/,' -');
+      }catch(error){
+        console.warn('نمایش ساعت ثبت سفارش ناموفق بود.',error);
+      }
+    }
+  }
+
+  return String(item.date||'—');
+}
 function openModal(selector){q(selector)?.classList.add('open');}
 function closeModals(){const productWasOpen=q('#productModal')?.classList.contains('open');const categoryWasOpen=q('#categoryModal')?.classList.contains('open');qa('.portal-modal-backdrop').forEach(item=>item.classList.remove('open'));if(productWasOpen)releaseProductImageItems();if(categoryWasOpen)releaseCategoryImageSelection();}
 function productThumb(title='محصول',image=D.PRODUCT_IMAGE){
   return `<span class="product-mini-img"><img src="${D.esc(image||D.PRODUCT_IMAGE)}" alt="${D.esc(title)}"></span>`;
 }
 function productImage(id){return D.get('products').find(product=>Number(product.id)===Number(id))?.image||D.PRODUCT_IMAGE;}
+function parsePillowSelection(value){
+  const text=String(value||'').trim();if(!text||(!text.includes('کاور')&&!text.includes('الیاف')))return null;
+  const option=text.includes('با الیاف')?'با الیاف':'فقط کاور';
+  const size=text.replace(/^.*?—\s*/,'').trim();
+  return size?{option,size}:null;
+}
+function orderItemOptions(item){
+  const pillow=parsePillowSelection(item?.size),parts=[];
+  if(pillow)parts.push(`نوع سفارش: ${D.esc(pillow.option)}`,`سایز: ${D.esc(pillow.size)}`);
+  else if(item?.size)parts.push(`سایز: ${D.esc(item.size)}`);
+  if(item?.fabric)parts.push(`جنس: ${D.esc(item.fabric)}`);
+  parts.push(`تعداد ${D.fa(item?.qty||1)}`);
+  return parts.join(' — ');
+}
+function orderItemDownloadMarkup(item={}){
+  const customRequestId=String(item?.customRequestId||'').trim();
+  if(!customRequestId)return '';
+  const downloadUrl=String(item?.downloadUrl||'').trim();
+  const fileName=String(item?.fileName||'').trim();
+  const fileMeta=`<small>کد طرح: ${D.esc(customRequestId)}${fileName?` — فایل: ${D.esc(fileName)}`:''}</small>`;
+  if(!downloadUrl)return `${fileMeta}<small style="color:var(--portal-danger)">فایل طرح روی سرور در دسترس نیست.</small>`;
+  return `${fileMeta}<a href="${D.esc(downloadUrl)}" class="portal-btn portal-btn-soft" style="display:inline-flex;width:max-content;margin-top:7px">دانلود فایل طرح</a>`;
+}
+
+function customRequestIdsFromDisplayOrder(order={}){
+  return [...new Set(
+    (order.items||[])
+      .map(item=>String(item?.customRequestId||'').trim())
+      .filter(Boolean)
+  )];
+}
 function getOrdersForDisplay() {
   const realOrders = Array.isArray(D.get('orders'))
-    ? [...D.get('orders')]
+    ? D.get('orders').map(order => ({
+        ...order,
+        displayType: 'order',
+        sourceCollection: 'orders'
+      }))
     : [];
 
-  const customRequests = Array.isArray(D.get('custom'))
-    ? [...D.get('custom')]
-    : [];
+  const customRequests = Array.isArray(D.get('custom')) ? D.get('custom') : [];
+  const orderByNumber = new Map(realOrders.map(order => [String(order.id || '').trim(), order]));
+  const orderByCustomRequestId = new Map();
 
-  const linkedCustomRequestIds = new Set(
-    realOrders.flatMap(order => (order.items || [])
-      .map(item => String(item.customRequestId || '').trim())
-      .filter(Boolean))
-  );
+  for (const order of realOrders) {
+    for (const customRequestId of customRequestIdsFromDisplayOrder(order)) {
+      if (!orderByCustomRequestId.has(customRequestId)) orderByCustomRequestId.set(customRequestId, order);
+    }
+  }
 
   /*
-   * درخواست‌هایی که هنوز سفارش پرداختی برایشان ساخته نشده،
-   * به‌صورت ردیف موقت در جدول سفارش‌ها دیده می‌شوند.
+   * هر پرداخت نهایی دقیقاً یک ردیف KR است و تمام اقلام همان Order را نشان می‌دهد؛
+   * فرقی ندارد همه اختصاصی باشند، همه عادی باشند یا ترکیبی از هر دو.
+   * درخواست‌های DS فقط زمانی در لیست سفارش‌ها ردیف جدا می‌گیرند که هنوز به هیچ
+   * Order نهایی وصل نشده باشند (مثلاً طرحی که هنوز در مرحله بررسی/سبد است).
    */
-  const customDisplayRows = customRequests
-    .filter(item => !linkedCustomRequestIds.has(String(item.id || '').trim()))
-    .map(item => ({
-    id: item.id,
-    customRequestId: item.id,
-    displayType: 'custom',
+  const standaloneCustomRows = customRequests.flatMap(item => {
+    const customRequestId = String(item.id || '').trim();
+    const directOrderNumber = String(item.orderNumber || '').trim();
+    const linkedOrder = (directOrderNumber ? orderByNumber.get(directOrderNumber) : null)
+      || orderByCustomRequestId.get(customRequestId)
+      || null;
 
-    customer: item.customer || 'مشتری طرح اختصاصی',
-    phone: item.phone || '—',
-    email: item.email || '',
+    if (linkedOrder) return [];
 
-    date: item.date || '—',
-    createdAt: item.createdAt || '',
+    const customGross = Number(item.price || 0);
+    const customStatus = item.status || 'review';
+    const mappedOrderStatus = item.orderStatus || (customStatus === 'approved' ? 'processing' : 'design-review');
 
-    total: Number(item.price || 0),
-    paymentStatus: item.paymentStatus || 'review',
+    return [{
+      id: item.id,
+      customRequestId: item.id,
+      linkedOrderNumber: '',
+      displayType: 'custom',
+      sourceCollection: 'customRequests',
 
-    /*
-     * وضعیت دقیقاً از همان CustomRequest خوانده می‌شود.
-     * برای جدول سفارش فقط برچسب نمایشی می‌سازیم.
-     */
-    status: item.status || 'review',
+      customer: item.customer || 'مشتری طرح اختصاصی',
+      phone: item.phone || '—',
+      email: item.email || '',
 
-    shippingMethod: 'طرح اختصاصی',
+      date: item.date || '—',
+      dateTime: item.dateTime || '',
+      createdAt: item.createdAt || '',
 
-    fileName: item.fileName || '',
-    size: item.size || '',
-    fabric: item.fabric || '',
-    notes: item.notes || ''
-  }));
+      subtotal: customGross,
+      shipping: 0,
+      discount: 0,
+      total: customGross,
+      linkedPaymentTotal: customGross,
+      payment: item.payment || 'ثبت نشده',
+      paymentStatus: item.paymentStatus || 'unpaid',
 
-  return [...realOrders, ...customDisplayRows];
+      status: mappedOrderStatus,
+      orderStatus: mappedOrderStatus,
+      customStatus,
+      shippingMethod: item.shippingMethod || 'طرح اختصاصی',
+
+      province: item.province || '',
+      city: item.city || '',
+      postalCode: item.postalCode || '',
+      address: item.address || '',
+      customerNote: item.deliveryNote || '',
+      tracking: '',
+
+      fileName: item.fileName || '',
+      size: item.size || '',
+      fabric: item.fabric || '',
+      notes: item.notes || '',
+      adminNote: item.adminNote || '',
+      items: []
+    }];
+  });
+
+  return [...realOrders, ...standaloneCustomRows];
 }
+
+function paidOrdersValue(orders=[]){
+  return orders.reduce((state,order)=>{
+    if(order.paymentStatus!=='paid'||order.status==='cancelled')return state;
+    const saleKey=String(order.linkedOrderNumber||order.id||'').trim();
+    if(!saleKey||state.keys.has(saleKey))return state;
+    state.keys.add(saleKey);
+    state.total+=Number(order.total||0);
+    return state;
+  },{total:0,keys:new Set()}).total;
+}
+
 function showView(view){
   qa('[data-admin-section]').forEach(section=>section.classList.toggle('active',section.dataset.adminSection===view));
   qa('[data-admin-view]').forEach(button=>button.classList.toggle('active',button.dataset.adminView===view));
@@ -238,27 +360,35 @@ function renderOrderDonut(statusCounts={}){
   const totalEl=q('#donutOrders');
   if(totalEl)totalEl.textContent=D.fa(total);
 }
+function paymentGatewayLabel(order = {}) {
+  const raw = String(order.payment || '').trim();
+  if (/ترب|torob/i.test(raw)) return 'ترب‌پی';
+  if (/زرین|zarin/i.test(raw)) return 'زرین‌پال';
+  if (/کارت\s*به\s*کارت/i.test(raw)) return 'کارت به کارت';
+  if (/ثبت دستی/i.test(raw)) return 'ثبت دستی مدیر';
+  if (!raw || raw === 'ثبت نشده') return 'ثبت نشده';
+  if (raw === 'پرداخت آنلاین') return 'درگاه آنلاین';
+  return raw;
+}
+
 function orderRow(order, compact = false) {
   const isCustom = order.displayType === 'custom';
 
-  const orderStatus = isCustom
-    ? status(order.status || 'review')
-    : status(order.status);
+  const orderStatus = status(order.status || (isCustom ? 'design-review' : 'processing'));
 
-  const paymentStatus = isCustom
-    ? '<span class="portal-status status-review">مدیریت در طرح‌های اختصاصی</span>'
-    : status(order.paymentStatus);
+  const paymentStatus = status(order.paymentStatus || (isCustom ? 'unpaid' : 'pending'));
 
-  const customBadge = isCustom
+  const customItemCount = isCustom ? 1 : customRequestIdsFromDisplayOrder(order).length;
+  const normalItemCount = isCustom ? 0 : Math.max(0, (order.items || []).length - customItemCount);
+  const orderKindBadge = isCustom
     ? `
-      <span
-        class="portal-status status-design-review"
-        style="margin-top:6px"
-      >
-        طرح اختصاصی
+      <span class="portal-status status-design-review" style="margin-top:6px">
+        درخواست اختصاصی بدون سفارش نهایی
       </span>
     `
-    : '';
+    : customItemCount
+      ? `<span class="portal-status status-design-review" style="margin-top:6px">${normalItemCount ? 'سفارش ترکیبی' : 'سفارش اختصاصی'} — ${D.fa(customItemCount)} طرح</span>`
+      : '';
 
   const actionButton = isCustom
     ? `
@@ -266,7 +396,7 @@ function orderRow(order, compact = false) {
         type="button"
         class="table-action open-custom-from-orders"
         data-id="${D.esc(order.customRequestId)}"
-        title="مشاهده در طرح‌های اختصاصی"
+        title="مشاهده سفارش اختصاصی"
       >
         <svg viewBox="0 0 24 24">
           <path d="M4 19V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/>
@@ -288,6 +418,21 @@ function orderRow(order, compact = false) {
       </button>
     `;
 
+  const deleteButton = `
+    <button
+      type="button"
+      class="table-action delete-order"
+      data-id="${D.esc(order.id)}"
+      data-source="${isCustom ? 'custom' : 'order'}"
+      title="حذف ${isCustom ? 'سفارش اختصاصی' : 'سفارش'}"
+      style="color:var(--portal-danger)"
+    >
+      <svg viewBox="0 0 24 24">
+        <path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/>
+      </svg>
+    </button>
+  `;
+
   if (compact) {
     return `
       <tr>
@@ -297,10 +442,10 @@ function orderRow(order, compact = false) {
           </span>
 
           <span class="table-secondary">
-            ${D.esc(order.date || '—')}
+            ${D.esc(registrationDateTime(order))}
           </span>
 
-          ${customBadge}
+          ${orderKindBadge}
         </td>
 
         <td>
@@ -337,7 +482,7 @@ function orderRow(order, compact = false) {
           ${D.esc(order.shippingMethod || '—')}
         </span>
 
-        ${customBadge}
+        ${orderKindBadge}
       </td>
 
       <td>
@@ -349,7 +494,7 @@ function orderRow(order, compact = false) {
       </td>
 
       <td>
-        ${D.esc(order.date || '—')}
+        ${D.esc(registrationDateTime(order))}
       </td>
 
       <td>
@@ -358,6 +503,7 @@ function orderRow(order, compact = false) {
 
       <td>
         ${paymentStatus}
+        <span class="table-secondary">درگاه: ${D.esc(paymentGatewayLabel(order))}</span>
       </td>
 
       <td>
@@ -384,10 +530,50 @@ function orderRow(order, compact = false) {
               `
               : ''
           }
+
+          ${deleteButton}
         </div>
       </td>
     </tr>
   `;
+}
+
+async function deleteAdminOrder(id, source = 'order', trigger = null) {
+  const normalizedId = String(id || '').trim();
+  if (!normalizedId) return false;
+
+  const isCustom = source === 'custom';
+  const customItem = isCustom
+    ? D.get('custom').find(item => String(item.id) === normalizedId)
+    : null;
+  const relatedOrder = customItem?.orderNumber
+    ? ` و سفارش مرتبط ${customItem.orderNumber}`
+    : '';
+  const warning = isCustom
+    ? `سفارش اختصاصی ${normalizedId}${relatedOrder} برای همیشه حذف شود؟ فایل طرح و اطلاعات مرتبط نیز پاک می‌شوند.`
+    : `سفارش ${normalizedId} برای همیشه حذف شود؟ موجودی و مصرف کد تخفیف این سفارش در صورت نیاز برگردانده می‌شود.`;
+
+  if (!confirm(warning)) return false;
+
+  if (trigger) trigger.disabled = true;
+  try {
+    const result = await window.CribAPI.request(
+      `/api/admin/orders/${encodeURIComponent(normalizedId)}?source=${encodeURIComponent(isCustom ? 'custom' : 'order')}`,
+      { method: 'DELETE' }
+    );
+    activeOrder = null;
+    activeCustom = null;
+    await D.syncFromApi('admin');
+    closeModals();
+    renderAll();
+    D.toast(result.message || (isCustom ? 'سفارش اختصاصی حذف شد.' : 'سفارش حذف شد.'));
+    return true;
+  } catch (error) {
+    D.toast(error.message || 'حذف سفارش انجام نشد.', 'error');
+    return false;
+  } finally {
+    if (trigger?.isConnected) trigger.disabled = false;
+  }
 }
 function productRow(product){
   const sizes=(product.sizes||[]).map(item=>item.replace(' سانتی‌متر','')).join('، ')||'—';
@@ -459,11 +645,20 @@ function renderOrders() {
 
   if (term) {
     list = list.filter(order => {
+      const itemSearch=(order.items||[]).map(item=>[
+        item?.title,
+        item?.customRequestId,
+        item?.fileName,
+        item?.size,
+        item?.fabric
+      ].filter(Boolean).join(' ')).join(' ');
       const searchableText = `
         ${order.id || ''}
         ${order.customer || ''}
         ${order.phone || ''}
         ${order.fileName || ''}
+        ${order.linkedOrderNumber || ''}
+        ${itemSearch}
       `.toLowerCase();
 
       return searchableText.includes(term);
@@ -471,43 +666,13 @@ function renderOrders() {
   }
 
   if (orderStatus) {
-    list = list.filter(order => {
-      if (order.displayType === 'custom') {
-        /*
-         * درخواست‌های اختصاصی با وضعیت review و preview-ready
-         * در فیلتر بررسی طراحی نمایش داده می‌شوند.
-         */
-        if (orderStatus === 'design-review') {
-          return [
-            'draft',
-            'review',
-            'preview-ready'
-          ].includes(order.status);
-        }
-
-        if (orderStatus === 'processing') {
-          return order.status === 'approved';
-        }
-
-        return false;
-      }
-
-      return order.status === orderStatus;
-    });
+    list = list.filter(order => order.status === orderStatus);
   }
 
   if (paymentStatus) {
-    list = list.filter(order => {
-      /*
-       * برای طرح اختصاصی وضعیت پرداخت در جدول سفارش‌ها
-       * قابل مدیریت نیست.
-       */
-      if (order.displayType === 'custom') {
-        return paymentStatus === 'review';
-      }
-
-      return order.paymentStatus === paymentStatus;
-    });
+    list = list.filter(order =>
+      (order.paymentStatus || (order.displayType === 'custom' ? 'unpaid' : 'pending')) === paymentStatus
+    );
   }
 
   const table = q('#adminOrdersTable');
@@ -529,27 +694,11 @@ function renderOrders() {
   const all = getOrdersForDisplay();
 
   q('#orderStatToday').textContent = D.fa(
-    all.filter(order => {
-      if (order.displayType === 'custom') {
-        return ['draft', 'review', 'preview-ready'].includes(
-          order.status
-        );
-      }
-
-      return ['processing', 'design-review'].includes(
-        order.status
-      );
-    }).length
+    all.filter(order => ['processing', 'design-review', 'print-preparation'].includes(order.status)).length
   );
 
   q('#orderStatProcessing').textContent = D.fa(
-    all.filter(order => {
-      if (order.displayType === 'custom') {
-        return order.status === 'approved';
-      }
-
-      return order.status === 'processing';
-    }).length
+    all.filter(order => order.status === 'processing').length
   );
 
   q('#orderStatShipping').textContent = D.fa(
@@ -560,10 +709,7 @@ function renderOrders() {
   );
 
   q('#orderStatValue').textContent = D.toman(
-    all.reduce(
-      (sum, order) => sum + Number(order.total || 0),
-      0
-    )
+    paidOrdersValue(all)
   );
 }
 function productCategoryIds(product){
@@ -657,24 +803,113 @@ function renderCategories(){
     </tr>`;
   }).join('')||'<tr><td colspan="7"><div class="empty-panel">دسته‌بندی‌ای پیدا نشد.</div></td></tr>';
 }
-function couponVariantKey(size,fabric){return `${String(size||'').trim()}\u0000${String(fabric||'').trim()}`;}
+const COUPON_VARIANT_GROUPS=Object.freeze([
+  Object.freeze({key:'pillowcase',title:'روبالشتی',icon:'▣',hint:'سایز ۵۰ × ۷۰ · فقط جنس مخمل',variants:Object.freeze([
+    Object.freeze({title:'فقط کاور',size:pillowVariantSize('فقط کاور','۵۰ × ۷۰ سانتی‌متر'),displaySize:'۵۰ × ۷۰',fabric:'مخمل'}),
+    Object.freeze({title:'با الیاف',size:pillowVariantSize('با الیاف','۵۰ × ۷۰ سانتی‌متر'),displaySize:'۵۰ × ۷۰',fabric:'مخمل'})
+  ])}),
+  Object.freeze({key:'dakimakura',title:'داکیماکورا',icon:'▯',hint:'دو سایز · فقط جنس مخمل',variants:Object.freeze([
+    Object.freeze({title:'فقط کاور',size:pillowVariantSize('فقط کاور','۳۵ × ۱۰۰ سانتی‌متر'),displaySize:'۱۰۰ × ۳۵',fabric:'مخمل'}),
+    Object.freeze({title:'با الیاف',size:pillowVariantSize('با الیاف','۳۵ × ۱۰۰ سانتی‌متر'),displaySize:'۱۰۰ × ۳۵',fabric:'مخمل'}),
+    Object.freeze({title:'فقط کاور',size:pillowVariantSize('فقط کاور','۵۰ × ۱۵۰ سانتی‌متر'),displaySize:'۱۵۰ × ۵۰',fabric:'مخمل'}),
+    Object.freeze({title:'با الیاف',size:pillowVariantSize('با الیاف','۵۰ × ۱۵۰ سانتی‌متر'),displaySize:'۱۵۰ × ۵۰',fabric:'مخمل'})
+  ])}),
+  Object.freeze({key:'flag',title:'پرچم',icon:'⚑',hint:'سه سایز · سه جنس',variants:Object.freeze([
+    Object.freeze({title:'۱۵۰ × ۹۰',size:'۱۵۰ × ۹۰ سانتی‌متر',displaySize:'۱۵۰ × ۹۰',fabric:'ساتن آمریکایی'}),
+    Object.freeze({title:'۱۵۰ × ۹۰',size:'۱۵۰ × ۹۰ سانتی‌متر',displaySize:'۱۵۰ × ۹۰',fabric:'ساتن براق'}),
+    Object.freeze({title:'۱۵۰ × ۹۰',size:'۱۵۰ × ۹۰ سانتی‌متر',displaySize:'۱۵۰ × ۹۰',fabric:'مخمل'}),
+    Object.freeze({title:'۱۰۰ × ۷۰',size:'۱۰۰ × ۷۰ سانتی‌متر',displaySize:'۱۰۰ × ۷۰',fabric:'ساتن آمریکایی'}),
+    Object.freeze({title:'۱۰۰ × ۷۰',size:'۱۰۰ × ۷۰ سانتی‌متر',displaySize:'۱۰۰ × ۷۰',fabric:'ساتن براق'}),
+    Object.freeze({title:'۱۰۰ × ۷۰',size:'۱۰۰ × ۷۰ سانتی‌متر',displaySize:'۱۰۰ × ۷۰',fabric:'مخمل'}),
+    Object.freeze({title:'۵۰ × ۷۰',size:'۵۰ × ۷۰ سانتی‌متر',displaySize:'۵۰ × ۷۰',fabric:'ساتن آمریکایی'}),
+    Object.freeze({title:'۵۰ × ۷۰',size:'۵۰ × ۷۰ سانتی‌متر',displaySize:'۵۰ × ۷۰',fabric:'ساتن براق'}),
+    Object.freeze({title:'۵۰ × ۷۰',size:'۵۰ × ۷۰ سانتی‌متر',displaySize:'۵۰ × ۷۰',fabric:'مخمل'})
+  ])})
+]);
+const COUPON_VARIANTS=Object.freeze(COUPON_VARIANT_GROUPS.flatMap(group=>group.variants.map(variant=>Object.freeze({...variant,groupKey:group.key,groupTitle:group.title}))));
+function normalizedCouponProductId(value){const id=Number(value);return Number.isInteger(id)&&id>0?id:null;}
+function couponVariantKey(productId,size,fabric){return `${normalizedCouponProductId(productId)||'*'}\u0000${String(size||'').trim()}\u0000${String(fabric||'').trim()}`;}
+function couponVariantParts(size){
+  const text=String(size||'').trim();
+  const parts=text.split(/\s+[—–-]\s+/);
+  if(parts.length>1&&(parts[0].includes('کاور')||parts[0].includes('الیاف'))){return {option:parts[0],size:parts.slice(1).join(' — ')};}
+  return {option:'',size:text};
+}
+function configuredCouponVariant(size,fabric){
+  return COUPON_VARIANTS.find(item=>item.size===String(size||'').trim()&&item.fabric===String(fabric||'').trim())||null;
+}
+function couponVariantTitle(item,{includeProduct=false}={}){
+  const configured=configuredCouponVariant(item?.size,item?.fabric);
+  if(configured){
+    const variantTitle=configured.groupKey==='flag'?configured.displaySize:`${configured.title} · ${configured.displaySize}`;
+    return [includeProduct?configured.groupTitle:'',variantTitle,configured.fabric].filter(Boolean).join(' · ');
+  }
+  const parts=couponVariantParts(item?.size);
+  const variantTitle=parts.option?`${parts.option} · ${parts.size.replace(' سانتی‌متر','')}`:parts.size.replace(' سانتی‌متر','');
+  return [includeProduct?'ترکیب قدیمی':'',variantTitle,item?.fabric].filter(Boolean).join(' · ');
+}
 function couponScopeMarkup(coupon){
-  if(coupon.applicability!=='variants')return '<span class="portal-status status-active">همه ترکیب‌ها</span>';
+  if(coupon.applicability!=='variants')return '<span class="portal-status status-active">همه محصولات</span>';
   const variants=Array.isArray(coupon.eligibleVariants)?coupon.eligibleVariants:[];
   if(!variants.length)return '<span class="portal-status status-cancelled">بدون انتخاب</span>';
-  const labels=variants.slice(0,2).map(item=>`${String(item.size||'').replace(' سانتی‌متر','')} · ${item.fabric}`);
-  const more=variants.length>2?`<small class="table-secondary">+ ${D.fa(variants.length-2)} ترکیب دیگر</small>`:'';
+  const groups=new Set(variants.map(item=>configuredCouponVariant(item?.size,item?.fabric)?.groupTitle).filter(Boolean));
+  const labels=variants.slice(0,2).map(item=>couponVariantTitle(item,{includeProduct:true}));
+  const more=variants.length>2?`<small class="table-secondary">+ ${D.fa(variants.length-2)} حالت دیگر${groups.size?` از ${D.fa(groups.size)} گروه`:''}</small>`:'';
   return `<div class="coupon-scope-summary">${labels.map(label=>`<span>${D.esc(label)}</span>`).join('')}${more}</div>`;
 }
 function selectedCouponVariants(){
   return qa('.coupon-variant-option:checked').map(input=>({size:input.dataset.size||'',fabric:input.dataset.fabric||''}));
+}
+function updateCouponVariantCount(){
+  const selected=qa('.coupon-variant-option:checked').length;
+  const total=qa('.coupon-variant-option').length;
+  const counter=q('#couponVariantCount');
+  if(counter)counter.textContent=`${D.fa(selected)} از ${D.fa(total)} حالت انتخاب شده`;
+  const selectAll=q('#couponSelectAllVariants');
+  if(selectAll)selectAll.textContent=selected&&selected===total?'لغو انتخاب همه':'انتخاب همه';
+}
+function filterCouponVariantOptions(){
+  const term=String(q('#couponVariantSearch')?.value||'').trim().toLowerCase();
+  qa('.coupon-product-scope').forEach(group=>{
+    const productMatch=!term||String(group.dataset.search||'').includes(term);
+    let visible=0;
+    group.querySelectorAll('.coupon-variant-option-label').forEach(label=>{
+      const show=productMatch||!term||String(label.dataset.search||'').includes(term);
+      label.hidden=!show;
+      if(show)visible+=1;
+    });
+    group.classList.toggle('is-filter-empty',visible===0);
+  });
+}
+function renderCouponVariantOptions(selectedVariants=[]){
+  const box=q('#couponVariantProducts');if(!box)return;
+  // کدهای نسخه قبلی ممکن است productId داشته باشند؛ اینجا عمداً فقط سایز و جنس
+  // مقایسه می‌شود تا پس از ذخیره به یکی از ۱۵ حالت ثابت تبدیل شوند.
+  const selected=new Set((Array.isArray(selectedVariants)?selectedVariants:[]).map(item=>couponVariantKey(null,item?.size,item?.fabric)));
+  const groups=COUPON_VARIANT_GROUPS.map(group=>{
+    const options=group.variants.map(item=>{
+      const checked=selected.has(couponVariantKey(null,item.size,item.fabric));
+      const title=group.key==='flag'?`${item.displaySize} · ${item.fabric}`:item.title;
+      const details=group.key==='flag'?[`سایز ${item.displaySize}`,`جنس ${item.fabric}`]:[`سایز ${item.displaySize}`,`جنس ${item.fabric}`];
+      const search=`${group.title} ${group.hint} ${item.title} ${item.displaySize} ${item.size} ${item.fabric}`.toLowerCase();
+      return `<label class="coupon-variant-option-label" data-search="${D.esc(search)}"><input class="coupon-variant-option" data-size="${D.esc(item.size)}" data-fabric="${D.esc(item.fabric)}" type="checkbox" ${checked?'checked':''}/><span><b>${D.esc(title)}</b><small class="coupon-variant-detail">${details.map(detail=>`<em>${D.esc(detail)}</em>`).join('')}</small></span></label>`;
+    }).join('');
+    const groupSearch=`${group.title} ${group.hint} ${group.variants.map(item=>`${item.title} ${item.displaySize} ${item.fabric}`).join(' ')}`.toLowerCase();
+    return `<section class="coupon-product-scope" data-group="${D.esc(group.key)}" data-search="${D.esc(groupSearch)}"><div class="coupon-product-head"><div class="coupon-product-meta"><span aria-hidden="true" style="display:grid;place-items:center;width:42px;height:42px;border-radius:10px;background:#eef2ff;color:#3157d5;font-size:22px;flex:0 0 auto">${D.esc(group.icon)}</span><span><b>${D.esc(group.title)}</b><small>${D.esc(group.hint)} · ${D.fa(group.variants.length)} حالت</small></span></div><div class="coupon-product-actions"><button type="button" data-coupon-product-action="select">انتخاب گروه</button><button type="button" data-coupon-product-action="clear">پاک کردن</button></div></div><div class="coupon-variant-grid">${options}</div></section>`;
+  });
+  box.innerHTML=groups.join('');
+  filterCouponVariantOptions();
+  updateCouponVariantCount();
 }
 function syncCouponVariantScope(){
   const restricted=q('#couponApplicability')?.value==='variants';
   const scope=q('#couponVariantScope');
   if(scope)scope.hidden=!restricted;
   qa('.coupon-variant-option').forEach(input=>{input.disabled=!restricted;});
+  if(restricted&&!qa('.coupon-variant-option').length)renderCouponVariantOptions([]);
+  updateCouponVariantCount();
 }
+
 function renderCoupons(){
   const term=(q('#couponSearch')?.value||'').toLowerCase(),couponStatus=q('#couponStatus')?.value||'';
   let list=D.get('coupons');
@@ -704,6 +939,7 @@ function renderCustom() {
     .toLowerCase();
 
   const customStatus = q('#adminCustomStatus')?.value || '';
+  const customPaymentStatus = q('#adminCustomPaymentStatus')?.value || '';
 
   let list = Array.isArray(D.get('custom'))
     ? [...D.get('custom')]
@@ -718,6 +954,7 @@ function renderCustom() {
         ${item.province || ''}
         ${item.city || ''}
         ${item.fileName || ''}
+        ${item.requestType || ''}
       `.toLowerCase();
 
       return searchableText.includes(term);
@@ -726,6 +963,10 @@ function renderCustom() {
 
   if (customStatus) {
     list = list.filter(item => item.status === customStatus);
+  }
+
+  if (customPaymentStatus) {
+    list = list.filter(item => (item.paymentStatus || 'unpaid') === customPaymentStatus);
   }
 
   const table = q('#adminCustomTable');
@@ -754,6 +995,8 @@ function renderCustom() {
           </a>
 
           <span class="table-secondary">
+            ${D.esc(item.requestType || 'پرچم')}
+            —
             ${D.esc(item.size || '—')}
             —
             ${D.esc(item.fabric || 'ساتن آمریکایی')}
@@ -769,6 +1012,8 @@ function renderCustom() {
           </span>
 
           <span class="table-secondary">
+            ${D.esc(item.requestType || 'پرچم')}
+            —
             ${D.esc(item.size || '—')}
             —
             ${D.esc(item.fabric || 'ساتن آمریکایی')}
@@ -782,7 +1027,7 @@ function renderCustom() {
           <b>${D.esc(item.id || '—')}</b>
 
           <span class="table-secondary">
-            ${D.esc(item.date || '—')}
+            ${D.esc(registrationDateTime(item))}
           </span>
         </td>
 
@@ -805,6 +1050,11 @@ function renderCustom() {
         </td>
 
         <td>
+          ${status(item.paymentStatus || 'unpaid')}
+          ${item.orderNumber ? `<span class="table-secondary">سفارش ${D.esc(item.orderNumber)}</span>` : '<span class="table-secondary">بدون سفارش نهایی</span>'}
+        </td>
+
+        <td>
           ${status(item.status || 'review')}
         </td>
 
@@ -821,7 +1071,7 @@ function renderCustom() {
     `;
   }).join('') || `
     <tr>
-      <td colspan="7">
+      <td colspan="8">
         <div class="empty-panel">
           درخواستی پیدا نشد.
         </div>
@@ -848,10 +1098,10 @@ function renderReports(){
 }
 
 function renderNotifications(){
-  const orders=D.get('orders').filter(order=>['processing','design-review'].includes(order.status));
+  const orders=D.get('orders').filter(order=>['processing','design-review','print-preparation'].includes(order.status));
   const tickets=D.get('tickets').filter(ticket=>ticket.status==='open');
   const items=[
-    ...orders.slice(0,4).map(order=>({title:'سفارش نیازمند اقدام',text:`سفارش ${order.id} در وضعیت ${labels[order.status]} است.`,date:order.date})),
+    ...orders.slice(0,4).map(order=>({title:'سفارش نیازمند اقدام',text:`سفارش ${order.id} در وضعیت ${labels[order.status]} است.`,date:registrationDateTime(order)})),
     ...tickets.slice(0,4).map(ticket=>({title:'تیکت باز',text:ticket.subject,date:ticket.date}))
   ];
   q('#adminNotificationList').innerHTML=items.map(item=>`<div class="notification-item unread"><span class="notification-mark"></span><div><strong>${D.esc(item.title)}</strong><p>${D.esc(item.text)}</p><small>${D.esc(item.date)}</small></div></div>`).join('')||'<div class="empty-panel">اعلان جدیدی وجود ندارد.</div>';
@@ -912,8 +1162,70 @@ function generateRandomSku(excludeId=null){
   }
   return `CF-${String(Date.now()).slice(-9)}`;
 }
+function compactPillowCategory(value=''){
+  return String(value||'').trim().toLowerCase()
+    .replace(/[ي]/g,'ی').replace(/[ك]/g,'ک')
+    .replace(/[\u200c\u200d\u200e\u200f]/g,'')
+    .replace(/[^a-z0-9\u0600-\u06FF]+/g,'');
+}
+function detectPillowProductMode(categories=[]){
+  const values=(Array.isArray(categories)?categories:[categories]).map(compactPillowCategory).filter(Boolean);
+  if(values.some(value=>value.includes('داکیماکورا')||value.includes('بالشتقدی')||value.includes('روبالشتیقدی')))return 'dakimakura';
+  if(values.some(value=>value.includes('روبالشتی')||value.includes('بالشتی')))return 'pillowcase';
+  return null;
+}
+function selectedProductPillowMode(){
+  const categoryMap=new Map(D.get('categories').map(category=>[Number(category.id),category]));
+  const selected=qa('.product-category-option:checked').map(input=>categoryMap.get(Number(input.value))).filter(Boolean);
+  return detectPillowProductMode(selected.flatMap(category=>[category.name,category.slug]));
+}
+function pillowFixedVariants(mode){
+  const config=PILLOW_PRODUCT_CONFIGS[mode];
+  return config?config.variants.map(item=>({
+    size:pillowVariantSize(item.option,item.size),fabric:'مخمل',price:item.price,oldPrice:null,hasDiscount:false,
+    option:item.option,displaySize:item.size
+  })):[];
+}
+function renderProductOptionChoices(mode=null,selectedSizes=[],selectedFabrics=[]){
+  activeProductPillowMode=mode||null;
+  const sizeBox=q('#productSizeChoices'),fabricBox=q('#productFabricChoices');
+  if(!sizeBox||!fabricBox)return;
+  const selectedSizeSet=new Set(Array.isArray(selectedSizes)?selectedSizes:[]);
+  const selectedFabricSet=new Set(Array.isArray(selectedFabrics)?selectedFabrics:[]);
+  const special=Boolean(mode&&PILLOW_PRODUCT_CONFIGS[mode]);
+  if(special){
+    const variants=pillowFixedVariants(mode);
+    sizeBox.innerHTML=variants.map(item=>`<label class="product-choice"><input class="product-size-option" type="checkbox" value="${D.esc(item.size)}" ${(selectedSizeSet.size?selectedSizeSet.has(item.size):true)?'checked':''}/><span><b>${D.esc(item.option)} — ${D.esc(item.displaySize.replace(' سانتی‌متر',''))}</b><small>${D.toman(item.price)} · مقدار پیش‌فرض قابل ویرایش</small></span></label>`).join('');
+    fabricBox.innerHTML=`<label class="product-choice"><input class="product-fabric-option" type="checkbox" value="مخمل" ${(selectedFabricSet.size?selectedFabricSet.has('مخمل'):true)?'checked':''}/><span><b>مخمل</b><small>جنس مخصوص این دسته و قابل ثبت در محصول</small></span></label>`;
+  }else{
+    sizeBox.innerHTML=STANDARD_PRODUCT_SIZES.map((item,index)=>`<label class="product-choice"><input class="product-size-option" type="checkbox" value="${D.esc(item.value)}" ${(selectedSizeSet.size?selectedSizeSet.has(item.value):index<STANDARD_PRODUCT_SIZES.length)?'checked':''}/><span><b>${D.esc(item.title)}</b><small>${D.esc(item.hint)}</small></span></label>`).join('');
+    fabricBox.innerHTML=STANDARD_PRODUCT_FABRICS.map(item=>`<label class="product-choice"><input class="product-fabric-option" type="checkbox" value="${D.esc(item.value)}" ${(selectedFabricSet.size?selectedFabricSet.has(item.value):true)?'checked':''}/><span><b>${D.esc(item.title)}</b><small>${D.esc(item.hint)}</small></span></label>`).join('');
+  }
+  q('#productOptionsTitle').textContent=special?'نوع سفارش، سایز و جنس':'سایزبندی و جنس پارچه';
+  q('#productOptionsDescription').textContent=special?'گزینه‌های پیشنهادی این دسته آماده‌اند؛ موارد لازم را انتخاب و ذخیره کنید.':'یک یا چند گزینه برای مشتری قابل انتخاب باشد';
+  q('#productSizesLabel').textContent=special?'حالت و سایزهای قابل سفارش':'سایزهای قابل سفارش';
+  q('#variantPricingLabel').textContent=special?'قیمت هر حالت':'قیمت هر سایز و جنس';
+  q('#variantPricingHelp').textContent=special?'قیمت‌های فعلی به‌صورت مقدار پیش‌فرض وارد شده‌اند و مثل محصولات پرچم قابل ویرایش و ذخیره هستند.':'برای هر ترکیب مثل ۱۵۰×۹۰ مخمل یا ۱۰۰×۷۰ ساتن، قیمت دقیق وارد کنید.';
+  const hint=q('#productPillowRuleHint');if(hint)hint.hidden=!special;
+  const discount=q('#productHasDiscount');if(discount)discount.disabled=false;
+  const base=q('#productPrice');if(base){base.readOnly=false;if(special&&!base.value)base.value=Math.min(...pillowFixedVariants(mode).map(item=>item.price));}
+  const fill=q('#fillVariantPrices');if(fill)fill.disabled=false;
+  toggleDiscountFields();
+}
+function applyProductCategoryRules(seed={}){
+  const mode=selectedProductPillowMode();
+  const modeChanged=mode!==activeProductPillowMode;
+  const sizes=seed.sizes||(modeChanged?[]:qa('.product-size-option:checked').map(input=>input.value));
+  const fabrics=seed.fabrics||(modeChanged?[]:qa('.product-fabric-option:checked').map(input=>input.value));
+  renderProductOptionChoices(mode,sizes,fabrics);
+  renderVariantPricing(seed.variants||null);
+}
 function variantPricingKey(size,fabric){return `${size}|||${fabric}`;}
 function defaultProductPriceForVariant(size,fabric){
+  if(activeProductPillowMode){
+    const fixed=pillowFixedVariants(activeProductPillowMode).find(item=>item.size===String(size||'').trim()&&item.fabric===String(fabric||'').trim());
+    if(fixed)return fixed.price;
+  }
   const normalized=String(size||'')
     .replace(/[۰-۹]/g,digit=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
     .replace(/[٠-٩]/g,digit=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
@@ -962,9 +1274,13 @@ function renderVariantPricing(seedVariants=null){
     const variantDefaultPrice=defaultProductPriceForVariant(size,fabric);
     const price=saved?.price??variantDefaultPrice??basePrice;
     const oldPrice=saved?.oldPrice??saved?.old??baseOld;
+    const fixed=Boolean(activeProductPillowMode);
+    const parts=String(size||'').split(' — ');
+    const sizeLabel=fixed&&parts.length>1?parts.slice(1).join(' — '):size;
+    const optionLabel=fixed?parts[0]:fabric;
     return `<div class="variant-price-row" data-size="${D.esc(size)}" data-fabric="${D.esc(fabric)}">
-      <div class="variant-label"><small>سایز</small><strong>${D.esc(size)}</strong></div>
-      <div class="variant-label"><small>جنس</small><strong>${D.esc(fabric)}</strong></div>
+      <div class="variant-label"><small>${fixed?'نوع سفارش':'سایز'}</small><strong>${D.esc(fixed?optionLabel:sizeLabel)}</strong></div>
+      <div class="variant-label"><small>${fixed?'سایز':'جنس'}</small><strong>${D.esc(fixed?sizeLabel:fabric)}</strong></div>
       <label class="variant-price-input-wrap">قیمت فروش<input class="variant-price-input" min="0" type="number" value="${price===''?'':D.esc(price)}" required></label>
       <label class="variant-old-price-wrap${hasDiscount?'':' is-hidden'}">قیمت قبل تخفیف<input class="variant-old-price-input" min="0" type="number" value="${oldPrice==null?'':D.esc(oldPrice)}" ${hasDiscount?'':'disabled'}></label>
     </div>`;
@@ -990,23 +1306,37 @@ function productModal(id=null){
   productImageItems=product?existingProductImages(product).map(value=>({type:'existing',value,preview:value})):[];
   q('#productImageFile').value='';
   renderProductImageEditor();
-  setChecked('.product-size-option',product?.sizes||D.DEFAULT_SIZES);
-  setChecked('.product-fabric-option',product?.fabrics||D.DEFAULT_FABRICS);
-  renderVariantPricing(product?.variantPrices||[]);toggleDiscountFields();toggleInventoryFields();openModal('#productModal');
+  activeProductPillowMode=null;
+  applyProductCategoryRules({sizes:product?.sizes||D.DEFAULT_SIZES,fabrics:product?.fabrics||D.DEFAULT_FABRICS,variants:product?.variantPrices||[]});
+  toggleDiscountFields();toggleInventoryFields();openModal('#productModal');
 }
 function orderModal(id){
-  const order=D.get('orders').find(item=>item.id===id);if(!order)return;activeOrder=id;
+  const order=getOrdersForDisplay().find(item=>item.displayType==='order'&&item.id===id)||D.get('orders').find(item=>item.id===id);if(!order)return;activeOrder=id;
   const discount=Number(order.discount||0),shipping=Number(order.shipping||0),subtotal=Number.isFinite(Number(order.subtotal))?Number(order.subtotal):Math.max(0,Number(order.total||0)+discount-shipping);
+  const orderItems=(order.items||[]);
+  const customCount=orderItems.filter(item=>String(item?.customRequestId||'').trim()).length;
+  const normalCount=orderItems.length-customCount;
+  const itemTypeLabel=customCount&&normalCount?'ترکیبی (عادی + اختصاصی)':customCount?'اختصاصی':'عادی';
   q('#adminOrderModalBody').innerHTML=`
     <div class="detail-summary">
       <div class="detail-chip"><small>سفارش</small><strong>${D.esc(order.id)}</strong></div>
+      <div class="detail-chip"><small>زمان ثبت</small><strong>${D.esc(registrationDateTime(order))}</strong></div>
       <div class="detail-chip"><small>مشتری</small><strong>${D.esc(order.customer)}</strong></div>
+      <div class="detail-chip"><small>نوع سفارش</small><strong>${D.esc(itemTypeLabel)}</strong></div>
+      <div class="detail-chip"><small>تعداد اقلام</small><strong>${D.fa(orderItems.length)}</strong></div>
       <div class="detail-chip"><small>مبلغ نهایی</small><strong>${D.toman(order.total)}</strong></div>
-      <div class="detail-chip"><small>پرداخت</small><strong>${labels[order.paymentStatus]||order.paymentStatus}</strong></div>
+      <div class="detail-chip"><small>وضعیت پرداخت</small><strong>${labels[order.paymentStatus]||order.paymentStatus}</strong></div>
+      <div class="detail-chip"><small>درگاه پرداخت</small><strong>${D.esc(paymentGatewayLabel(order))}</strong></div>
     </div>
     <div class="portal-grid-equal"><div>
       <h4>اقلام سفارش</h4>
-      <div class="order-items-mini">${(order.items||[]).map(item=>`<div class="order-item-mini">${productThumb(item.title,productImage(item.id))}<span><strong>${D.esc(item.title)}</strong><small>${item.size?D.esc(item.size)+' — ':''}${item.fabric?D.esc(item.fabric)+' — ':''}تعداد ${D.fa(item.qty)}</small>${item.notes?`<small>یادداشت کالا: ${D.esc(item.notes)}</small>`:''}</span><b>${D.toman(item.price*item.qty)}</b></div>`).join('')}</div>
+      <div class="order-items-mini">${orderItems.map(item=>{
+        const qty=Math.max(1,Number(item?.qty||1));
+        const customId=String(item?.customRequestId||'').trim();
+        const thumb=customId?`<span class="list-icon">DS</span>`:productThumb(item.title,productImage(item.id));
+        const customAdminNote=customId?String(item?.adminNote||'').trim():'';
+        return `<div class="order-item-mini">${thumb}<span><strong>${D.esc(item.title)}</strong><small>${orderItemOptions(item)}</small>${item.notes?`<small>یادداشت کالا: ${D.esc(item.notes)}</small>`:''}${customAdminNote?`<small><strong>یادداشت ادمین:</strong> ${D.esc(customAdminNote)}</small>`:''}${orderItemDownloadMarkup(item)}</span><b>${D.toman(Number(item?.price||0)*qty)}</b></div>`;
+      }).join('')||'<div class="empty-panel">آیتمی برای این سفارش ثبت نشده است.</div>'}</div>
       <h4 style="margin-top:16px">صورتحساب و تخفیف</h4>
       <div class="order-payment-breakdown">
         <div><span>جمع محصولات</span><strong>${D.toman(subtotal)}</strong></div>
@@ -1018,13 +1348,14 @@ function orderModal(id){
       <h4 style="margin-top:16px">یادداشت ثبت‌شده توسط کاربر</h4>
       <p class="order-customer-note ${order.customerNote?'':'is-empty'}">${order.customerNote?D.esc(order.customerNote):'کاربر یادداشتی برای این سفارش ثبت نکرده است.'}</p>
       <h4 style="margin-top:16px">نشانی تحویل</h4><p style="font-size:11px;line-height:2;color:var(--portal-muted)">${D.esc(order.address)}<br>${D.esc(order.phone)} — ${D.esc(order.email||'')}</p>
-    </div><div><div class="form-grid"><div class="field full"><label>وضعیت سفارش</label><select id="modalOrderStatus"><option value="processing">در حال آماده‌سازی</option><option value="design-review">بررسی طراحی</option><option value="shipped">ارسال شده</option><option value="delivered">تحویل شده</option><option value="cancelled">لغو شده</option></select></div><div class="field full"><label>وضعیت پرداخت</label><select id="modalPaymentStatus"><option value="paid">پرداخت شده</option><option value="review">در انتظار بررسی</option><option value="refunded">مسترد شده</option></select></div><div class="field full"><label>کد رهگیری</label><input id="modalTracking" value="${D.esc(order.tracking||'')}"></div><div class="field full"><label>یادداشت داخلی</label><textarea id="modalAdminNote">${D.esc(order.adminNote||'')}</textarea></div></div></div></div>`;
+    </div><div><div class="form-grid"><div class="field full"><label>وضعیت سفارش</label><select id="modalOrderStatus"><option value="processing">در حال آماده‌سازی</option><option value="design-review">بررسی طراحی</option><option value="print-preparation">آماده‌سازی برای چاپ</option><option value="shipped">ارسال شده</option><option value="delivered">تحویل شده</option><option value="cancelled">لغو شده</option></select></div><div class="field full"><label>وضعیت پرداخت</label><select id="modalPaymentStatus"><option value="paid">پرداخت شده</option><option value="review">در انتظار بررسی</option><option value="refunded">مسترد شده</option></select></div><div class="field full"><label>کد رهگیری</label><input id="modalTracking" value="${D.esc(order.tracking||'')}"></div><div class="field full"><label>یادداشت داخلی</label><textarea id="modalAdminNote">${D.esc(order.adminNote||'')}</textarea></div></div></div></div>`;
   q('#modalOrderStatus').value=order.status;q('#modalPaymentStatus').value=order.paymentStatus;openModal('#adminOrderModal');
 }
+
 function customerModal(id){
   const user=D.get('users').find(item=>Number(item.id)===Number(id));if(!user)return;activeCustomer=id;
   const orders=D.get('orders').filter(order=>Number(order.userId)===Number(id));
-  q('#customerModalBody').innerHTML=`<div class="profile-hero" style="margin-bottom:15px"><div class="portal-avatar">${D.esc(user.name[0])}</div><div><h2>${D.esc(user.name)}</h2><p>${D.esc(user.phone)} — ${D.esc(user.email)}</p></div></div><div class="detail-summary customer-summary"><div class="detail-chip"><small>تاریخ عضویت</small><strong>${D.esc(user.joined)}</strong></div><div class="detail-chip"><small>تعداد سفارش</small><strong>${D.fa(orders.length||user.orders)}</strong></div><div class="detail-chip"><small>ارزش خرید</small><strong>${D.toman(user.total)}</strong></div><div class="detail-chip"><small>نوع حساب</small><strong>${user.role==='business'?'سازمانی':'شخصی'}</strong></div></div><h4>سفارش‌های اخیر</h4><div class="order-items-mini">${orders.map(order=>`<div class="order-item-mini"><span class="list-icon">${D.esc(order.id.slice(-2))}</span><span><strong>${D.esc(order.id)} — ${labels[order.status]}</strong><small>${D.esc(order.date)}</small></span><b>${D.toman(order.total)}</b></div>`).join('')||'<div class="empty-panel">سفارشی ندارد.</div>'}</div>`;
+  q('#customerModalBody').innerHTML=`<div class="profile-hero" style="margin-bottom:15px"><div class="portal-avatar">${D.esc(user.name[0])}</div><div><h2>${D.esc(user.name)}</h2><p>${D.esc(user.phone)} — ${D.esc(user.email)}</p></div></div><div class="detail-summary customer-summary"><div class="detail-chip"><small>تاریخ عضویت</small><strong>${D.esc(user.joined)}</strong></div><div class="detail-chip"><small>تعداد سفارش</small><strong>${D.fa(orders.length||user.orders)}</strong></div><div class="detail-chip"><small>ارزش خرید</small><strong>${D.toman(user.total)}</strong></div><div class="detail-chip"><small>نوع حساب</small><strong>${user.role==='business'?'سازمانی':'شخصی'}</strong></div></div><h4>سفارش‌های اخیر</h4><div class="order-items-mini">${orders.map(order=>`<div class="order-item-mini"><span class="list-icon">${D.esc(order.id.slice(-2))}</span><span><strong>${D.esc(order.id)} — ${labels[order.status]}</strong><small>${D.esc(registrationDateTime(order))}</small></span><b>${D.toman(order.total)}</b></div>`).join('')||'<div class="empty-panel">سفارشی ندارد.</div>'}</div>`;
   openModal('#customerModal');
 }
 function ticketModal(id){
@@ -1040,6 +1371,11 @@ function customModal(id) {
   if (!item) return;
 
   activeCustom = id;
+  const linkedOrder = (item.orderNumber
+    ? D.get('orders').find(order=>String(order.id||'')===String(item.orderNumber||''))
+    : D.get('orders').find(order=>customRequestIdsFromDisplayOrder(order).includes(String(id)))) || null;
+  const displayRow = getOrdersForDisplay().find(row=>row.displayType==='custom'&&row.customRequestId===id) || null;
+  const customOrderStatus = linkedOrder?.status || displayRow?.orderStatus || item.orderStatus || 'design-review';
 
   const downloadUrl = item.downloadUrl || item.fileUrl || '';
 
@@ -1075,6 +1411,11 @@ function customModal(id) {
       </div>
 
       <div class="detail-chip">
+        <small>زمان ثبت</small>
+        <strong>${D.esc(registrationDateTime(item))}</strong>
+      </div>
+
+      <div class="detail-chip">
         <small>مشتری</small>
         <strong>${D.esc(item.customer)}</strong>
       </div>
@@ -1085,8 +1426,14 @@ function customModal(id) {
       </div>
 
       <div class="detail-chip">
+        <small>نوع محصول</small>
+        <strong>${D.esc(item.requestType || 'پرچم')}</strong>
+      </div>
+
+      ${parsePillowSelection(item.size)?`<div class="detail-chip"><small>نوع سفارش</small><strong>${D.esc(parsePillowSelection(item.size).option)}</strong></div>`:''}
+      <div class="detail-chip">
         <small>سایز</small>
-        <strong>${D.esc(item.size || '—')}</strong>
+        <strong>${D.esc(parsePillowSelection(item.size)?.size || item.size || '—')}</strong>
       </div>
 
       <div class="detail-chip">
@@ -1098,6 +1445,14 @@ function customModal(id) {
         <small>قیمت</small>
         <strong>${D.toman(item.price || 0)}</strong>
       </div>
+
+      <div class="detail-chip">
+        <small>وضعیت پرداخت</small>
+        <strong>${D.esc(labels[item.paymentStatus || 'unpaid'] || item.paymentStatus || 'پرداخت نشده')}</strong>
+      </div>
+
+      ${item.orderNumber ? `<div class="detail-chip"><small>تراکنش مرتبط</small><strong>${D.esc(item.orderNumber)}</strong></div>` : ''}
+      ${linkedOrder?`<div class="detail-chip"><small>پرداخت کل سبد</small><strong>${D.toman(linkedOrder.total||0)}</strong></div>`:(displayRow&&Number(displayRow.linkedPaymentTotal||0)!==Number(displayRow.total||0)?`<div class="detail-chip"><small>پرداخت کل سبد</small><strong>${D.toman(displayRow.linkedPaymentTotal||0)}</strong></div>`:'')}
     </div>
 
     ${fileContent}
@@ -1119,6 +1474,18 @@ function customModal(id) {
 
     <div class="form-grid" style="margin-top:15px">
       <div class="field">
+        <label>وضعیت سفارش</label>
+        <select id="modalCustomOrderStatus">
+          <option value="design-review">بررسی طراحی</option>
+          <option value="processing">در حال آماده‌سازی</option>
+          <option value="print-preparation">آماده‌سازی برای چاپ</option>
+          <option value="shipped">ارسال شده</option>
+          <option value="delivered">تحویل شده</option>
+          <option value="cancelled">لغو شده</option>
+        </select>
+        <small class="field-help">این وضعیت مخصوص همین سفارش DS است و مستقل از وضعیت درخواست طراحی نگه‌داری می‌شود.</small>
+      </div>
+      <div class="field">
         <label>وضعیت درخواست</label>
 
         <select id="modalCustomStatus">
@@ -1137,6 +1504,19 @@ function customModal(id) {
           type="number"
           value="${Number(item.price || 0)}"
         >
+      </div>
+
+      <div class="field">
+        <label>وضعیت پرداخت</label>
+        <select id="modalCustomPaymentStatus">
+          ${item.orderNumber ? '' : '<option value="unpaid">پرداخت نشده</option>'}
+          <option value="pending">در انتظار پرداخت</option>
+          <option value="review">در انتظار بررسی</option>
+          <option value="paid">پرداخت شده</option>
+          <option value="failed">پرداخت ناموفق</option>
+          <option value="refunded">مسترد شده</option>
+        </select>
+        <small class="field-help">${item.orderNumber ? 'این وضعیت با سفارش مرتبط همگام می‌شود.' : 'هنوز سفارش نهایی برای این درخواست ثبت نشده است.'}</small>
       </div>
 
       <div class="field full">
@@ -1159,7 +1539,9 @@ function customModal(id) {
     </div>
   `;
 
+  q('#modalCustomOrderStatus').value = customOrderStatus;
   q('#modalCustomStatus').value = item.status || 'review';
+  q('#modalCustomPaymentStatus').value = item.paymentStatus || (item.orderNumber ? 'pending' : 'unpaid');
 
   openModal('#customAdminModal');
 }
@@ -1173,8 +1555,8 @@ function couponModal(id=null){
   q('#couponValue').value=coupon?.value||'';
   q('#couponMin').value=coupon?.min||'';
   q('#couponApplicability').value=coupon?.applicability==='variants'?'variants':'all';
-  const selected=new Set((coupon?.eligibleVariants||[]).map(item=>couponVariantKey(item.size,item.fabric)));
-  qa('.coupon-variant-option').forEach(input=>{input.checked=selected.has(couponVariantKey(input.dataset.size,input.dataset.fabric));});
+  if(q('#couponVariantSearch'))q('#couponVariantSearch').value='';
+  renderCouponVariantOptions(coupon?.eligibleVariants||[]);
   q('#couponLimit').value=coupon?.limit||'';
   q('#couponExpires').value=coupon?.expires||'';
   q('#couponStatusField').value=coupon?.status||'active';
@@ -1229,7 +1611,9 @@ q('#productImagesEditor')?.addEventListener('click',event=>{
 });
 q('#productHasDiscount')?.addEventListener('change',()=>{toggleDiscountFields();renderVariantPricing();});
 q('#productInventoryMode')?.addEventListener('change',toggleInventoryFields);
-qa('.product-size-option,.product-fabric-option').forEach(input=>input.addEventListener('change',()=>renderVariantPricing()));
+document.addEventListener('change',event=>{
+  if(event.target.closest('.product-size-option,.product-fabric-option'))renderVariantPricing();
+});
 q('#fillVariantPrices')?.addEventListener('click',()=>{
   const price=q('#productPrice')?.value||'';const oldPrice=q('#productOldPrice')?.value||'';
   qa('.variant-price-input').forEach(input=>{input.value=price;});
@@ -1245,6 +1629,7 @@ document.addEventListener('change',event=>{
     const next=q('.product-category-option:checked')?.closest('.product-category-choice')?.querySelector('.product-primary-category');
     if(next)next.checked=true;
   }else if(checkbox.checked&&!q('.product-primary-category:checked')&&radio){radio.checked=true;}
+  applyProductCategoryRules();
 });
 document.addEventListener('click',event=>{if(!event.target.closest('#adminNotificationPanel')&&!event.target.closest('#adminNotificationBtn'))q('#adminNotificationPanel')?.classList.remove('open');});
 
@@ -1254,7 +1639,7 @@ document.addEventListener('click',event=>{if(!event.target.closest('#adminNotifi
   ['#adminCategorySearch','input',renderCategories],['#adminCategoryStatus','change',renderCategories],['#adminCategoryPlacement','change',renderCategories],
   ['#couponSearch','input',renderCoupons],['#couponStatus','change',renderCoupons],['#customerSearch','input',renderCustomers],['#customerRole','change',renderCustomers],
   ['#adminTicketSearch','input',renderTickets],['#adminTicketStatus','change',renderTickets],['#adminTicketPriority','change',renderTickets],
-  ['#adminCustomSearch','input',renderCustom],['#adminCustomStatus','change',renderCustom]
+  ['#adminCustomSearch','input',renderCustom],['#adminCustomStatus','change',renderCustom],['#adminCustomPaymentStatus','change',renderCustom]
 ].forEach(([selector,eventName,handler])=>q(selector)?.addEventListener(eventName,handler));
 
 q('#productForm')?.addEventListener('submit',async event=>{
@@ -1324,10 +1709,16 @@ q('#saveOrderChanges')?.addEventListener('click',()=>{
   order.status=q('#modalOrderStatus').value;order.paymentStatus=q('#modalPaymentStatus').value;order.tracking=q('#modalTracking').value.trim();order.adminNote=q('#modalAdminNote').value.trim();
   D.set('orders',all);closeModals();renderAll();D.toast('وضعیت سفارش به‌روزرسانی شد.');
 });
+q('#deleteOrderFromModal')?.addEventListener('click',event=>{
+  if(activeOrder)deleteAdminOrder(activeOrder,'order',event.currentTarget);
+});
 q('#saveCustomChanges')?.addEventListener('click',()=>{
   const all=D.get('custom'),item=all.find(entry=>entry.id===activeCustom);if(!item)return;
-  item.status=q('#modalCustomStatus').value;item.price=Number(q('#modalCustomPrice').value);item.adminNote=q('#modalCustomAdminNote').value.trim();D.set('custom',all);
+  item.orderStatus=q('#modalCustomOrderStatus').value;item.status=q('#modalCustomStatus').value;item.paymentStatus=q('#modalCustomPaymentStatus').value;item.price=Number(q('#modalCustomPrice').value);item.adminNote=q('#modalCustomAdminNote').value.trim();D.set('custom',all);
   closeModals();renderAll();D.toast('درخواست طراحی به‌روزرسانی شد.');
+});
+q('#deleteCustomOrderFromModal')?.addEventListener('click',event=>{
+  if(activeCustom)deleteAdminOrder(activeCustom,'custom',event.currentTarget);
 });
 q('#addCategoryBtn')?.addEventListener('click',()=>categoryModal());
 q('#categoryName')?.addEventListener('input',event=>{
@@ -1385,6 +1776,18 @@ q('#couponSelectAllVariants')?.addEventListener('click',()=>{
   const options=qa('.coupon-variant-option');
   const shouldCheck=options.some(input=>!input.checked);
   options.forEach(input=>{input.checked=shouldCheck;});
+  updateCouponVariantCount();
+});
+q('#couponVariantSearch')?.addEventListener('input',filterCouponVariantOptions);
+q('#couponVariantProducts')?.addEventListener('change',event=>{
+  if(event.target.matches('.coupon-variant-option'))updateCouponVariantCount();
+});
+q('#couponVariantProducts')?.addEventListener('click',event=>{
+  const button=event.target.closest('[data-coupon-product-action]');if(!button)return;
+  const group=button.closest('.coupon-product-scope');if(!group)return;
+  const shouldCheck=button.dataset.couponProductAction==='select';
+  group.querySelectorAll('.coupon-variant-option').forEach(input=>{input.checked=shouldCheck;});
+  updateCouponVariantCount();
 });
 q('#couponForm')?.addEventListener('submit',event=>{
   event.preventDefault();let all=D.get('coupons');const id=Number(q('#couponId').value)||Date.now(),old=all.find(coupon=>Number(coupon.id)===id);
@@ -1392,7 +1795,7 @@ q('#couponForm')?.addEventListener('submit',event=>{
   const applicability=q('#couponApplicability').value==='variants'?'variants':'all';
   const eligibleVariants=applicability==='variants'?selectedCouponVariants():[];
   if(!Number.isInteger(minimum)||minimum<0)return D.toast('حداقل مبلغ خرید باید عدد صحیح صفر یا بیشتر باشد.','error');
-  if(applicability==='variants'&&!eligibleVariants.length)return D.toast('حداقل یک ترکیب سایز و جنس را انتخاب کنید.','error');
+  if(applicability==='variants'&&!eligibleVariants.length)return D.toast('حداقل یک محصول و ترکیب سایز، جنس یا حالت سفارش را انتخاب کنید.','error');
   const data={id,code:q('#couponCode').value.trim().toUpperCase(),type:q('#couponType').value,value:Number(q('#couponValue').value),min:minimum,applicability,eligibleVariants,limit:Number(q('#couponLimit').value||0),used:old?.used||0,expires:q('#couponExpires').value.trim(),status:q('#couponStatusField').value};
   const index=all.findIndex(coupon=>Number(coupon.id)===id);if(index>=0)all[index]=data;else all.unshift(data);D.set('coupons',all);closeModals();renderCoupons();event.target.reset();D.toast('کد تخفیف ذخیره شد.');
 });
@@ -1401,6 +1804,11 @@ q('#createOrderBtn')?.addEventListener('click',async()=>{const customer=prompt('
 q('#adminGlobalSearch')?.addEventListener('keydown',event=>{if(event.key==='Enter'){const value=event.target.value.trim();if(!value)return;showView('orders');q('#adminOrderSearch').value=value;renderOrders();}});
 
 document.addEventListener('click',async event=>{
+  const deleteOrderButton=event.target.closest('.delete-order');
+  if(deleteOrderButton){
+    await deleteAdminOrder(deleteOrderButton.dataset.id,deleteOrderButton.dataset.source,deleteOrderButton);
+    return;
+  }
   const orderView = event.target.closest('.admin-order-view');
 
 
@@ -1431,14 +1839,7 @@ document.addEventListener('click',async event=>{
   if (customOrderButton) {
     const customId = customOrderButton.dataset.id;
 
-    /*
-    * رفتن به تب طرح‌های اختصاصی
-    */
-    showView('custom');
-
-    /*
-    * بازکردن مودال همان درخواست
-    */
+    // همان مودال کامل طرح اختصاصی، بدون تغییر تب صفحه سفارش‌ها باز می‌شود.
     customModal(customId);
   }
 
@@ -1451,12 +1852,12 @@ document.addEventListener('click',async event=>{
 });
 
 function exportRows(name,rows){D.downloadCSV(`${name}-${new Date().toISOString().slice(0,10)}.csv`,rows);}
-q('#exportOrdersBtn')?.addEventListener('click',()=>exportRows('orders',D.get('orders').map(order=>({order:order.id,customer:order.customer,phone:order.phone,date:order.date,subtotal:order.subtotal,coupon:order.couponCode||'',discount:order.discount,total:order.total,note:order.customerNote||'',status:labels[order.status],payment:labels[order.paymentStatus]||order.paymentStatus}))));
+q('#exportOrdersBtn')?.addEventListener('click',()=>exportRows('orders',getOrdersForDisplay().map(order=>({order:order.id,customer:order.customer,phone:order.phone,date:registrationDateTime(order),subtotal:order.subtotal,coupon:order.couponCode||'',discount:order.discount,total:order.total,note:order.customerNote||'',status:labels[order.status],payment:labels[order.paymentStatus]||order.paymentStatus,paymentGateway:paymentGatewayLabel(order)}))));
 q('#exportProductsBtn')?.addEventListener('click',()=>exportRows('products',D.get('products').map(product=>({id:product.id,sku:product.sku,title:product.title,category:(product.categories||[product.category]).join(' | '),sizes:(product.sizes||[]).join(' | '),fabrics:(product.fabrics||[]).join(' | '),price:product.price,badge:product.badge,status:labels[product.status]}))));
 q('#exportCategoriesBtn')?.addEventListener('click',()=>exportRows('categories',D.get('categories').map(category=>({id:category.id,name:category.name,slug:category.slug,sortOrder:category.sortOrder,status:labels[category.status]||category.status,placements:categoryPlacements(category).join(' | '),productCount:category.productCount||0}))));
 q('#exportCustomersBtn')?.addEventListener('click',()=>exportRows('customers',D.get('users').map(user=>({id:user.id,name:user.name,phone:user.phone,email:user.email,orders:user.orders,total:user.total,role:user.role}))));
 q('#exportCustomBtn')?.addEventListener('click',()=>exportRows('custom-designs',D.get('custom')));
-q('#downloadFullReport')?.addEventListener('click',()=>exportRows('full-sales-report',D.get('orders').map(order=>({order:order.id,customer:order.customer,phone:order.phone,date:order.date,subtotal:order.subtotal,discount:order.discount,shipping:order.shipping,total:order.total,paymentStatus:labels[order.paymentStatus]||order.paymentStatus,status:labels[order.status]||order.status,includedInSales:order.paymentStatus==='paid'&&order.status!=='cancelled'?'بله':'خیر',coupon:order.couponCode||'',customerNote:order.customerNote||''}))));
+q('#downloadFullReport')?.addEventListener('click',()=>exportRows('full-sales-report',D.get('orders').map(order=>({order:order.id,customer:order.customer,phone:order.phone,date:registrationDateTime(order),subtotal:order.subtotal,discount:order.discount,shipping:order.shipping,total:order.total,paymentStatus:labels[order.paymentStatus]||order.paymentStatus,paymentGateway:paymentGatewayLabel(order),status:labels[order.status]||order.status,includedInSales:order.paymentStatus==='paid'&&order.status!=='cancelled'?'بله':'خیر',coupon:order.couponCode||'',customerNote:order.customerNote||''}))));
 
 q('#adminLogout')?.addEventListener('click',async()=>{try{await window.CribAPI.request('/api/admin/logout',{method:'POST',body:'{}'});}catch{}location.reload();});
 async function bootstrapAdmin(){

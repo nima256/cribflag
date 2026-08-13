@@ -18,12 +18,23 @@ const env = {
   zarinpalMerchantId: process.env.ZARINPAL_MERCHANT_ID || '',
   zarinpalSandbox: process.env.ZARINPAL_SANDBOX === 'true',
   zarinpalAmountUnit: process.env.ZARINPAL_AMOUNT_UNIT || 'toman',
+  torobPayBaseUrl: (process.env.TOROBPAY_BASE_URL || 'https://cpg.torobpay.com').replace(/\/$/, ''),
+  torobPayClientId: process.env.TOROBPAY_CLIENT_ID || '',
+  torobPayClientSecret: process.env.TOROBPAY_CLIENT_SECRET || '',
+  torobPayUsername: process.env.TOROBPAY_USERNAME || '',
+  torobPayPassword: process.env.TOROBPAY_PASSWORD || '',
   adminEmail: process.env.ADMIN_EMAIL || "iUqcjT1Nh62e@gmail.com",
   adminPassword: process.env.ADMIN_PASSWORD || "gl4N}(E9o99An%fCSND#",
   adminMobile: process.env.ADMIN_MOBILE
 };
 
 env.isProduction = env.nodeEnv === 'production';
+try {
+  env.torobExpectedAudience = process.env.TOROB_EXPECTED_AUDIENCE || new URL(env.siteUrl).host;
+} catch {
+  env.torobExpectedAudience = process.env.TOROB_EXPECTED_AUDIENCE || '';
+}
+env.torobAuthDisabled = String(process.env.TOROB_AUTH_DISABLED || '').toLowerCase() === 'true';
 
 if (!Number.isInteger(env.port) || env.port < 1 || env.port > 65535) {
   throw new Error('PORT باید یک عدد معتبر بین ۱ تا ۶۵۵۳۵ باشد');

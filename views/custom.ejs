@@ -4,9 +4,9 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
-<meta content="Crib Flag؛ فروشگاه تخصصی پرچم" name="description"/>
-<title>طراحی پرچم اختصاصی | Crib Flag</title>
-<link href="/assets/css/style.css?v=20260801-final-scroll-v3" rel="stylesheet"/>
+<meta content="سفارش طرح دلخواه پرچم، روبالشتی و داکیماکورا در Crib Flag" name="description"/>
+<title>طراحی محصول اختصاصی | Crib Flag</title>
+<link href="/assets/css/style.css?v=20260806-custom-page-repair-v1" rel="stylesheet"/>
 <link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
 </head>
 <body data-page="custom">
@@ -70,19 +70,26 @@
 <%- include("partials/nav") %>
 </header>
 <main class="main"><section class="page active" id="page-custom"><div class="container">
-<div class="page-hero"><span class="eyebrow">سفارش چاپ اختصاصی</span><h1>طرح خودت را آپلود کن</h1><p>فایل طرح را بفرست، سایز را انتخاب کن و هر تغییری که لازم داری برای طراح توضیح بده.</p></div>
+<div class="page-hero"><span class="eyebrow">سفارش چاپ اختصاصی</span><h1>طرح خودت را آپلود کن</h1><p>فایل طرح را بفرست، محصول و سایز را انتخاب کن و هر تغییری که لازم داری برای طراح توضیح بده.</p></div>
 <div class="custom-order-layout">
-<section class="custom-upload-card"><div class="custom-section-title"><span>۱</span><div><h2>آپلود فایل طرح</h2><p>فرمت‌های JPG، PNG، WEBP و PDF تا سقف ۲۰ مگابایت</p></div></div>
+<section class="custom-upload-card"><div class="custom-section-title"><span>۱</span><div><h2>آپلود فایل طرح</h2><p>فرمت‌های JPG، PNG، WEBP و PDF تا سقف ۳ مگابایت</p></div></div>
 <label class="upload-dropzone" for="customFileInput"><input accept="image/jpeg,image/png,image/webp,application/pdf" id="customFileInput" type="file"/><div class="upload-preview" id="customUploadPreview"><div class="upload-placeholder"><span class="upload-icon">↑</span><strong>فایل را انتخاب کنید</strong><small>یا آن را داخل این کادر رها کنید</small></div></div></label><div class="upload-file-meta" id="customFileName">هنوز فایلی انتخاب نشده است.</div></section>
-<section class="custom-config-card"><div class="custom-section-title"><span>۲</span><div><h2>انتخاب سایز</h2><p>دو سایز پیشنهادی برای بیشتر سفارش‌ها مشخص شده‌اند.</p></div></div>
-<div class="order-size-grid">
-<label class="order-size-option recommended"><input data-price="950000" name="customOrderSize" type="radio" value="150x90"/><span class="recommend-badge">پیشنهادی</span><strong>۱۵۰ × ۹۰</strong><small>بزرگ و چشمگیر</small></label>
-<label class="order-size-option recommended"><input checked="" data-price="800000" name="customOrderSize" type="radio" value="100x70"/><span class="recommend-badge">پیشنهادی</span><strong>۱۰۰ × ۷۰</strong><small>متعادل و پرکاربرد</small></label>
-<label class="order-size-option"><input data-price="550000" name="customOrderSize" type="radio" value="70x50"/><strong>۷۰ × ۵۰</strong><small>جمع‌وجور</small></label>
-<label class="order-size-option"><input data-price="0" name="customOrderSize" type="radio" value="custom"/><strong>سایز دلخواه</strong><small>ابعاد را وارد کنید</small></label>
-</div><div class="custom-dimension-fields" id="customDimensionFields"><label>عرض (سانتی‌متر)<input id="customOrderWidth" max="150" min="1" placeholder="مثلاً ۱۲۰" type="number"/></label><label>ارتفاع (سانتی‌متر)<input id="customOrderHeight" max="150" min="1" placeholder="مثلاً ۸۰" type="number"/></label></div>
-<div class="custom-section-title fabric-title"><span>۳</span><div><h2>انتخاب جنس پارچه</h2><p>جنس مناسب سفارش خود را انتخاب کنید.</p></div></div><div class="custom-fabric-field"><label for="customOrderFabric">جنس پارچه</label><select id="customOrderFabric"><option value="ساتن آمریکایی">ساتن آمریکایی</option><option value="مخمل">مخمل</option></select></div><div class="custom-section-title notes-title"><span>۴</span><div><h2>توضیحات تغییرات</h2><p>نوشته، حذف پس‌زمینه یا هر نکته‌ای که طراح باید بداند.</p></div></div><textarea class="custom-order-notes" id="customOrderNotes" placeholder="مثلاً پس‌زمینه حذف شود، نوشته پایین تصویر سفید باشد و لوگو کمی بزرگ‌تر شود..."></textarea>
-<div class="custom-order-summary"><div><small>قیمت سفارش</small><strong id="customOrderPrice">۸۰۰٬۰۰۰ تومان</strong></div><button class="btn btn-primary" id="addCustomOrder" type="button">افزودن سفارش به سبد خرید</button></div><p class="form-hint">قیمت سایز دلخواه بر اساس بازه ابعاد محاسبه می‌شود و حداکثر سایز قابل ثبت ۱۵۰ × ۹۰ سانتی‌متر است.</p></section>
+<section class="custom-config-card">
+<div class="custom-section-title"><span>۲</span><div><h2>انتخاب نوع محصول</h2><p>طرح شما می‌تواند روی پرچم یا یکی از مدل‌های روبالشتی چاپ شود.</p></div></div>
+<div class="custom-product-grid">
+<label class="custom-product-option"><input checked name="customProductType" type="radio" value="پرچم"/><strong>پرچم</strong><small>سایزهای پرچم و انتخاب جنس پارچه</small></label>
+<label class="custom-product-option"><input name="customProductType" type="radio" value="روبالشتی"/><strong>روبالشتی</strong><small>سایز ۵۰ × ۷۰، فقط مخمل</small></label>
+<label class="custom-product-option"><input name="customProductType" type="radio" value="داکیماکورا بالشت قدی"/><strong>داکیماکورا</strong><small>بالشت قدی در دو سایز، فقط مخمل</small></label>
+</div>
+<div id="customPillowOptionSection" hidden>
+<div class="custom-section-title size-title"><span>۳</span><div><h2>انتخاب نوع سفارش</h2><p>فقط کاور یا همراه با الیاف را مشخص کنید.</p></div></div>
+<div class="order-size-grid" id="customPillowOptions"></div>
+</div>
+<div class="custom-section-title size-title"><span id="customSizeStep">۳</span><div><h2>انتخاب سایز</h2><p id="customSizeDescription">یکی از سایزهای پرچم یا ابعاد دلخواه را انتخاب کنید.</p></div></div>
+<div class="order-size-grid" id="customSizeOptions"></div>
+<div class="custom-dimension-fields" id="customDimensionFields"><label>عرض (سانتی‌متر)<input id="customOrderWidth" max="150" min="1" placeholder="مثلاً ۱۲۰" type="number"/></label><label>ارتفاع (سانتی‌متر)<input id="customOrderHeight" max="150" min="1" placeholder="مثلاً ۸۰" type="number"/></label></div>
+<div class="custom-section-title fabric-title"><span id="customFabricStep">۴</span><div><h2>انتخاب جنس پارچه</h2><p id="customFabricDescription">جنس مناسب سفارش خود را انتخاب کنید.</p></div></div><div class="custom-fabric-field"><label for="customOrderFabric">جنس پارچه</label><select id="customOrderFabric"><option value="ساتن آمریکایی">ساتن آمریکایی</option><option value="ساتن براق">ساتن براق</option><option value="مخمل">مخمل</option></select><small id="customFabricHint">برای پرچم می‌توانید جنس پارچه را انتخاب کنید.</small></div><div class="custom-section-title notes-title"><span id="customNotesStep">۵</span><div><h2>توضیحات تغییرات</h2><p>نوشته، حذف پس‌زمینه یا هر نکته‌ای که طراح باید بداند.</p></div></div><textarea class="custom-order-notes" id="customOrderNotes" placeholder="مثلاً پس‌زمینه حذف شود، نوشته پایین تصویر سفید باشد و لوگو کمی بزرگ‌تر شود..."></textarea>
+<div class="custom-order-summary"><div><small>قیمت سفارش</small><strong id="customOrderPrice">۸۰۰٬۰۰۰ تومان</strong></div><button class="btn btn-primary" id="addCustomOrder" type="button">افزودن سفارش به سبد خرید</button></div><p class="form-hint">روبالشتی و داکیماکورا فقط با جنس مخمل و قیمت‌های ثابت ثبت می‌شوند. سایز دلخواه فقط برای پرچم فعال است و حداکثر ابعاد آن ۱۵۰ × ۹۰ سانتی‌متر است.</p></section>
 </div></div></section></main>
 <%- include("partials/footer") %>
 <nav aria-label="منوی پایین موبایل" class="mobile-bottom-nav">
@@ -188,6 +195,6 @@
 <%- include("partials/page-data") %>
 <script src="/assets/js/api.js"></script>
 <script src="/assets/js/portal-data.js"></script>
-<script src="/assets/js/app.js?v=20260801-final-scroll-v3"></script>
+<script src="/assets/js/app.js?v=20260813-custom-orders-v2"></script>
 </body>
 </html>

@@ -12,7 +12,8 @@
     "smoke": "node scripts/smoke.js",
     "test": "npm run check && npm run smoke",
     "migrate:ready": "node scripts/migrate-ready-designs.js",
-    "admin:sync": "node scripts/sync-admin.js"
+    "admin:sync": "node scripts/sync-admin.js",
+    "migrate:pillows": "node scripts/migrate-pillow-products.js"
   },
   "engines": {
     "node": ">=18.18.0",

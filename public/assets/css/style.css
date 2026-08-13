@@ -4546,3 +4546,16 @@ body.is-scrolling .categories-grid {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
+
+/* نوع محصول در سفارش طرح دلخواه */
+.custom-product-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px}
+.custom-product-option{position:relative;border:1px solid var(--border);border-radius:20px;padding:17px;cursor:pointer;background:var(--surface-2);transition:.2s}
+.custom-product-option:has(input:checked){border-color:var(--primary);box-shadow:0 0 0 4px rgba(20,87,255,.08);background:#fff}
+.custom-product-option input{position:absolute;left:14px;top:14px;accent-color:var(--primary)}
+.custom-product-option strong,.custom-product-option small{display:block}
+.custom-product-option strong{font-size:16px;padding-left:22px}
+.custom-product-option small{color:var(--muted);margin-top:6px;line-height:1.7}
+.size-title{margin-top:4px}
+.custom-fabric-field small{color:var(--muted);font-size:12px;line-height:1.8}
+.custom-fabric-field select:disabled{background:#eef2f7;color:#475569;cursor:not-allowed}
+@media(max-width:640px){.custom-product-grid{grid-template-columns:1fr}}

@@ -26,12 +26,16 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({
+const createUpload = fileSize => multer({
   storage,
-  limits: { fileSize: 20 * 1024 * 1024, files: 12 },
+  limits: { fileSize, files: 12 },
   fileFilter: (_req, file, cb) => MIME_EXTENSIONS.has(file.mimetype)
     ? cb(null, true)
     : cb(new AppError(400, 'فرمت فایل مجاز نیست'))
 });
+
+const upload = createUpload(20 * 1024 * 1024);
+// فایل طرح دلخواه جداگانه محدود می‌شود تا آپلود تصاویر مدیریت همچنان سقف قبلی را داشته باشد.
+upload.customDesign = createUpload(3 * 1024 * 1024);
 
 module.exports = upload;

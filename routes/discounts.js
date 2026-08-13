@@ -1,45 +1,111 @@
 const express = require('express');
 const Coupon = require('../models/Coupon');
 const Product = require('../models/Product');
+const CustomRequest = require('../models/CustomRequest');
 const { findVariantPricing, fallbackPricing } = require('../utils/productPricing');
+const { normalizeCustomProductType } = require('../utils/customPricing');
 const { asyncHandler, ok, AppError } = require('../utils/http');
 const router = express.Router();
 
 const normalizeText = value => String(value || '').trim();
+const normalizeDigits = value => normalizeText(value)
+  .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+  .replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)));
 
-function variantKey(size, fabric) {
-  return `${normalizeText(size)}\u0000${normalizeText(fabric)}`;
+function normalizedProductId(value) {
+  const productId = Number(value);
+  return Number.isInteger(productId) && productId > 0 ? productId : null;
+}
+
+function normalizeVariantText(value) {
+  return normalizeDigits(value)
+    .replace(/[ي]/g, 'ی')
+    .replace(/[ك]/g, 'ک')
+    .replace(/[\u200c\u200d\u200e\u200f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeVariantSize(value) {
+  const text = normalizeVariantText(value);
+  const option = /با\s*الیاف/.test(text) ? 'با الیاف' : (/کاور/.test(text) ? 'فقط کاور' : '');
+  const match = text.match(/(\d+(?:\.\d+)?)\s*(?:x|×|\*)\s*(\d+(?:\.\d+)?)/i);
+  if (!match) return text;
+
+  const first = Number(match[1]);
+  const second = Number(match[2]);
+  if (!Number.isFinite(first) || !Number.isFinite(second)) return text;
+  const dimensions = `${Math.min(first, second)}x${Math.max(first, second)}`;
+  return option ? `${option}|${dimensions}` : dimensions;
+}
+
+function variantKey(productId, size, fabric) {
+  return `${normalizedProductId(productId) || '*'}\u0000${normalizeVariantSize(size)}\u0000${normalizeVariantText(fabric)}`;
 }
 
 function couponVariantSet(coupon) {
   return new Set((coupon?.eligibleVariants || [])
-    .map(item => variantKey(item?.size, item?.fabric))
-    .filter(key => key !== '\u0000'));
+    .map(item => variantKey(item?.productId, item?.size, item?.fabric))
+    .filter(key => !key.endsWith('\u0000\u0000')));
 }
 
 function itemIsEligible(coupon, item) {
   if (coupon?.applicability !== 'variants') return true;
-  return couponVariantSet(coupon).has(variantKey(item?.size, item?.fabric));
+  const variants = couponVariantSet(coupon);
+  // کلید بدون شناسه محصول برای حالت‌های عمومی پرچم، روبالشتی و داکیماکورا
+  // و همچنین سازگاری با کدهای قدیمی استفاده می‌شود.
+  return variants.has(variantKey(item?.productId, item?.size, item?.fabric))
+    || variants.has(variantKey(null, item?.size, item?.fabric));
 }
 
 function variantDescription(coupon) {
-  const labels = (coupon?.eligibleVariants || []).map(item => `${item.size} با ${item.fabric}`);
-  if (!labels.length) return 'ترکیب‌های تعیین‌شده';
+  const labels = (coupon?.eligibleVariants || []).map(item => {
+    const product = normalizedProductId(item?.productId) ? `محصول شماره ${item.productId}، ` : '';
+    return `${product}${item.size} با ${item.fabric}`;
+  });
+  if (!labels.length) return 'محصول‌ها و ترکیب‌های تعیین‌شده';
   const visible = labels.slice(0, 3).join('، ');
   return labels.length > 3 ? `${visible} و ${labels.length - 3} ترکیب دیگر` : visible;
 }
 
-async function priceSubmittedItems(rawItems) {
+function isSubmittedCustomItem(item) {
+  return Boolean(normalizeText(item?.customRequestId));
+}
+
+async function priceSubmittedItems(rawItems, userId) {
   const submitted = Array.isArray(rawItems) ? rawItems : [];
   if (!submitted.length) throw new AppError(400, 'محصولی برای بررسی کد تخفیف وجود ندارد');
 
-  const publicIds = [...new Set(submitted.map(item => Number(item?.id)).filter(Number.isFinite))];
-  const products = await Product.find({ publicId: { $in: publicIds }, status: 'active' });
+  const normalSubmitted = submitted.filter(item => !isSubmittedCustomItem(item));
+  const customSubmitted = submitted.filter(isSubmittedCustomItem);
+
+  const publicIds = [...new Set(normalSubmitted.map(item => Number(item?.id)).filter(Number.isFinite))];
+  const products = publicIds.length
+    ? await Product.find({ publicId: { $in: publicIds }, status: 'active' })
+    : [];
   const byId = new Map(products.map(product => [Number(product.publicId), product]));
+
+  const customIds = customSubmitted.map(item => normalizeText(item?.customRequestId));
+  if (customIds.some(id => !id)) throw new AppError(400, 'شناسه یکی از طرح‌های اختصاصی معتبر نیست');
+  if (new Set(customIds).size !== customIds.length) {
+    throw new AppError(400, 'یک طرح اختصاصی بیش از یک بار برای کد تخفیف ارسال شده است');
+  }
+  if (customIds.length && !userId) {
+    throw new AppError(401, 'برای اعمال کد تخفیف روی طرح اختصاصی ابتدا وارد حساب شوید');
+  }
+
+  const customRequests = customIds.length
+    ? await CustomRequest.find({ publicId: { $in: customIds }, user: userId })
+    : [];
+  const customById = new Map(customRequests.map(item => [String(item.publicId), item]));
+  if (customById.size !== customIds.length) {
+    throw new AppError(404, 'یک یا چند طرح اختصاصی برای اعمال کد تخفیف پیدا نشد');
+  }
+
   const items = [];
   let subtotal = 0;
 
-  for (const raw of submitted) {
+  for (const raw of normalSubmitted) {
     const publicId = Number(raw?.id);
     const qty = Number(raw?.qty ?? 1);
     if (!Number.isInteger(publicId)) throw new AppError(400, 'شناسه یکی از محصولات معتبر نیست');
@@ -65,6 +131,37 @@ async function priceSubmittedItems(rawItems) {
 
     items.push({ productId: publicId, title: product.title, size, fabric, price, qty });
     subtotal += price * qty;
+  }
+
+  for (const raw of customSubmitted) {
+    const customRequestId = normalizeText(raw?.customRequestId);
+    const qty = Number(raw?.qty ?? 1);
+    if (qty !== 1) throw new AppError(400, 'تعداد هر طرح اختصاصی باید یک عدد باشد');
+
+    const request = customById.get(customRequestId);
+    const price = Number(request?.price || 0);
+    if (!Number.isFinite(price) || price <= 0) {
+      throw new AppError(400, `قیمت طرح اختصاصی ${customRequestId} معتبر نیست`);
+    }
+
+    const requestType = normalizeCustomProductType(request.requestType);
+    const size = normalizeText(request.size);
+    const fabric = normalizeText(request.fabric);
+    if (!size || !fabric) {
+      throw new AppError(400, `سایز یا جنس طرح اختصاصی ${customRequestId} کامل نیست`);
+    }
+
+    items.push({
+      customRequestId,
+      title: `${requestType} طرح اختصاصی`,
+      category: 'طرح دلخواه',
+      requestType,
+      size,
+      fabric,
+      price,
+      qty: 1
+    });
+    subtotal += price;
   }
 
   return { items, subtotal };
@@ -96,7 +193,7 @@ async function calculate(code, pricingInput, userId) {
 
   let eligibleSubtotal = normalizedSubtotal;
   if (coupon.applicability === 'variants') {
-    if (!items.length) throw new AppError(400, 'برای بررسی این کد، جزئیات سایز و جنس محصولات لازم است');
+    if (!items.length) throw new AppError(400, 'برای بررسی این کد، جزئیات محصول، سایز و جنس لازم است');
     eligibleSubtotal = items
       .filter(item => itemIsEligible(coupon, item))
       .reduce((sum, item) => sum + Number(item.price || 0) * Number(item.qty || 1), 0);
@@ -114,7 +211,7 @@ async function calculate(code, pricingInput, userId) {
 
 router.post('/validate', asyncHandler(async (req, res) => {
   const pricing = Array.isArray(req.body.items) && req.body.items.length
-    ? await priceSubmittedItems(req.body.items)
+    ? await priceSubmittedItems(req.body.items, req.session?.userId)
     : { subtotal: Number(req.body.subtotal), items: [] };
   const result = await calculate(req.body.code, pricing, req.session?.userId);
   ok(res, {

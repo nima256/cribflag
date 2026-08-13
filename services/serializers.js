@@ -1,12 +1,13 @@
-const { faDate } = require('../utils/formatters');
+const { faDate, faDateTime } = require('../utils/formatters');
 
 const product = (p, categoryLookup = null) => {
-  const price = Number(p.price || 0);
-  const rawOldPrice = Number(p.oldPrice);
-  const rawVariants = Array.isArray(p.variantPrices) ? p.variantPrices : [];
+  const source = p;
+  const price = Number(source.price || 0);
+  const rawOldPrice = Number(source.oldPrice);
+  const rawVariants = Array.isArray(source.variantPrices) ? source.variantPrices : [];
   const legacyDiscount = p.hasDiscount === undefined && Number.isFinite(rawOldPrice) && rawOldPrice > price;
   const hasDiscount = Boolean(
-    p.hasDiscount ||
+    source.hasDiscount ||
     legacyDiscount ||
     rawVariants.some(item => Number(item.oldPrice) > Number(item.price))
   );
@@ -24,7 +25,7 @@ const product = (p, categoryLookup = null) => {
     };
   });
 
-  const rawImages = Array.isArray(p.images) && p.images.length ? p.images : [p.image];
+  const rawImages = Array.isArray(source.images) && source.images.length ? source.images : [source.image];
   const images = [...new Set(rawImages.map(item => String(item || '').trim()).filter(Boolean))];
   if (!images.length) images.push('assets/images/ukflag.png');
 
@@ -75,8 +76,8 @@ const product = (p, categoryLookup = null) => {
     rate: p.rate || 4.7,
     status: p.status,
     sales: p.sales || 0,
-    sizes: p.sizes || [],
-    fabrics: p.fabrics || [],
+    sizes: source.sizes || [],
+    fabrics: source.fabrics || [],
     image: images[0],
     images,
     description: p.description || '',
@@ -94,20 +95,34 @@ const user = (u, stats = {}) => ({
 
 const order = (o) => ({
   id: o.orderNumber, userId: o.user && typeof o.user === 'object' ? o.user.publicId : o.userPublicId,
-  customer: o.customer, phone: o.phone, email: o.email || '', date: faDate(o.createdAt), createdAt: o.createdAt,
+  customer: o.customer, phone: o.phone, email: o.email || '', date: faDate(o.createdAt), dateTime: faDateTime(o.createdAt), createdAt: o.createdAt,
   total: o.total, subtotal: o.subtotal, shipping: o.shipping, discount: o.discount, couponCode: o.couponCode || '',
   customerNote: o.customerNote || '', status: o.status,
   payment: o.payment, paymentStatus: o.paymentStatus, shippingMethod: o.shippingMethod, tracking: o.tracking || '',
   address: o.address, adminNote: o.adminNote || '', items: (o.items || []).map((item, index) => {
     const value = item.toObject ? item.toObject() : item;
-    return { ...value, id: value.productId ?? value.customRequestId ?? `order-item-${index}` };
+    // مسیر واقعی فایل نباید به مرورگر ادمین نشت کند. برای هر آیتم اختصاصی
+    // یک لینک دانلود امن وابسته به همان Order و همان index می‌سازیم.
+    const { filePath, ...safeValue } = value;
+    const isCustomItem = Boolean(String(value.customRequestId || '').trim());
+    return {
+      ...safeValue,
+      id: value.productId ?? value.customRequestId ?? `order-item-${index}`,
+      downloadUrl: isCustomItem && (filePath || value.customRequestId)
+        ? `/admin/download/custom-file/${encodeURIComponent(String(o._id))}/${index}`
+        : ''
+    };
   })
 });
 
 const coupon = (c) => ({
   id: c.publicId, code: c.code, type: c.type, value: c.value, min: c.minOrderAmount || 0,
   applicability: c.applicability === 'variants' ? 'variants' : 'all',
-  eligibleVariants: (c.eligibleVariants || []).map(item => ({ size: item.size, fabric: item.fabric })),
+  eligibleVariants: (c.eligibleVariants || []).map(item => ({
+    productId: Number.isInteger(Number(item.productId)) && Number(item.productId) > 0 ? Number(item.productId) : null,
+    size: item.size,
+    fabric: item.fabric
+  })),
   limit: c.usageLimit || 0, used: c.usedCount || 0, expires: c.displayExpires || (c.expiresAt ? faDate(c.expiresAt) : ''),
   status: c.status
 });
@@ -130,13 +145,20 @@ const custom = (c) => ({
   shippingMethod: c.shippingMethod || '',
   deliveryNote: c.deliveryNote || '',
   createdAt: c.createdAt,
+  dateTime: faDateTime(c.createdAt),
   fileName: c.fileName,
 
+  requestType: !c.requestType || c.requestType === 'چاپ مستقیم' ? 'پرچم' : c.requestType,
   size: c.size,
   fabric: c.fabric,
   notes: c.notes || '',
   status: c.status,
+  orderStatus: c.orderStatus || 'design-review',
   price: c.price || 0,
+  orderNumber: c.orderNumber || '',
+  payment: c.payment || 'ثبت نشده',
+  paymentStatus: c.paymentStatus || 'unpaid',
+  paymentInfo: c.paymentInfo || {},
   date: faDate(c.createdAt),
   adminNote: c.adminNote || '',
 

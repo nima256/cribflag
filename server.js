@@ -20,6 +20,10 @@ app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false 
 app.use(compression());
 if (env.corsOrigin) app.use(cors({ origin: env.corsOrigin, credentials: true }));
 
+// Torob server-to-server routes are authenticated with Torob's signed JWT headers.
+// Mount them before the browser Origin guard so a valid Torob request is not treated as CSRF.
+app.use('/', require('./routes/torobRoutes'));
+
 // جلوگیری از درخواست‌های تغییردهنده بین‌سایتی. درخواست‌های سروربه‌سرور که Origin ندارند
 // (مانند برخی وب‌هوک‌ها) همچنان مجاز می‌مانند.
 const allowedOrigins = new Set([env.siteUrl, env.corsOrigin].filter(Boolean).map(value => {
@@ -27,6 +31,9 @@ const allowedOrigins = new Set([env.siteUrl, env.corsOrigin].filter(Boolean).map
 }).filter(Boolean));
 app.use((req, _res, next) => {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+  // TorobPay returns the customer's browser with a cross-site POST form.
+  // The callback does not trust browser fields; it verifies the stored paymentToken server-to-server.
+  if (req.path === '/api/orders/torobpay/callback') return next();
   const origin = req.get('origin');
   if (!origin) return next();
   if (allowedOrigins.has(origin)) return next();

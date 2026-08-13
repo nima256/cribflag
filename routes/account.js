@@ -10,10 +10,11 @@ const upload = require('../middlewares/upload');
 const { requireUser } = require('../middlewares/auth');
 const { asyncHandler, ok, AppError } = require('../utils/http');
 const { publicCode, normalizeMobile } = require('../utils/formatters');
-const { calculateCustomPrice } = require('../utils/customPricing');
+const { calculateCustomPrice, normalizeCustomProductType, isCustomPillow, CUSTOM_FLAG_FABRICS } = require('../utils/customPricing');
 const { isPaidSale } = require('../services/analytics');
 const { assertUploadedFile } = require('../utils/uploadValidation');
 const S = require('../services/serializers');
+const { hydrateCustomRequestsWithOrders } = require('../services/customOrderSync');
 
 const router = express.Router();
 router.use(requireUser);
@@ -34,7 +35,8 @@ async function bootstrap(userId) {
   const paidOrders = orders.filter(isPaidSale);
   const total = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const hydratedTickets = tickets.map(ticket => ({ ...ticket, user }));
-  const hydratedCustom = custom.map(item => ({ ...item, user }));
+  const hydratedCustom = hydrateCustomRequestsWithOrders(custom, orders)
+    .map(item => ({ ...item, user }));
   return {
     products: products.map(S.product),
     orders: orders.map(order => S.order({ ...order, user: { publicId: user.publicId } })),
@@ -109,19 +111,32 @@ router.post('/tickets/:publicId/reply', asyncHandler(async (req, res) => {
   ok(res, { ticket: S.ticket({ ...ticket.toObject(), user }) });
 }));
 
-router.post('/custom', upload.single('file'), asyncHandler(async (req, res) => {
+const uploadCustomDesign = (req, res, next) => {
+  upload.customDesign.single('file')(req, res, error => {
+    if (error?.code === 'LIMIT_FILE_SIZE') {
+      return next(new AppError(400, 'حجم فایل باید حداکثر ۳ مگابایت باشد'));
+    }
+    return next(error);
+  });
+};
+
+router.post('/custom', uploadCustomDesign, asyncHandler(async (req, res) => {
   if (!req.file) throw new AppError(400, 'فایل طرح الزامی است');
   try {
     await assertUploadedFile(req.file, new Set(['image/png', 'image/jpeg', 'image/webp', 'application/pdf']));
-    const fabric = cleanText(req.body.fabric, 80);
-    if (!['ساتن آمریکایی', 'مخمل'].includes(fabric)) {
+    const requestType = normalizeCustomProductType(req.body.requestType);
+    const submittedFabric = cleanText(req.body.fabric, 80);
+    const fabric = isCustomPillow(requestType) ? 'مخمل' : submittedFabric;
+    if (!CUSTOM_FLAG_FABRICS.includes(fabric)) {
       throw new AppError(400, 'جنس پارچه انتخاب‌شده معتبر نیست');
     }
-    const pricing = calculateCustomPrice(req.body.size, undefined, fabric);
+    const pricing = calculateCustomPrice(req.body.size, undefined, fabric, requestType);
     if (!pricing.valid) {
       throw new AppError(400, pricing.reason === 'too-large'
         ? 'حداکثر سایز قابل ثبت ۱۵۰ × ۹۰ سانتی‌متر است'
-        : 'ابعاد واردشده معتبر نیست');
+        : pricing.reason === 'invalid-pillow-variant'
+          ? 'نوع سفارش یا سایز روبالشتی انتخاب‌شده معتبر نیست'
+          : 'ابعاد واردشده معتبر نیست');
     }
     const user = await User.findById(req.session.userId);
     const item = await CustomRequest.create({
@@ -133,9 +148,9 @@ router.post('/custom', upload.single('file'), asyncHandler(async (req, res) => {
       fileName: cleanText(req.file.originalname, 255),
       filePath: req.file.path,
       mimeType: req.file.mimetype,
-      size: cleanText(req.body.size, 80),
-      fabric,
-      requestType: cleanText(req.body.requestType, 80),
+      size: isCustomPillow(requestType) ? pricing.variantSize : cleanText(req.body.size, 80),
+      fabric: isCustomPillow(requestType) ? pricing.fabric : fabric,
+      requestType,
       notes: cleanText(req.body.notes, 3000),
       status: 'review',
       price: pricing.price

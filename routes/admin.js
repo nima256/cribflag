@@ -21,29 +21,175 @@ const { prepareProductPricing, findVariantPricing, fallbackPricing } = require('
 const { assertUploadedFile } = require('../utils/uploadValidation');
 const { processUploadedImage, removeManagedImage, removeManagedImages, unlinkQuietly } = require('../utils/imageProcessing');
 const { applyInventory, releaseInventory } = require('../services/inventory');
-const { consumeCoupon } = require('../services/coupons');
+const { consumeCoupon, releaseCoupon } = require('../services/coupons');
+const torobPay = require('../services/torobPay');
 const upload = require('../middlewares/upload');
 const { buildAnalytics, isPaidSale } = require('../services/analytics');
 const { categoryPayload, ensureLegacyCategories, nextCategoryId, resolveCategorySelection, syncProductCategoryNames } = require('../services/categories');
 const { parsePersianDate } = require('../utils/formatters');
+const { detectPillowMode, getPillowConfig } = require('../utils/pillowPricing');
+const {
+  CUSTOM_PAYMENT_STATUSES,
+  ORDER_PAYMENT_STATUSES,
+  hydrateCustomRequestsWithOrders,
+  syncCustomRequestsFromOrder
+} = require('../services/customOrderSync');
 
-const COUPON_SIZES = ['۱۵۰ × ۹۰ سانتی‌متر', '۱۰۰ × ۷۰ سانتی‌متر', '۵۰ × ۷۰ سانتی‌متر'];
-const COUPON_FABRICS = ['ساتن آمریکایی', 'ساتن براق', 'مخمل'];
-const COUPON_SIZE_SET = new Set(COUPON_SIZES);
-const COUPON_FABRIC_SET = new Set(COUPON_FABRICS);
+function addOrderRelations(order, orderNumbers, customRequestIds) {
+  if (!order) return false;
+  let changed = false;
+  const orderNumber = String(order.orderNumber || '').trim();
+  if (orderNumber && !orderNumbers.has(orderNumber)) {
+    orderNumbers.add(orderNumber);
+    changed = true;
+  }
+  for (const item of order.items || []) {
+    const customRequestId = String(item?.customRequestId || '').trim();
+    if (customRequestId && !customRequestIds.has(customRequestId)) {
+      customRequestIds.add(customRequestId);
+      changed = true;
+    }
+  }
+  return changed;
+}
 
-function normalizeCouponVariants(value) {
-  const unique = new Map();
+function addCustomRelations(customRequest, orderNumbers, customRequestIds) {
+  if (!customRequest) return false;
+  let changed = false;
+  const publicId = String(customRequest.publicId || '').trim();
+  const orderNumber = String(customRequest.orderNumber || '').trim();
+  if (publicId && !customRequestIds.has(publicId)) {
+    customRequestIds.add(publicId);
+    changed = true;
+  }
+  if (orderNumber && !orderNumbers.has(orderNumber)) {
+    orderNumbers.add(orderNumber);
+    changed = true;
+  }
+  return changed;
+}
+
+function orderRelationQuery(orderNumbers, customRequestIds) {
+  const conditions = [];
+  if (orderNumbers.size) conditions.push({ orderNumber: { $in: [...orderNumbers] } });
+  if (customRequestIds.size) conditions.push({ 'items.customRequestId': { $in: [...customRequestIds] } });
+  return conditions.length ? { $or: conditions } : { _id: null };
+}
+
+function customRelationQuery(orderNumbers, customRequestIds) {
+  const conditions = [];
+  if (orderNumbers.size) conditions.push({ orderNumber: { $in: [...orderNumbers] } });
+  if (customRequestIds.size) conditions.push({ publicId: { $in: [...customRequestIds] } });
+  return conditions.length ? { $or: conditions } : { _id: null };
+}
+
+function adminOrderPayload(order, customRequestById = new Map()) {
+  const payload = S.order(order);
+  payload.items = (payload.items || []).map(item => {
+    const customRequestId = String(item?.customRequestId || '').trim();
+    if (!customRequestId) return item;
+
+    const customRequest = customRequestById.get(customRequestId);
+    return {
+      ...item,
+      adminNote: String(customRequest?.adminNote || '').trim()
+    };
+  });
+  return payload;
+}
+
+async function resolveOrderDeletion(identifier, source) {
+  const orderNumbers = new Set();
+  const customRequestIds = new Set();
+
+  if (source === 'custom') {
+    const customRequest = await CustomRequest.findOne({ publicId: identifier });
+    if (!customRequest) throw new AppError(404, 'سفارش اختصاصی پیدا نشد');
+    addCustomRelations(customRequest, orderNumbers, customRequestIds);
+  } else {
+    const order = await Order.findOne({ orderNumber: identifier });
+    if (!order) throw new AppError(404, 'سفارش پیدا نشد');
+    addOrderRelations(order, orderNumbers, customRequestIds);
+  }
+
+  let orders = [];
+  let customRequests = [];
+
+  // ارتباط‌های قدیمی ممکن است فقط در یکی از دو سند ذخیره شده باشند؛
+  // چند مرحله گسترش، همه رکوردهای یک خرید را بدون باقی‌گذاشتن DS/KR یتیم پیدا می‌کند.
+  for (let round = 0; round < 5; round += 1) {
+    orders = await Order.find(orderRelationQuery(orderNumbers, customRequestIds));
+    customRequests = await CustomRequest.find(customRelationQuery(orderNumbers, customRequestIds));
+
+    let changed = false;
+    for (const order of orders) changed = addOrderRelations(order, orderNumbers, customRequestIds) || changed;
+    for (const customRequest of customRequests) changed = addCustomRelations(customRequest, orderNumbers, customRequestIds) || changed;
+    if (!changed) break;
+  }
+
+  return { orders, customRequests, orderNumbers, customRequestIds };
+}
+
+function managedCustomFilePath(filePath) {
+  if (!filePath) return '';
+  const uploadsDirectory = path.resolve(__dirname, '..', 'uploads');
+  const absoluteFilePath = path.resolve(filePath);
+  if (!absoluteFilePath.startsWith(`${uploadsDirectory}${path.sep}`)) return '';
+  return absoluteFilePath;
+}
+
+async function normalizeCouponVariants(value) {
+  const parsed = [];
+  const productIds = new Set();
+
   for (const item of Array.isArray(value) ? value : []) {
+    const rawProductId = Number(item?.productId);
+    const productId = Number.isInteger(rawProductId) && rawProductId > 0 ? rawProductId : null;
     const size = String(item?.size || '').trim();
     const fabric = String(item?.fabric || '').trim();
-    if (!COUPON_SIZE_SET.has(size) || !COUPON_FABRIC_SET.has(fabric)) {
-      throw new AppError(400, 'یکی از ترکیب‌های سایز و جنس کد تخفیف معتبر نیست');
+    if (!size || !fabric || size.length > 160 || fabric.length > 120) {
+      throw new AppError(400, 'یکی از ترکیب‌های محصول، سایز یا جنس کد تخفیف معتبر نیست');
     }
-    unique.set(`${size}\u0000${fabric}`, { size, fabric });
+    if (productId) productIds.add(productId);
+    parsed.push({ productId, size, fabric });
   }
+
+  const products = productIds.size
+    ? await Product.find({ publicId: { $in: [...productIds] } })
+      .select('publicId title sizes fabrics variantPrices')
+      .lean()
+    : [];
+  const productById = new Map(products.map(product => [Number(product.publicId), product]));
+
+  if (productById.size !== productIds.size) {
+    throw new AppError(400, 'یکی از محصولات انتخاب‌شده برای کد تخفیف پیدا نشد');
+  }
+
+  const unique = new Map();
+  for (const item of parsed) {
+    if (item.productId) {
+      const product = productById.get(item.productId);
+      const sizes = Array.isArray(product.sizes) ? product.sizes.map(value => String(value).trim()) : [];
+      const fabrics = Array.isArray(product.fabrics) ? product.fabrics.map(value => String(value).trim()) : [];
+      if (sizes.length && !sizes.includes(item.size)) {
+        throw new AppError(400, `سایز انتخاب‌شده برای محصول ${product.title || item.productId} معتبر نیست`);
+      }
+      if (fabrics.length && !fabrics.includes(item.fabric)) {
+        throw new AppError(400, `جنس انتخاب‌شده برای محصول ${product.title || item.productId} معتبر نیست`);
+      }
+      const variants = Array.isArray(product.variantPrices) ? product.variantPrices : [];
+      if (variants.length && !variants.some(variant => String(variant.size || '').trim() === item.size && String(variant.fabric || '').trim() === item.fabric)) {
+        throw new AppError(400, `ترکیب انتخاب‌شده برای محصول ${product.title || item.productId} وجود ندارد`);
+      }
+    }
+
+    const key = `${item.productId || '*'}\u0000${item.size}\u0000${item.fabric}`;
+    unique.set(key, item);
+  }
+
   return [...unique.values()];
 }
+
 
 const adminLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -122,9 +268,13 @@ router.post('/login', adminLoginLimiter, asyncHandler(async (req, res) => {
   const email = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
   const admin = await Admin.findOne({ email }).select('+password');
-  if (!admin || !admin.isActive || !(await admin.comparePassword(password))) {
+  const passwordIsValid = admin?.isActive && await admin.comparePassword(password);
+  if (!passwordIsValid) {
     throw new AppError(401, 'ایمیل یا رمز عبور اشتباه است');
   }
+
+  // رمزهای ساده‌ای که قبلاً مستقیم وارد دیتابیس شده‌اند، بعد از اولین ورود امن می‌شوند.
+  if (admin.passwordNeedsHash()) await admin.setPassword(password);
 
   admin.lastLoginAt = new Date();
   admin.lastLoginIP = req.ip;
@@ -252,6 +402,9 @@ async function getBootstrap() {
     CustomRequest.find().populate('user').sort({ createdAt: -1 }).lean()
   ]);
   const categoryLookup = new Map(categories.map(category => [String(category._id), category]));
+  const customRequestById = new Map(
+    custom.map(item => [String(item.publicId || '').trim(), item])
+  );
   const categoryCounts = new Map();
   for (const product of products) {
     for (const categoryId of product.categoryRefs || []) {
@@ -272,11 +425,11 @@ async function getBootstrap() {
   return {
     products: products.map(product => S.product(product, categoryLookup)),
     categories: categories.map(category => categoryPayload(category, categoryCounts.get(String(category._id)) || 0)),
-    orders: orders.map(S.order),
+    orders: orders.map(order => adminOrderPayload(order, customRequestById)),
     users: users.map(user => S.user(user, userStats[user.publicId] || {})),
     coupons: coupons.map(S.coupon),
     tickets: tickets.map(S.ticket),
-    custom: custom.map(S.custom),
+    custom: hydrateCustomRequestsWithOrders(custom, orders).map(S.custom),
     notifications: [],
     analytics: buildAnalytics({ orders, products, users })
   };
@@ -347,11 +500,12 @@ router.post('/orders/manual', asyncHandler(async (req, res) => {
   const product = await Product.findOne({ publicId: productId, status: 'active' });
   if (!product) throw new AppError(404, 'محصول یافت نشد');
 
-  const size = selectedProductOption(product, req.body.size, 'sizes');
-  const fabric = selectedProductOption(product, req.body.fabric, 'fabrics');
-  const variant = findVariantPricing(product, size, fabric);
-  if (product.variantPrices?.length && !variant) throw new AppError(400, 'برای ترکیب سایز و جنس انتخاب‌شده قیمت ثبت نشده است');
-  const pricing = variant || fallbackPricing(product);
+  const pricingProduct = product;
+  const size = selectedProductOption(pricingProduct, req.body.size, 'sizes');
+  const fabric = selectedProductOption(pricingProduct, req.body.fabric, 'fabrics');
+  const variant = findVariantPricing(pricingProduct, size, fabric);
+  if (pricingProduct.variantPrices?.length && !variant) throw new AppError(400, 'برای ترکیب سایز و جنس انتخاب‌شده قیمت ثبت نشده است');
+  const pricing = variant || fallbackPricing(pricingProduct);
   const inventoryManaged = product.inventoryMode === 'managed';
   if (inventoryManaged && product.stock < qty) throw new AppError(409, `فقط ${product.stock} عدد از این محصول موجود است`);
 
@@ -389,6 +543,63 @@ router.post('/orders/manual', asyncHandler(async (req, res) => {
   }
 }));
 
+router.delete('/orders/:identifier', asyncHandler(async (req, res) => {
+  const identifier = String(req.params.identifier || '').trim();
+  if (!identifier || identifier.length > 120) throw new AppError(400, 'شناسه سفارش معتبر نیست');
+
+  const requestedSource = String(req.query.source || '').trim();
+  const source = requestedSource === 'custom' || (!requestedSource && identifier.startsWith('DS-'))
+    ? 'custom'
+    : 'order';
+  if (requestedSource && !['order', 'custom'].includes(requestedSource)) {
+    throw new AppError(400, 'نوع سفارش معتبر نیست');
+  }
+
+  const deletion = await resolveOrderDeletion(identifier, source);
+  const filePaths = [...new Set(
+    deletion.customRequests
+      .map(item => managedCustomFilePath(item.filePath))
+      .filter(Boolean)
+  )];
+
+  for (const order of deletion.orders) {
+    if (order.payment === 'پرداخت اقساطی ترب‌پی' && order.paymentStatus === 'paid') {
+      throw new AppError(409, `سفارش ${order.orderNumber} با ترب‌پی پرداخت شده است؛ ابتدا از پنل سفارش را لغو/مسترد کنید تا عودت وجه توسط ترب‌پی انجام شود.`);
+    }
+    await releaseInventory(order);
+    await releaseCoupon(order);
+  }
+
+  if (deletion.orders.length) {
+    await Order.deleteMany({ _id: { $in: deletion.orders.map(item => item._id) } });
+  }
+  if (deletion.customRequests.length) {
+    await CustomRequest.deleteMany({ _id: { $in: deletion.customRequests.map(item => item._id) } });
+  }
+
+  for (const filePath of filePaths) {
+    const stillUsed = await CustomRequest.exists({ filePath });
+    if (!stillUsed) await unlinkQuietly(filePath);
+  }
+
+  const removedOrderNumbers = [...deletion.orderNumbers];
+  const removedCustomIds = [...deletion.customRequestIds];
+  await RecentAction.create({
+    action: 'order_delete',
+    targetType: source === 'custom' ? 'custom-order' : 'order',
+    targetId: identifier,
+    targetName: [...removedCustomIds, ...removedOrderNumbers].join(' / ').slice(0, 300),
+    adminId: req.session.adminId,
+    ipAddress: req.ip
+  });
+
+  ok(res, {
+    message: source === 'custom' ? 'سفارش اختصاصی حذف شد' : 'سفارش حذف شد',
+    removedOrders: removedOrderNumbers,
+    removedCustomRequests: removedCustomIds
+  });
+}));
+
 router.put('/sync/:name', asyncHandler(async (req, res) => {
   const name = req.params.name;
   const allowed = new Set(['products', 'coupons', 'orders', 'users', 'tickets', 'custom']);
@@ -412,12 +623,26 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
       if (!Number.isFinite(id)) continue;
       ids.push(id);
 
-      const sizes = Array.isArray(p.sizes) ? p.sizes.map(item => String(item).trim()).filter(Boolean) : [];
-      const fabrics = Array.isArray(p.fabrics) ? p.fabrics.map(item => String(item).trim()).filter(Boolean) : [];
+      let sizes = Array.isArray(p.sizes) ? p.sizes.map(item => String(item).trim()).filter(Boolean) : [];
+      let fabrics = Array.isArray(p.fabrics) ? p.fabrics.map(item => String(item).trim()).filter(Boolean) : [];
       const selectedCategories = await resolveCategorySelection(p);
+      const pillowMode = detectPillowMode([...selectedCategories.categories, ...selectedCategories.categorySlugs]);
+      if (pillowMode) {
+        const pillowConfig = getPillowConfig(pillowMode);
+        const allowedSizes = new Set(pillowConfig.sizes);
+        const allowedFabrics = new Set(pillowConfig.fabrics);
+        if (!sizes.length || sizes.some(size => !allowedSizes.has(size))) {
+          throw new AppError(400, `یکی از حالت‌ها یا سایزهای محصول ${p.title || id} معتبر نیست`);
+        }
+        if (!fabrics.length || fabrics.some(fabric => !allowedFabrics.has(fabric))) {
+          throw new AppError(400, `جنس محصول ${p.title || id} باید مخمل باشد`);
+        }
+      }
+
       const pricing = prepareProductPricing(p);
       pricing.variantPrices = pricing.variantPrices.filter(item => sizes.includes(item.size) && fabrics.includes(item.fabric));
-      if (Array.isArray(p.variantPrices) && p.variantPrices.length && pricing.variantPrices.length !== sizes.length * fabrics.length) {
+      const submittedVariantPricing = Array.isArray(p.variantPrices) && p.variantPrices.length > 0;
+      if ((pillowMode || submittedVariantPricing) && pricing.variantPrices.length !== sizes.length * fabrics.length) {
         throw new AppError(400, `قیمت همه ترکیب‌های سایز و جنس برای محصول ${p.title || id} باید ثبت شود`);
       }
       const sku = String(p.sku || '').trim().toUpperCase() || await generateUniqueSku();
@@ -472,7 +697,7 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
       const amount = Number(submitted.value);
       const minOrderAmount = Number(submitted.min || 0);
       const applicability = submitted.applicability === 'variants' ? 'variants' : 'all';
-      const eligibleVariants = applicability === 'variants' ? normalizeCouponVariants(submitted.eligibleVariants) : [];
+      const eligibleVariants = applicability === 'variants' ? await normalizeCouponVariants(submitted.eligibleVariants) : [];
       const usageLimit = Number(submitted.limit || 0);
       const usedCount = Number(submitted.used || 0);
       const displayExpires = String(submitted.expires || '').trim();
@@ -481,7 +706,7 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
       if (!/^[A-Z0-9_-]{3,32}$/.test(code)) throw new AppError(400, `کد تخفیف ${code || id} معتبر نیست`);
       if (!Number.isFinite(amount) || amount <= 0 || (type === 'percent' && amount > 100)) throw new AppError(400, `مقدار کد ${code} معتبر نیست`);
       if (!Number.isInteger(minOrderAmount) || minOrderAmount < 0) throw new AppError(400, `حداقل خرید کد ${code} باید عدد صحیح صفر یا بیشتر باشد`);
-      if (applicability === 'variants' && !eligibleVariants.length) throw new AppError(400, `حداقل یک ترکیب سایز و جنس برای کد ${code} انتخاب کنید`);
+      if (applicability === 'variants' && !eligibleVariants.length) throw new AppError(400, `حداقل یک محصول و ترکیب سایز، جنس یا حالت سفارش برای کد ${code} انتخاب کنید`);
       if (!Number.isInteger(usageLimit) || usageLimit < 0 || !Number.isInteger(usedCount) || usedCount < 0) throw new AppError(400, `سقف یا تعداد استفاده کد ${code} معتبر نیست`);
       if (displayExpires && !expiresAt) throw new AppError(400, `تاریخ انقضای کد ${code} معتبر نیست`);
       ids.push(id);
@@ -493,29 +718,112 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
     }
     await Coupon.deleteMany({ publicId: { $nin: ids } });
   }else if(name==='orders'){
-    const validStatuses = new Set(['processing', 'design-review', 'shipped', 'delivered', 'cancelled']);
+    const validStatuses = new Set(['processing', 'design-review', 'print-preparation', 'shipped', 'delivered', 'cancelled']);
     const validPaymentStatuses = new Set(['pending', 'review', 'paid', 'failed', 'refunded']);
     for (const submitted of value) {
       const order = await Order.findOne({ orderNumber: submitted.id });
       if (!order) continue;
       const status = validStatuses.has(submitted.status) ? submitted.status : order.status;
       const paymentStatus = validPaymentStatuses.has(submitted.paymentStatus) ? submitted.paymentStatus : order.paymentStatus;
-      const shouldRelease = status === 'cancelled' || ['failed', 'refunded'].includes(paymentStatus);
-      const shouldApply = !shouldRelease && paymentStatus === 'paid';
-      if (shouldRelease) await releaseInventory(order);
+      let finalStatus = status;
+      let finalPaymentStatus = paymentStatus;
+      const shouldRelease = finalStatus === 'cancelled' || ['failed', 'refunded'].includes(finalPaymentStatus);
+      const shouldApply = !shouldRelease && finalPaymentStatus === 'paid';
+      const isTorobPayOrder = order.payment === 'پرداخت اقساطی ترب‌پی';
+      const torobCancellationRequested = isTorobPayOrder && Boolean(order.paymentInfo?.torobPaymentToken) && (finalStatus === 'cancelled' || finalPaymentStatus === 'refunded');
+
+      if (torobCancellationRequested && order.paymentStatus === 'paid') {
+        try {
+          await torobPay.cancelPayment(order.paymentInfo.torobPaymentToken);
+          order.paymentInfo.torobStatus = 'REVERT';
+          finalStatus = 'cancelled';
+          finalPaymentStatus = 'refunded';
+        } catch (error) {
+          throw new AppError(502, `لغو سفارش در ترب‌پی انجام نشد؛ وضعیت سفارش تغییر نکرد: ${error?.message || 'خطای نامشخص'}`);
+        }
+      }
+
+      const finalShouldRelease = finalStatus === 'cancelled' || ['failed', 'refunded'].includes(finalPaymentStatus);
+      if (finalShouldRelease) { await releaseInventory(order); await releaseCoupon(order); }
       else if (shouldApply) { await applyInventory(order); await consumeCoupon(order); }
-      order.status = status;
-      order.paymentStatus = paymentStatus;
+      order.status = finalStatus;
+      order.paymentStatus = finalPaymentStatus;
       order.tracking = String(submitted.tracking || '').trim().slice(0, 120);
       order.adminNote = String(submitted.adminNote || '').trim().slice(0, 2000);
       await order.save();
+      await syncCustomRequestsFromOrder(order);
     }
   }else if(name==='users'){
     for(const u of value)await User.updateOne({publicId:Number(u.id)},{$set:{fullName:u.name,mobile:u.phone,email:u.email||undefined,role:u.role||'customer',isActive:u.status!=='blocked'}});
   }else if(name==='tickets'){
     for(const t of value){const user=await User.findOne({publicId:Number(t.userId)});if(user)await Ticket.findOneAndUpdate({publicId:t.id},{$set:{user:user._id,customer:t.customer||user.fullName,subject:t.subject,department:t.department,priority:t.priority,status:t.status,messages:t.messages}},{upsert:true,setDefaultsOnInsert:true});}
   }else if(name==='custom'){
-    for(const c of value){const user=await User.findOne({publicId:Number(c.userId)});if(!user)continue;const old=await CustomRequest.findOne({publicId:c.id});await CustomRequest.findOneAndUpdate({publicId:c.id},{$set:{user:user._id,customer:c.customer||user.fullName,fileName:c.fileName,size:c.size,fabric:c.fabric,notes:c.notes,status:c.status,price:Number(c.price||0),adminNote:c.adminNote||''}},{upsert:true,setDefaultsOnInsert:true});if(c.status==='preview-ready'&&old?.status!=='preview-ready')await Notification.create({user:user._id,title:'پیش‌نمایش طرح آماده است',text:`پیش‌نمایش درخواست ${c.id} برای تأیید شما آماده شد.`});}
+    const validCustomOrderStatuses = new Set(['processing', 'design-review', 'print-preparation', 'shipped', 'delivered', 'cancelled']);
+    for (const submitted of value) {
+      const user = await User.findOne({ publicId: Number(submitted.userId) });
+      if (!user) continue;
+
+      const publicId = String(submitted.id || '').trim();
+      const old = await CustomRequest.findOne({ publicId });
+      const linkedOrder = await Order.findOne({ 'items.customRequestId': publicId })
+        .sort({ createdAt: -1 });
+
+      let paymentStatus = CUSTOM_PAYMENT_STATUSES.has(submitted.paymentStatus)
+        ? submitted.paymentStatus
+        : (linkedOrder?.paymentStatus || old?.paymentStatus || 'unpaid');
+
+      if (linkedOrder) {
+        const orderPaymentStatus = ORDER_PAYMENT_STATUSES.has(paymentStatus)
+          ? paymentStatus
+          : linkedOrder.paymentStatus;
+        const shouldRelease = linkedOrder.status === 'cancelled' || ['failed', 'refunded'].includes(orderPaymentStatus);
+        const shouldApply = !shouldRelease && orderPaymentStatus === 'paid';
+
+        if (shouldRelease) await releaseInventory(linkedOrder);
+        else if (shouldApply) {
+          await applyInventory(linkedOrder);
+          await consumeCoupon(linkedOrder);
+        }
+
+        linkedOrder.paymentStatus = orderPaymentStatus;
+        await linkedOrder.save();
+        await syncCustomRequestsFromOrder(linkedOrder);
+        paymentStatus = linkedOrder.paymentStatus;
+      }
+
+      await CustomRequest.findOneAndUpdate(
+        { publicId },
+        {
+          $set: {
+            user: user._id,
+            customer: submitted.customer || user.fullName,
+            fileName: submitted.fileName,
+            requestType: submitted.requestType || 'پرچم',
+            size: submitted.size,
+            fabric: submitted.fabric,
+            notes: submitted.notes,
+            status: submitted.status,
+            orderStatus: validCustomOrderStatuses.has(submitted.orderStatus)
+              ? submitted.orderStatus
+              : (old?.orderStatus || linkedOrder?.status || 'design-review'),
+            price: Number(submitted.price || 0),
+            orderNumber: linkedOrder?.orderNumber || submitted.orderNumber || old?.orderNumber || '',
+            payment: linkedOrder?.payment || submitted.payment || old?.payment || (paymentStatus === 'unpaid' ? 'ثبت نشده' : 'ثبت دستی مدیر'),
+            paymentStatus,
+            adminNote: submitted.adminNote || ''
+          }
+        },
+        { upsert: true, setDefaultsOnInsert: true, runValidators: true }
+      );
+
+      if (submitted.status === 'preview-ready' && old?.status !== 'preview-ready') {
+        await Notification.create({
+          user: user._id,
+          title: 'پیش‌نمایش طرح آماده است',
+          text: `پیش‌نمایش درخواست ${publicId} برای تأیید شما آماده شد.`
+        });
+      }
+    }
   }
   ok(res,{message:'اطلاعات ذخیره شد'});
 }));
