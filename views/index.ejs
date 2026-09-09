@@ -120,8 +120,27 @@ const specialBadgeNames = new Set(['ویژه', 'پیشنهاد ویژه'].map(no
 const bestSellerBadgeNames = new Set(['پرفروش', 'پرفروش‌ترین', 'پرفروش ترین'].map(normalizeHomeBadge));
 const markedSpecialProducts = products.filter(product => specialBadgeNames.has(normalizeHomeBadge(product.badge)));
 const markedBestSellerProducts = products.filter(product => bestSellerBadgeNames.has(normalizeHomeBadge(product.badge)));
-const homeSpecialProducts = (markedSpecialProducts.length ? markedSpecialProducts : products.slice(0, 4)).slice(0, 4);
-const homeBestSellerProducts = (markedBestSellerProducts.length ? markedBestSellerProducts : products.slice(4, 12)).slice(0, 8);
+const buildHomeSlots = (positionField, markedProducts, defaultProducts) => {
+  const slots = [null, null, null, null];
+  const positionedIds = new Set();
+  products.forEach(product => {
+    const position = Number(product[positionField]);
+    if (!Number.isInteger(position) || position < 1 || position > 4 || slots[position - 1]) return;
+    slots[position - 1] = product;
+    positionedIds.add(Number(product.id));
+  });
+
+  // تا زمانی که هر چهار جایگاه تنظیم نشده‌اند، خانه‌های خالی با رفتار قبلی پر می‌شوند؛
+  // محصولی که جایگاه مشخص گرفته، دقیقاً در همان شماره باقی می‌ماند.
+  const fallbackPool = (markedProducts.length ? markedProducts : defaultProducts)
+    .filter(product => !positionedIds.has(Number(product.id)));
+  slots.forEach((product, index) => {
+    if (!product && fallbackPool.length) slots[index] = fallbackPool.shift();
+  });
+  return slots.filter(Boolean).slice(0, 4);
+};
+const homeSpecialProducts = buildHomeSlots('homeSpecialPosition', markedSpecialProducts, products.slice(0, 4));
+const homeBestSellerProducts = buildHomeSlots('homeBestSellerPosition', markedBestSellerProducts, products.slice(4, 8));
 %>
 <section class="section">
 <div class="section-head">

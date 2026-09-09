@@ -4,6 +4,7 @@ const Category = require('../models/Category');
 const S = require('../services/serializers');
 const { asyncHandler, ok, AppError } = require('../utils/http');
 const { ensureLegacyCategories } = require('../services/categories');
+const { getCustomPricingConfig } = require('../utils/customPricing');
 const router = express.Router();
 
 async function categoryContext() {
@@ -14,6 +15,10 @@ async function categoryContext() {
     lookup: new Map(categories.map(category => [String(category._id), category]))
   };
 }
+
+router.get('/custom-pricing', asyncHandler(async (_req, res) => {
+  ok(res, { pricing: await getCustomPricingConfig() });
+}));
 
 router.get('/', asyncHandler(async (req, res) => {
   const { categories, lookup } = await categoryContext();

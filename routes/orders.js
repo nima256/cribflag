@@ -19,6 +19,23 @@ const { syncCustomRequestsFromOrder } = require('../services/customOrderSync');
 
 const router = express.Router();
 
+function orderAcquisitionFromSession(req) {
+  const touch = req.session?.attribution?.lastTouch || req.session?.attribution?.firstTouch || null;
+  if (!touch) {
+    return { source: 'Direct', medium: '', campaign: '', term: '', content: '', referrer: '', landingPage: '', capturedAt: new Date() };
+  }
+  return {
+    source: String(touch.source || 'Direct').trim().slice(0, 120),
+    medium: String(touch.medium || '').trim().slice(0, 120),
+    campaign: String(touch.campaign || '').trim().slice(0, 180),
+    term: String(touch.term || '').trim().slice(0, 180),
+    content: String(touch.content || '').trim().slice(0, 180),
+    referrer: String(touch.referrer || '').trim().slice(0, 500),
+    landingPage: String(touch.landingPage || '').trim().slice(0, 500),
+    capturedAt: touch.capturedAt ? new Date(touch.capturedAt) : new Date()
+  };
+}
+
 const isCustomItem = item => ['طرح دلخواه', 'طرح اختصاصی'].includes(String(item?.category || '')) || Boolean(item?.customRequestId);
 const normalizeDigits = value => String(value || '')
   .replace(/[۰-۹]/g, digit => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
@@ -59,9 +76,10 @@ async function assertPersistedOrderSnapshot(orderId, expected) {
   const sameCustomIds = JSON.stringify(normalizedCustomIds(expectedItems)) === JSON.stringify(normalizedCustomIds(persistedItems));
   const sameItemCount = persistedItems.length === expectedItems.length;
   const sameSubtotal = Number(persisted.subtotal) === Number(expected.subtotal);
+  const sameTax = Number(persisted.tax || 0) === Number(expected.tax || 0);
   const sameTotal = Number(persisted.total) === Number(expected.total);
 
-  if (!sameItemCount || !sameCustomIds || !sameSubtotal || !sameTotal) {
+  if (!sameItemCount || !sameCustomIds || !sameSubtotal || !sameTax || !sameTotal) {
     await Order.deleteOne({ _id: orderId }).catch(() => {});
     throw new AppError(500, 'ثبت کامل اقلام سفارش تأیید نشد؛ هیچ پرداختی ایجاد نشد، دوباره تلاش کنید');
   }
@@ -303,6 +321,43 @@ async function updateCustomDelivery({ customItems, user, province, city, address
   return publicIds;
 }
 
+router.post('/quote', requireUser, asyncHandler(async (req, res) => {
+  const user = await User.findById(req.session.userId);
+  if (!user || !user.isActive) throw new AppError(401, 'ابتدا وارد حساب کاربری فعال شوید');
+
+  const rawItems = Array.isArray(req.body.items) ? req.body.items : [];
+  assertClientCartSnapshot(req.body, rawItems);
+  const customItems = rawItems.filter(isCustomItem);
+  const normalItems = rawItems.filter(item => !isCustomItem(item));
+
+  const normalPricing = await priceItems(normalItems);
+  const customPricing = await priceCustomItems(customItems, user);
+  const items = [...normalPricing.items, ...customPricing.items];
+  const subtotal = normalPricing.subtotal + customPricing.subtotal;
+
+  if (!items.length) throw new AppError(400, 'سبد خرید خالی است');
+  if (items.length !== rawItems.length || normalPricing.items.length !== normalItems.length || customPricing.items.length !== customItems.length) {
+    throw new AppError(500, 'همه اقلام سبد خرید برای بازبینی قیمت پردازش نشدند؛ صفحه را تازه‌سازی کنید');
+  }
+
+  let discount = 0;
+  if (req.body.couponCode && subtotal > 0) {
+    const result = await calculate(req.body.couponCode, { items, subtotal }, user._id);
+    discount = result.amount;
+  }
+
+  const requestedPaymentMethod = String(req.body.paymentMethod || '').trim();
+  if (requestedPaymentMethod && !['zarinpal', 'torobpay'].includes(requestedPaymentMethod)) {
+    throw new AppError(400, 'روش پرداخت انتخاب‌شده معتبر نیست');
+  }
+  const paymentMethod = requestedPaymentMethod || 'zarinpal';
+  const payableBeforeTax = Math.max(0, subtotal - discount);
+  const tax = paymentMethod === 'torobpay' ? Math.round(payableBeforeTax * 0.10) : 0;
+  const total = payableBeforeTax + tax;
+
+  return ok(res, { subtotal, discount, tax, total, paymentMethod });
+}));
+
 router.get('/torobpay/eligibility', requireUser, asyncHandler(async (req, res) => {
   const amountToman = Number(req.query.amount);
   if (!Number.isFinite(amountToman) || amountToman <= 0) throw new AppError(400, 'مبلغ سفارش برای بررسی ترب‌پی معتبر نیست');
@@ -354,9 +409,6 @@ router.post('/', requireUser, asyncHandler(async (req, res) => {
   }
 
   const expectedSubtotal = Number(req.body.expectedSubtotal);
-  if (!Number.isFinite(expectedSubtotal) || expectedSubtotal < 0 || expectedSubtotal !== subtotal) {
-    throw new AppError(409, 'مبلغ سبد خرید با اطلاعات ثبت‌شده روی سرور هماهنگ نیست؛ صفحه را تازه‌سازی کنید');
-  }
 
   if (customItems.length) {
     await updateCustomDelivery({
@@ -381,15 +433,32 @@ router.post('/', requireUser, asyncHandler(async (req, res) => {
   }
 
   const requestedPaymentMethod = String(req.body.paymentMethod || '').trim();
-  const paymentMethod = ['manual', 'zarinpal', 'torobpay'].includes(requestedPaymentMethod)
-    ? requestedPaymentMethod
-    : 'zarinpal';
+  if (requestedPaymentMethod && !['zarinpal', 'torobpay'].includes(requestedPaymentMethod)) {
+    throw new AppError(400, 'روش پرداخت انتخاب‌شده معتبر نیست');
+  }
+  const paymentMethod = requestedPaymentMethod || 'zarinpal';
   const customerMobile = normalizeMobile(user.mobile);
   if (!/^09\d{9}$/.test(customerMobile)) {
     throw new AppError(400, 'شماره موبایل حساب کاربری معتبر نیست؛ ابتدا آن را در پروفایل اصلاح کنید');
   }
 
-  const total = Math.max(0, subtotal - discount);
+  const payableBeforeTax = Math.max(0, subtotal - discount);
+  const tax = paymentMethod === 'torobpay' ? Math.round(payableBeforeTax * 0.10) : 0;
+  const total = payableBeforeTax + tax;
+  const expectedDiscount = Number(req.body.expectedDiscount);
+  const expectedTax = Number(req.body.expectedTax);
+  const expectedTotal = Number(req.body.expectedTotal);
+  const checkoutSnapshotMatches = Number.isFinite(expectedSubtotal)
+    && Number.isFinite(expectedDiscount)
+    && Number.isFinite(expectedTax)
+    && Number.isFinite(expectedTotal)
+    && expectedSubtotal === subtotal
+    && expectedDiscount === discount
+    && expectedTax === tax
+    && expectedTotal === total;
+  if (!checkoutSnapshotMatches) {
+    throw new AppError(409, 'مبلغ سفارش نسبت به صفحه بازبینی تغییر کرده است؛ بازبینی سفارش را دوباره انجام دهید تا مبلغ نهایی قبل از ورود به درگاه نمایش داده شود');
+  }
   if (paymentMethod === 'torobpay') {
     try {
       const eligibility = await torobPay.checkEligibility(total);
@@ -402,11 +471,9 @@ router.post('/', requireUser, asyncHandler(async (req, res) => {
     }
   }
 
-  const paymentLabel = paymentMethod === 'manual'
-    ? 'کارت به کارت'
-    : paymentMethod === 'torobpay'
-      ? 'پرداخت اقساطی ترب‌پی'
-      : 'پرداخت آنلاین زرین‌پال';
+  const paymentLabel = paymentMethod === 'torobpay'
+    ? 'پرداخت اقساطی ترب‌پی'
+    : 'پرداخت آنلاین زرین‌پال';
 
   const order = await Order.create({
     orderNumber: orderNumber(),
@@ -422,26 +489,18 @@ router.post('/', requireUser, asyncHandler(async (req, res) => {
     subtotal,
     shipping,
     discount,
+    tax,
     total,
     couponCode: coupon?.code,
     customerNote: String(req.body.note || '').trim(),
+    acquisition: orderAcquisitionFromSession(req),
     status: normalItems.length ? 'processing' : 'design-review',
     payment: paymentLabel,
-    paymentStatus: paymentMethod === 'manual' ? 'review' : 'pending',
+    paymentStatus: 'pending',
     shippingMethod
   });
 
-  await assertPersistedOrderSnapshot(order._id, { items, subtotal, total });
-
-  if (paymentMethod === 'manual') {
-    await syncCustomRequestsFromOrder(order);
-    await notifyOrderRegistered(order);
-    return ok(res, {
-      message: 'سفارش کارت‌به‌کارت ثبت شد',
-      orderNumber: order.orderNumber,
-      successUrl: `/payment/success?order=${encodeURIComponent(order.orderNumber)}&shipping=${encodeURIComponent(order.shippingMethod)}`
-    }, 201);
-  }
+  await assertPersistedOrderSnapshot(order._id, { items, subtotal, tax, total });
 
   if (env.paymentMock) {
     order.paymentStatus = 'paid';

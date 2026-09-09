@@ -26,6 +26,46 @@
 .option-card[hidden] {
   display: none !important;
 }
+
+.payment-option-card {
+  grid-template-columns: auto 52px minmax(0, 1fr) auto;
+}
+
+.payment-brand-logo {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #e7eaf0;
+  overflow: hidden;
+}
+
+.payment-brand-logo img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  display: block;
+}
+
+@media (max-width: 560px) {
+  .payment-option-card {
+    grid-template-columns: auto 44px minmax(0, 1fr) auto;
+    gap: 9px;
+  }
+
+  .payment-brand-logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+  }
+
+  .payment-brand-logo img {
+    width: 39px;
+    height: 39px;
+  }
+}
 </style>
 </head>
 <body data-page="checkout">
@@ -209,15 +249,14 @@
     </div>
     <h3 class="choice-title">روش پرداخت</h3>
     <div class="payment-options">
-      <label class="option-card"><input checked="" name="payment" type="radio" value="zarinpal"/><span><strong>پرداخت آنلاین</strong><small>اتصال به درگاه بانکی امن</small></span><b>پیشنهادی</b></label>
-      <label class="option-card" id="torobPayOption" hidden><input name="payment" type="radio" value="torobpay"/><span><strong id="torobPayTitle">پرداخت اقساطی با ترب‌پی</strong><small id="torobPayDescription">خرید اعتباری و پرداخت اقساطی از طریق ترب‌پی</small></span><b>اقساطی</b></label>
-      <label class="option-card"><input name="payment" type="radio" value="manual"/><span><strong>کارت به کارت</strong><small>مناسب سفارش‌های عمده با هماهنگی</small></span><b>هماهنگی</b></label>
+      <label class="option-card payment-option-card"><input checked="" name="payment" type="radio" value="zarinpal"/><span class="payment-brand-logo" aria-hidden="true"><img src="/assets/images/payments/zarinpal.webp" alt=""/></span><span><strong>پرداخت آنلاین</strong><small>اتصال به درگاه بانکی امن زرین‌پال</small></span><b>پیشنهادی</b></label>
+      <label class="option-card payment-option-card" id="torobPayOption" hidden><input name="payment" type="radio" value="torobpay"/><span class="payment-brand-logo" aria-hidden="true"><img src="/assets/images/payments/torobpay.webp" alt=""/></span><span><strong id="torobPayTitle">پرداخت اقساطی با ترب‌پی</strong><small id="torobPayDescription">خرید اعتباری و پرداخت اقساطی از طریق ترب‌پی</small></span><b>اقساطی</b></label>
     </div>
     <small id="torobPayAvailability" class="secure-note" aria-live="polite">در حال بررسی امکان پرداخت اقساطی ترب‌پی...</small>
     <div class="checkout-actions"><button class="btn btn-ghost checkout-back" data-back="1" type="button">مرحله قبل</button><button class="btn btn-primary checkout-next" data-next="3" type="button">مشاهده و بازبینی سفارش</button></div>
   </div>
 </section>
-<section class="checkout-step" data-step="3"><div class="checkout-review-layout"><div class="checkout-stage-card"><div class="stage-heading"><span>مرحله سوم</span><h2>سبد خرید و اطلاعات سفارش</h2></div><div class="checkout-review-items" id="checkoutSummaryItems"></div><div class="review-customer" id="checkoutCustomerReview"></div><div class="checkout-actions"><button class="btn btn-ghost checkout-back" data-back="2" type="button">مرحله قبل</button></div></div><aside class="checkout-summary final-summary"><h3>جمع سفارش</h3><div class="discount-row"><input id="discountCodeInput" placeholder="کد تخفیف"/><button id="applyDiscountBtn" type="button">اعمال</button><button class="discount-remove-btn" id="removeDiscountBtn" type="button" hidden>حذف کد</button></div><div class="discount-feedback" id="discountFeedback" aria-live="polite">هنوز کد تخفیفی اعمال نشده است.</div><div class="summary-line"><span>جمع محصولات</span><strong id="checkoutSubtotal">۰ تومان</strong></div><div class="summary-line"><span>تخفیف</span><strong id="checkoutDiscount">۰ تومان</strong></div><div class="summary-line"><span>هزینه ارسال</span><strong id="checkoutShipping">پرداخت جداگانه</strong></div><div class="summary-line total"><span>مبلغ نهایی</span><strong id="checkoutTotal">۰ تومان</strong></div><button class="btn btn-primary" id="finalPaymentBtn" type="button">تأیید و پرداخت نهایی</button><small class="secure-note">با ثبت پرداخت، سفارش برای بررسی و چاپ ارسال می‌شود.</small></aside></div></section>
+<section class="checkout-step" data-step="3"><div class="checkout-review-layout"><div class="checkout-stage-card"><div class="stage-heading"><span>مرحله سوم</span><h2>سبد خرید و اطلاعات سفارش</h2></div><div class="checkout-review-items" id="checkoutSummaryItems"></div><div class="review-customer" id="checkoutCustomerReview"></div><div class="checkout-actions"><button class="btn btn-ghost checkout-back" data-back="2" type="button">مرحله قبل</button></div></div><aside class="checkout-summary final-summary"><h3>جمع سفارش</h3><div class="discount-row"><input id="discountCodeInput" placeholder="کد تخفیف"/><button id="applyDiscountBtn" type="button">اعمال</button><button class="discount-remove-btn" id="removeDiscountBtn" type="button" hidden>حذف کد</button></div><div class="discount-feedback" id="discountFeedback" aria-live="polite">هنوز کد تخفیفی اعمال نشده است.</div><div class="summary-line"><span>جمع محصولات</span><strong id="checkoutSubtotal">۰ تومان</strong></div><div class="summary-line"><span>تخفیف</span><strong id="checkoutDiscount">۰ تومان</strong></div><div class="summary-line" id="checkoutVatRow" hidden><span>ارزش افزوده ترب‌پی (۱۰٪)</span><strong id="checkoutVat">۰ تومان</strong></div><div class="summary-line"><span>هزینه ارسال</span><strong id="checkoutShipping">پرداخت جداگانه</strong></div><div class="summary-line total"><span>مبلغ نهایی</span><strong id="checkoutTotal">۰ تومان</strong></div><button class="btn btn-primary" id="finalPaymentBtn" type="button">تأیید و پرداخت نهایی</button><small class="secure-note">با ثبت پرداخت، سفارش برای بررسی و چاپ ارسال می‌شود.</small></aside></div></section>
 </form></div></section></main>
 <%- include("partials/footer") %>
 <nav aria-label="منوی پایین موبایل" class="mobile-bottom-nav">
@@ -324,7 +363,7 @@
 <%- include("partials/page-data") %>
 <script src="/assets/js/api.js"></script>
 <script src="/assets/js/portal-data.js"></script>
-<script src="/assets/js/app.js?v=20260813-custom-orders-v2"></script>
+<script src="/assets/js/app.js?v=20260908-torob-vat-review-v2"></script>
 <script>
 (() => {
   const provinceSelect = document.getElementById('checkoutProvince');

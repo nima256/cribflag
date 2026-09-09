@@ -6,7 +6,7 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <meta content="پنل کاربری مشتریان Crib Flag" name="description"/>
 <title>پنل کاربری | Crib Flag</title>
-<link href="/assets/css/dashboard.css" rel="stylesheet"/>
+<link href="/assets/css/dashboard.css?v=20260827-order-status-v1" rel="stylesheet"/>
 <link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
 <style>
     * {
@@ -60,7 +60,7 @@
 </section>
 <section class="portal-view" data-account-section="orders">
 <div class="view-head"><div><h2>سفارش‌های من</h2><p>جزئیات، وضعیت آماده‌سازی و کد رهگیری سفارش‌ها</p></div><div class="view-actions"><a class="portal-btn portal-btn-primary" href="/store">ثبت سفارش جدید</a></div></div>
-<div class="portal-card"><div class="table-tools"><input class="table-search" id="accountOrderSearch" placeholder="جستجو با شماره سفارش یا محصول"/><select class="table-filter" id="accountOrderStatus"><option value="">همه وضعیت‌ها</option><option value="processing">در حال آماده‌سازی</option><option value="design-review">بررسی طراحی</option><option value="print-preparation">آماده‌سازی برای چاپ</option><option value="shipped">ارسال شده</option><option value="delivered">تحویل شده</option><option value="cancelled">لغو شده</option></select></div><div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>سفارش</th><th>محصولات</th><th>تاریخ</th><th>مبلغ</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="accountOrdersTable"></tbody></table></div></div>
+<div class="portal-card"><div class="table-tools"><input class="table-search" id="accountOrderSearch" placeholder="جستجو با شماره سفارش یا محصول"/><select class="table-filter" id="accountOrderStatus"><option value="">همه وضعیت‌ها</option><option value="processing">در حال آماده‌سازی</option><option value="design-review">بررسی طراحی</option><option value="print-preparation">آماده‌سازی برای چاپ</option><option value="printed">چاپ شده</option><option value="shipped">ارسال شده</option><option value="delivered">تحویل شده</option><option value="cancelled">لغو شده</option></select></div><div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>سفارش</th><th>محصولات</th><th>تاریخ</th><th>مبلغ</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="accountOrdersTable"></tbody></table></div></div>
 </section>
 <section class="portal-view" data-account-section="custom">
 <div class="view-head"><div><h2>طرح‌های اختصاصی</h2><p>فایل‌ها، توضیحات اصلاح و وضعیت تأیید پیش‌نمایش</p></div></div>
@@ -97,6 +97,6 @@
 <div class="portal-modal-backdrop" id="customRequestModal"><div class="portal-modal"><div class="portal-modal-head"><h3>ارسال طرح اختصاصی</h3><button class="portal-modal-close" data-close-modal="">×</button></div><form id="customRequestForm"><div class="portal-modal-body"><label class="upload-zone"><input accept="image/jpeg,image/png,image/webp,application/pdf" id="accountCustomFile" required="" type="file"/><strong id="accountCustomFileLabel">انتخاب فایل طرح</strong><p>PNG، JPG، WEBP یا PDF تا حجم ۳ مگابایت</p></label><div class="form-grid" style="margin-top:15px"><div class="field"><label>سایز</label><select id="accountCustomSize"><option value="150 × 90 سانتی‌متر">۱۵۰ × ۹۰ پیشنهادی</option><option value="100 × 70 سانتی‌متر">۱۰۰ × ۷۰ پیشنهادی</option><option value="50 × 70 سانتی‌متر">۵۰ × ۷۰</option></select></div><div class="field"><label>جنس پارچه</label><select id="accountCustomFabric"><option>ساتن آمریکایی</option><option>ساتن براق</option><option>مخمل</option></select></div><div class="field"><label>نوع درخواست</label><select id="accountCustomType"><option>چاپ مستقیم</option><option>نیازمند اصلاح طراحی</option></select></div><div class="field full"><label>توضیحات تغییرات</label><textarea id="accountCustomNotes" placeholder="برش، جای لوگو یا هر تغییر موردنیاز را بنویسید."></textarea></div></div></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="" type="button">انصراف</button><button class="portal-btn portal-btn-primary" type="submit">ثبت درخواست</button></div></form></div></div>
 <script src="/assets/js/api.js"></script>
 <script src="/assets/js/portal-data.js"></script>
-<script src="/assets/js/account.js?v=20260803-pillow-pricing-v1"></script>
+<script src="/assets/js/account.js?v=20260827-order-status-v1"></script>
 </body>
 </html>

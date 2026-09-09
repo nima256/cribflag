@@ -17,7 +17,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const { prepareProductPricing, findVariantPricing, fallbackPricing } = require('../utils/productPricing');
+const { prepareProductPricing, findVariantPricing, fallbackPricing, normalizeVariantPrices, variantKey } = require('../utils/productPricing');
 const { assertUploadedFile } = require('../utils/uploadValidation');
 const { processUploadedImage, removeManagedImage, removeManagedImages, unlinkQuietly } = require('../utils/imageProcessing');
 const { applyInventory, releaseInventory } = require('../services/inventory');
@@ -28,6 +28,7 @@ const { buildAnalytics, isPaidSale } = require('../services/analytics');
 const { categoryPayload, ensureLegacyCategories, nextCategoryId, resolveCategorySelection, syncProductCategoryNames } = require('../services/categories');
 const { parsePersianDate } = require('../utils/formatters');
 const { detectPillowMode, getPillowConfig } = require('../utils/pillowPricing');
+const { getCustomPricingConfig, saveCustomPricingConfig } = require('../utils/customPricing');
 const {
   CUSTOM_PAYMENT_STATUSES,
   ORDER_PAYMENT_STATUSES,
@@ -191,6 +192,81 @@ async function normalizeCouponVariants(value) {
 }
 
 
+const GALLERY_IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.avif']);
+const GALLERY_ROOTS = Object.freeze({
+  public: path.resolve(__dirname, '..', 'public'),
+  uploads: path.resolve(__dirname, '..', 'uploads')
+});
+
+function galleryFileId(rootKey, relativePath) {
+  return Buffer.from(`${rootKey}:${String(relativePath || '').replace(/\\/g, '/')}`, 'utf8').toString('base64url');
+}
+
+function galleryFileFromId(id) {
+  let decoded = '';
+  try { decoded = Buffer.from(String(id || ''), 'base64url').toString('utf8'); } catch {}
+  const separator = decoded.indexOf(':');
+  if (separator < 1) throw new AppError(400, 'شناسه تصویر معتبر نیست');
+  const rootKey = decoded.slice(0, separator);
+  const relativePath = decoded.slice(separator + 1).replace(/\\/g, '/').replace(/^\/+/, '');
+  const root = GALLERY_ROOTS[rootKey];
+  if (!root || !relativePath || relativePath.split('/').includes('..')) throw new AppError(400, 'مسیر تصویر معتبر نیست');
+  const absolutePath = path.resolve(root, relativePath);
+  if (absolutePath === root || !absolutePath.startsWith(`${root}${path.sep}`)) throw new AppError(403, 'مسیر تصویر خارج از محدوده مجاز است');
+  if (!GALLERY_IMAGE_EXTENSIONS.has(path.extname(absolutePath).toLowerCase())) throw new AppError(400, 'فایل انتخاب‌شده تصویر نیست');
+  return { rootKey, relativePath, absolutePath };
+}
+
+async function walkGalleryImages(rootKey, directory = GALLERY_ROOTS[rootKey], prefix = '') {
+  let entries = [];
+  try { entries = await fs.promises.readdir(directory, { withFileTypes: true }); } catch { return []; }
+  const output = [];
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) continue;
+    if (rootKey === 'uploads' && !prefix && entry.name === '.incoming') continue;
+    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    const absolutePath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      output.push(...await walkGalleryImages(rootKey, absolutePath, relativePath));
+      continue;
+    }
+    if (!entry.isFile() || !GALLERY_IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue;
+    const stat = await fs.promises.stat(absolutePath).catch(() => null);
+    if (!stat) continue;
+    output.push({ rootKey, relativePath, absolutePath, bytes: stat.size, modifiedAt: stat.mtime });
+  }
+  return output;
+}
+
+function galleryPublicUrl(rootKey, relativePath) {
+  const normalized = String(relativePath || '').replace(/\\/g, '/');
+  if (rootKey === 'public') return `/${normalized}`;
+  if (rootKey === 'uploads' && !normalized.startsWith('custom/')) return `/uploads/${normalized}`;
+  return '';
+}
+
+async function galleryReferenceSets() {
+  const [products, categories, customRequests] = await Promise.all([
+    Product.find().select('image images').lean(),
+    Category.find().select('image').lean(),
+    CustomRequest.find().select('filePath').lean()
+  ]);
+  const urls = new Set();
+  for (const product of products) {
+    for (const image of (Array.isArray(product.images) && product.images.length ? product.images : [product.image])) {
+      const normalized = String(image || '').split('?')[0].trim();
+      if (normalized) urls.add(normalized.startsWith('/') ? normalized : `/${normalized.replace(/^\.\//, '')}`);
+    }
+  }
+  for (const category of categories) {
+    const normalized = String(category.image || '').split('?')[0].trim();
+    if (normalized) urls.add(normalized.startsWith('/') ? normalized : `/${normalized.replace(/^\.\//, '')}`);
+  }
+  const customPaths = new Set(customRequests.map(item => path.resolve(String(item.filePath || ''))).filter(Boolean));
+  return { urls, customPaths };
+}
+
+
 const adminLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 8,
@@ -342,6 +418,230 @@ router.post('/categories/upload-image', upload.single('image'), asyncHandler(asy
     await unlinkQuietly(req.file?.path);
     throw error;
   }
+}));
+
+
+router.get('/settings/custom-pricing', asyncHandler(async (_req, res) => {
+  ok(res, { pricing: await getCustomPricingConfig() });
+}));
+
+router.put('/settings/custom-pricing', asyncHandler(async (req, res) => {
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) throw new AppError(400, 'ساختار قیمت‌گذاری معتبر نیست');
+  const pricing = await saveCustomPricingConfig(req.body);
+  await RecentAction.create({
+    action: 'custom_pricing_update',
+    targetType: 'settings',
+    targetId: 'custom-pricing',
+    targetName: 'قیمت‌های طرح دلخواه',
+    adminId: req.session.adminId,
+    ipAddress: req.ip
+  });
+  ok(res, { message: 'قیمت‌های طرح دلخواه ذخیره شد', pricing });
+}));
+
+function categoryProductQuery(category) {
+  return {
+    $or: [
+      { categoryRefs: category._id },
+      { primaryCategory: category._id },
+      { category: category.name },
+      { categories: category.name }
+    ]
+  };
+}
+
+function categoryPricingPayload(category, products) {
+  const variants = new Map();
+  let productsWithoutVariants = 0;
+
+  for (const product of products) {
+    const productVariants = normalizeVariantPrices(product.variantPrices, Boolean(product.hasDiscount));
+    if (!productVariants.length) {
+      productsWithoutVariants += 1;
+      continue;
+    }
+
+    for (const variant of productVariants) {
+      const key = variantKey(variant.size, variant.fabric);
+      let row = variants.get(key);
+      if (!row) {
+        row = {
+          size: variant.size,
+          fabric: variant.fabric,
+          affectedProducts: 0,
+          prices: new Set()
+        };
+        variants.set(key, row);
+      }
+      row.affectedProducts += 1;
+      row.prices.add(Number(variant.price || 0));
+    }
+  }
+
+  const rows = [...variants.values()].map(row => {
+    const prices = [...row.prices].sort((a, b) => a - b);
+    return {
+      size: row.size,
+      fabric: row.fabric,
+      affectedProducts: row.affectedProducts,
+      mixed: prices.length > 1,
+      price: prices.length === 1 ? prices[0] : null,
+      minPrice: prices.length ? prices[0] : null,
+      maxPrice: prices.length ? prices[prices.length - 1] : null
+    };
+  }).sort((a, b) => `${a.size} ${a.fabric}`.localeCompare(`${b.size} ${b.fabric}`, 'fa'));
+
+  return {
+    category: categoryPayload(category, products.length),
+    productCount: products.length,
+    productsWithoutVariants,
+    variants: rows
+  };
+}
+
+router.get('/category-pricing/:id', asyncHandler(async (req, res) => {
+  const category = await Category.findOne({ publicId: Number(req.params.id) }).lean();
+  if (!category) throw new AppError(404, 'دسته‌بندی پیدا نشد');
+  const products = await Product.find(categoryProductQuery(category)).sort({ publicId: 1 }).lean();
+  ok(res, categoryPricingPayload(category, products));
+}));
+
+router.put('/category-pricing/:id', asyncHandler(async (req, res) => {
+  const category = await Category.findOne({ publicId: Number(req.params.id) });
+  if (!category) throw new AppError(404, 'دسته‌بندی پیدا نشد');
+  const submitted = Array.isArray(req.body?.variants) ? req.body.variants : [];
+  if (!submitted.length) throw new AppError(400, 'حداقل یک قیمت برای اعمال انتخاب کنید');
+  if (submitted.length > 100) throw new AppError(400, 'تعداد ردیف‌های قیمت بیش از حد مجاز است');
+
+  const updates = new Map();
+  for (const item of submitted) {
+    const size = String(item?.size || '').trim();
+    const fabric = String(item?.fabric || '').trim();
+    const price = Number(item?.price);
+    if (!size || size.length > 160 || !fabric || fabric.length > 120) throw new AppError(400, 'سایز یا جنس یکی از ردیف‌ها معتبر نیست');
+    if (!Number.isInteger(price) || price < 0) throw new AppError(400, `قیمت «${size} / ${fabric}» باید عدد صحیح صفر یا بیشتر باشد`);
+    updates.set(variantKey(size, fabric), { size, fabric, price });
+  }
+
+  const products = await Product.find(categoryProductQuery(category)).lean();
+  if (!products.length) throw new AppError(404, 'محصولی در این دسته‌بندی پیدا نشد');
+
+  const operations = [];
+  const matchedCounts = new Map([...updates.keys()].map(key => [key, 0]));
+  let updatedVariantRows = 0;
+
+  for (const product of products) {
+    const currentVariants = normalizeVariantPrices(product.variantPrices, Boolean(product.hasDiscount));
+    if (!currentVariants.length) continue;
+    let changed = false;
+    const nextVariants = currentVariants.map(variant => {
+      const key = variantKey(variant.size, variant.fabric);
+      const requested = updates.get(key);
+      if (!requested) return variant;
+      matchedCounts.set(key, (matchedCounts.get(key) || 0) + 1);
+      updatedVariantRows += 1;
+      changed = changed || Number(variant.price) !== requested.price;
+      const oldPrice = Number(variant.oldPrice);
+      const keepDiscount = Boolean(product.hasDiscount && Number.isFinite(oldPrice) && oldPrice > requested.price);
+      return {
+        ...variant,
+        price: requested.price,
+        hasDiscount: keepDiscount,
+        oldPrice: keepDiscount ? oldPrice : null
+      };
+    });
+
+    if (!changed) continue;
+    const pricing = prepareProductPricing({
+      price: product.price,
+      hasDiscount: product.hasDiscount,
+      oldPrice: product.oldPrice,
+      variantPrices: nextVariants
+    });
+    operations.push({
+      updateOne: {
+        filter: { _id: product._id },
+        update: { $set: {
+          price: pricing.price,
+          hasDiscount: pricing.hasDiscount,
+          oldPrice: pricing.oldPrice,
+          variantPrices: pricing.variantPrices
+        } }
+      }
+    });
+  }
+
+  if (operations.length) await Product.bulkWrite(operations, { ordered: false });
+
+  const unmatchedVariants = [...updates.values()].filter(item => matchedCounts.get(variantKey(item.size, item.fabric)) === 0);
+  await RecentAction.create({
+    action: 'category_bulk_pricing_update',
+    targetType: 'category',
+    targetId: String(category._id),
+    targetName: category.name,
+    adminId: req.session.adminId,
+    ipAddress: req.ip
+  });
+
+  const refreshedProducts = await Product.find(categoryProductQuery(category)).sort({ publicId: 1 }).lean();
+  ok(res, {
+    message: operations.length ? `قیمت ${operations.length} محصول در دسته «${category.name}» به‌روزرسانی شد` : 'قیمت‌ها از قبل همین مقدار بودند',
+    updatedProducts: operations.length,
+    matchedVariantRows: updatedVariantRows,
+    unmatchedVariants,
+    ...categoryPricingPayload(category, refreshedProducts)
+  });
+}));
+
+router.get('/gallery', asyncHandler(async (_req, res) => {
+  const [publicFiles, uploadFiles, references] = await Promise.all([
+    walkGalleryImages('public'),
+    walkGalleryImages('uploads'),
+    galleryReferenceSets()
+  ]);
+  const images = [...publicFiles, ...uploadFiles].map(item => {
+    const publicUrl = galleryPublicUrl(item.rootKey, item.relativePath);
+    const usedByCatalog = Boolean(publicUrl && references.urls.has(publicUrl));
+    const usedByCustom = item.rootKey === 'uploads' && references.customPaths.has(path.resolve(item.absolutePath));
+    return {
+      id: galleryFileId(item.rootKey, item.relativePath),
+      name: path.basename(item.relativePath),
+      path: `${item.rootKey}/${item.relativePath}`,
+      source: item.rootKey,
+      bytes: item.bytes,
+      modifiedAt: item.modifiedAt,
+      previewUrl: `/api/admin/gallery/file/${galleryFileId(item.rootKey, item.relativePath)}`,
+      referenced: usedByCatalog || usedByCustom,
+      referenceType: usedByCustom ? 'طرح اختصاصی' : usedByCatalog ? 'کاتالوگ سایت' : ''
+    };
+  }).sort((a, b) => Number(b.bytes || 0) - Number(a.bytes || 0));
+  ok(res, { images, totalBytes: images.reduce((sum, image) => sum + Number(image.bytes || 0), 0) });
+}));
+
+router.get('/gallery/file/:id', asyncHandler(async (req, res) => {
+  const file = galleryFileFromId(req.params.id);
+  const stat = await fs.promises.stat(file.absolutePath).catch(() => null);
+  if (!stat?.isFile()) throw new AppError(404, 'تصویر روی هاست پیدا نشد');
+  res.setHeader('Cache-Control', 'private, max-age=60');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.type(path.extname(file.absolutePath));
+  return res.sendFile(file.absolutePath);
+}));
+
+router.delete('/gallery/:id', asyncHandler(async (req, res) => {
+  const file = galleryFileFromId(req.params.id);
+  const stat = await fs.promises.stat(file.absolutePath).catch(() => null);
+  if (!stat?.isFile()) throw new AppError(404, 'تصویر روی هاست پیدا نشد');
+  await fs.promises.unlink(file.absolutePath);
+  await RecentAction.create({
+    action: 'gallery_image_delete',
+    targetType: 'image',
+    targetId: req.params.id,
+    targetName: `${file.rootKey}/${file.relativePath}`.slice(0, 300),
+    adminId: req.session.adminId,
+    ipAddress: req.ip
+  });
+  ok(res, { message: 'تصویر از هاست حذف شد' });
 }));
 
 router.get(
@@ -527,6 +827,7 @@ router.post('/orders/manual', asyncHandler(async (req, res) => {
       payment: 'ثبت دستی مدیر',
       paymentStatus: req.body.paymentStatus === 'paid' ? 'paid' : 'review',
       shippingMethod: String(req.body.shippingMethod || 'تحویل حضوری').trim(),
+      acquisition: { source: 'Admin', medium: 'manual', landingPage: '/admin', capturedAt: new Date() },
       inventoryApplied: false
     });
     if (order.paymentStatus === 'paid') {
@@ -600,6 +901,31 @@ router.delete('/orders/:identifier', asyncHandler(async (req, res) => {
   });
 }));
 
+function normalizeHomePosition(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const position = Number(value);
+  if (!Number.isInteger(position) || position < 1 || position > 4) return null;
+  return position;
+}
+
+function assertUniqueHomePositions(products) {
+  const special = new Map();
+  const bestSeller = new Map();
+  for (const product of products) {
+    const id = Number(product.id);
+    const specialPosition = normalizeHomePosition(product.homeSpecialPosition);
+    const bestSellerPosition = normalizeHomePosition(product.homeBestSellerPosition);
+    if (specialPosition) {
+      if (special.has(specialPosition)) throw new AppError(409, `جایگاه ${specialPosition} پیشنهاد ویژه قبلاً برای محصول ${special.get(specialPosition)} انتخاب شده است`);
+      special.set(specialPosition, product.title || id);
+    }
+    if (bestSellerPosition) {
+      if (bestSeller.has(bestSellerPosition)) throw new AppError(409, `جایگاه ${bestSellerPosition} پرفروش‌ترین‌ها قبلاً برای محصول ${bestSeller.get(bestSellerPosition)} انتخاب شده است`);
+      bestSeller.set(bestSellerPosition, product.title || id);
+    }
+  }
+}
+
 router.put('/sync/:name', asyncHandler(async (req, res) => {
   const name = req.params.name;
   const allowed = new Set(['products', 'coupons', 'orders', 'users', 'tickets', 'custom']);
@@ -610,6 +936,7 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
     throw new AppError(400, 'برای حذف کامل اطلاعات باید confirmEmpty=true ارسال شود');
   }
   if(name==='products'){
+    assertUniqueHomePositions(value);
     const existingProducts = await Product.find().select('publicId image images').lean();
     const previouslyManagedImages = new Set(existingProducts.flatMap(product =>
       (Array.isArray(product.images) && product.images.length ? product.images : [product.image])
@@ -671,6 +998,8 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
           oldPrice: pricing.oldPrice,
           variantPrices: pricing.variantPrices,
           badge: p.badge || '',
+          homeSpecialPosition: normalizeHomePosition(p.homeSpecialPosition),
+          homeBestSellerPosition: normalizeHomePosition(p.homeBestSellerPosition),
           sortDate: Number(p.date || 1),
           rate: Number(p.rate || 4.7),
           status: p.status || 'active',
@@ -718,7 +1047,7 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
     }
     await Coupon.deleteMany({ publicId: { $nin: ids } });
   }else if(name==='orders'){
-    const validStatuses = new Set(['processing', 'design-review', 'print-preparation', 'shipped', 'delivered', 'cancelled']);
+    const validStatuses = new Set(['processing', 'design-review', 'print-preparation', 'printed', 'shipped', 'delivered', 'cancelled']);
     const validPaymentStatuses = new Set(['pending', 'review', 'paid', 'failed', 'refunded']);
     for (const submitted of value) {
       const order = await Order.findOne({ orderNumber: submitted.id });
@@ -758,7 +1087,7 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
   }else if(name==='tickets'){
     for(const t of value){const user=await User.findOne({publicId:Number(t.userId)});if(user)await Ticket.findOneAndUpdate({publicId:t.id},{$set:{user:user._id,customer:t.customer||user.fullName,subject:t.subject,department:t.department,priority:t.priority,status:t.status,messages:t.messages}},{upsert:true,setDefaultsOnInsert:true});}
   }else if(name==='custom'){
-    const validCustomOrderStatuses = new Set(['processing', 'design-review', 'print-preparation', 'shipped', 'delivered', 'cancelled']);
+    const validCustomOrderStatuses = new Set(['processing', 'design-review', 'print-preparation', 'printed', 'shipped', 'delivered', 'cancelled']);
     for (const submitted of value) {
       const user = await User.findOne({ publicId: Number(submitted.userId) });
       if (!user) continue;

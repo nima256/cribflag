@@ -100,12 +100,12 @@ const PAGE_ROUTES = {
 const CART_KEY = "cribFlagCartV2";
 const CUSTOM_PRICING_VERSION = "20260803-pillow-pricing-v2";
 const CUSTOM_PRODUCT_TYPES = Object.freeze(['پرچم', 'روبالشتی', 'داکیماکورا بالشت قدی']);
-const CUSTOM_SIZE_TIERS = Object.freeze([
+let CUSTOM_SIZE_TIERS = Object.freeze([
   Object.freeze({ maxLong: 70, maxShort: 50, price: 550000, americanSatinPrice: 550000, velvetPrice: 700000 }),
-  Object.freeze({ maxLong: 100, maxShort: 70, price: 800000, americanSatinPrice: 1000, velvetPrice: 1000000 }),
-  Object.freeze({ maxLong: 150, maxShort: 90, price: 990000, americanSatinPrice: 2000, velvetPrice: 1200000 })
+  Object.freeze({ maxLong: 100, maxShort: 70, price: 800000, americanSatinPrice: 800000, velvetPrice: 1000000 }),
+  Object.freeze({ maxLong: 150, maxShort: 90, price: 990000, americanSatinPrice: 990000, velvetPrice: 1200000 })
 ]);
-const PILLOW_CUSTOM_CONFIGS = Object.freeze({
+let PILLOW_CUSTOM_CONFIGS = Object.freeze({
   pillowcase:Object.freeze({
     title:'روبالشتی',
     variants:Object.freeze([
@@ -446,6 +446,41 @@ function scrollToCatalog(gridId){
 
 function cartSubtotal(){ return cart.reduce((s,i)=>s+Number(i.price)*Number(i.qty||1),0); }
 function discountableCartSubtotal(){ return cart.reduce((s,i)=>s+Number(i.price)*Number(i.qty||1),0); }
+function syncCartPricingFromCatalog(){
+  let changed=false;
+  cart=cart.map(item=>{
+    if(isCustomCartItem(item))return item;
+    const live=products.find(product=>Number(product.id)===Number(item?.id));
+    if(!live)return item;
+
+    const normalized=normalizeProductPricing(live);
+    const size=String(item.size||normalized.sizes?.[0]||'').trim();
+    const fabric=String(item.fabric||normalized.fabrics?.[0]||'').trim();
+    const exactVariant=normalized.variantPrices.find(variant=>variant.size===size&&variant.fabric===fabric);
+    if(normalized.variantPrices.length&&!exactVariant)return item;
+
+    const pricing=exactVariant||getVariantPricing(normalized,size,fabric);
+    const next={
+      ...item,
+      title:normalized.title,
+      category:normalized.category,
+      categories:normalized.categories,
+      image:productImageSrc(normalized),
+      size,
+      fabric,
+      price:pricing.price,
+      hasDiscount:pricing.hasDiscount,
+      old:pricing.oldPrice
+    };
+    if(Number(next.price)!==Number(item.price)||next.title!==item.title||next.image!==item.image)changed=true;
+    return next;
+  });
+  if(changed){
+    invalidateDiscountAfterCartChange();
+    saveCart();
+  }
+  return changed;
+}
 function renderCart(){
   saveCart(); const qty=cart.reduce((sum,item)=>sum+Number(item.qty||1),0); document.querySelectorAll(".cart-count").forEach(x=>x.textContent=toFa(qty));
   const box=document.getElementById("cartBody"), total=document.getElementById("cartTotal"); if(total)total.textContent=toman(cartSubtotal()); if(!box)return;
@@ -792,10 +827,28 @@ function renderCartPage(){
 }
 function initCart(){renderCartPage();document.getElementById('cartCheckoutLink')?.addEventListener('click',e=>{if(!cart.length){e.preventDefault();showToast('سبد خرید خالی است.');return;}if(!currentUser){e.preventDefault();requireLogin('/checkout');return;}window.CribLoader?.show('در حال آماده‌سازی تسویه حساب...');});}
 
-function initCustomOrder(){
+async function initCustomOrder(){
   const input=document.getElementById('customFileInput'),preview=document.getElementById('customUploadPreview'),nameBox=document.getElementById('customFileName'),dims=document.getElementById('customDimensionFields'),priceBox=document.getElementById('customOrderPrice'),addButton=document.getElementById('addCustomOrder'),fabricSelect=document.getElementById('customOrderFabric'),fabricHint=document.getElementById('customFabricHint'),fabricDescription=document.getElementById('customFabricDescription'),sizeBox=document.getElementById('customSizeOptions'),optionSection=document.getElementById('customPillowOptionSection'),optionBox=document.getElementById('customPillowOptions');
   const CUSTOM_DESIGN_MAX_FILE_SIZE=3*1024*1024;
   let uploadData='';let fileName='';let customDimensionError='';
+  try{
+    const response=await api('/api/products/custom-pricing');
+    const pricing=response?.pricing;
+    if(Array.isArray(pricing?.flagTiers)&&pricing.flagTiers.length){
+      CUSTOM_SIZE_TIERS=Object.freeze(pricing.flagTiers.map(item=>Object.freeze({
+        maxLong:Number(item.maxLongSide),maxShort:Number(item.maxShortSide),price:Number(item.price),
+        americanSatinPrice:Number(item.americanSatinPrice),velvetPrice:Number(item.velvetPrice)
+      })));
+    }
+    if(pricing?.pillows?.pillowcase&&pricing?.pillows?.dakimakura){
+      PILLOW_CUSTOM_CONFIGS=Object.freeze({
+        pillowcase:Object.freeze({title:pricing.pillows.pillowcase.title||'روبالشتی',variants:Object.freeze((pricing.pillows.pillowcase.variants||[]).map(item=>Object.freeze({...item,price:Number(item.price)})))}),
+        dakimakura:Object.freeze({title:pricing.pillows.dakimakura.title||'داکیماکورا بالشت قدی',variants:Object.freeze((pricing.pillows.dakimakura.variants||[]).map(item=>Object.freeze({...item,price:Number(item.price)})))})
+      });
+    }
+  }catch(error){
+    console.warn('قیمت‌های طرح دلخواه از سرور دریافت نشد؛ مقادیر پیش‌فرض نمایش داده می‌شوند.',error);
+  }
   const resetCustomFile=()=>{
     uploadData='';fileName='';
     if(input)input.value='';
@@ -874,12 +927,47 @@ function initCustomOrder(){
   renderCustomOptions();calcPrice();
 }
 
+let checkoutServerQuote=null;
+let checkoutServerQuoteKey='';
+
+function checkoutPricingKey(){
+  const paymentMethod=document.querySelector('input[name="payment"]:checked')?.value||'zarinpal';
+  const couponCode=sessionStorage.getItem('cribFlagActiveCoupon')||'';
+  const items=cart.map(item=>({
+    id:item.id,
+    qty:Number(item.qty||1),
+    size:String(item.size||''),
+    fabric:String(item.fabric||''),
+    customRequestId:String(item.customRequestId||'')
+  }));
+  return JSON.stringify({paymentMethod,couponCode,items});
+}
+
+function localCheckoutTotals(){
+  const subtotal=cartSubtotal();
+  const discount=Math.max(0,Number(discountAmount||0));
+  const payableBeforeTax=Math.max(0,subtotal-discount);
+  const paymentMethod=document.querySelector('input[name="payment"]:checked')?.value||'zarinpal';
+  const tax=paymentMethod==='torobpay'?Math.round(payableBeforeTax*.10):0;
+  return {subtotal,discount,tax,total:payableBeforeTax+tax,paymentMethod};
+}
+
+function checkoutTotals(){
+  if(checkoutServerQuote&&checkoutServerQuoteKey===checkoutPricingKey())return checkoutServerQuote;
+  return localCheckoutTotals();
+}
+
 function renderCheckout(){
-  const box=document.getElementById('checkoutSummaryItems');if(!box)return;const sub=cartSubtotal(),discountableSubtotal=discountableCartSubtotal(),total=Math.max(0,sub-discountAmount);
+  const box=document.getElementById('checkoutSummaryItems');if(!box)return;
+  const totals=checkoutTotals();
+  const paymentMethod=totals.paymentMethod||document.querySelector('input[name="payment"]:checked')?.value||'zarinpal';
   box.innerHTML=cart.length?cart.map(item=>`<div class="summary-item"><div class="summary-thumb">${item.preview?`<img src="${item.preview}" alt="${escapeHTML(item.title)}">`:productImageBox(item.title,item.image)}</div><span><h4>${escapeHTML(item.title)}</h4><small>تعداد: ${toFa(item.qty)}${item.requestType?` — محصول: ${escapeHTML(item.requestType)}`:''}${itemPillowOption(item)?` — نوع سفارش: ${escapeHTML(itemPillowOption(item))}`:''}${itemDisplaySize(item)?` — سایز: ${escapeHTML(itemDisplaySize(item))}`:''}${item.fabric?` — پارچه: ${escapeHTML(item.fabric)}`:''}</small></span><strong class="summary-price">${toman(item.price*item.qty)}</strong></div>`).join(''):'<div class="empty-state"><p>سبد خرید خالی است.</p></div>';
-  document.getElementById('checkoutSubtotal').textContent=toman(sub);document.getElementById('checkoutDiscount').textContent=discountAmount?`− ${toman(discountAmount)}`:toman(0);document.getElementById('checkoutShipping').textContent='پرداخت جداگانه';document.getElementById('checkoutTotal').textContent=toman(total);
+  document.getElementById('checkoutSubtotal').textContent=toman(totals.subtotal);document.getElementById('checkoutDiscount').textContent=totals.discount?`− ${toman(totals.discount)}`:toman(0);document.getElementById('checkoutShipping').textContent='پرداخت جداگانه';
+  const vatRow=document.getElementById('checkoutVatRow');if(vatRow)vatRow.hidden=paymentMethod!=='torobpay';
+  const vatAmount=document.getElementById('checkoutVat');if(vatAmount)vatAmount.textContent=toman(totals.tax);
+  document.getElementById('checkoutTotal').textContent=toman(totals.total);
   const code=sessionStorage.getItem('cribFlagActiveCoupon')||'';
-  const feedback=document.getElementById('discountFeedback');if(feedback){feedback.className=`discount-feedback ${discountFeedbackType}`;feedback.textContent=discountFeedbackMessage||(code&&discountAmount?`کد ${code} اعمال شد و ${toman(discountAmount)} از سفارش کم شد.`:'هنوز کد تخفیفی اعمال نشده است.');}
+  const feedback=document.getElementById('discountFeedback');if(feedback){feedback.className=`discount-feedback ${discountFeedbackType}`;feedback.textContent=discountFeedbackMessage||(code&&totals.discount?`کد ${code} اعمال شد و ${toman(totals.discount)} از سفارش کم شد.`:'هنوز کد تخفیفی اعمال نشده است.');}
   const removeButton=document.getElementById('removeDiscountBtn');if(removeButton)removeButton.hidden=!code;
 }
 function initCheckout(){
@@ -887,17 +975,66 @@ function initCheckout(){
   const get=id=>document.getElementById(id);
   let torobEligibilitySequence=0;
 
+  const clearCheckoutQuote=()=>{
+    checkoutServerQuote=null;
+    checkoutServerQuoteKey='';
+  };
+
+  const checkoutQuotePayload=()=>({
+    paymentMethod:document.querySelector('input[name="payment"]:checked')?.value||'zarinpal',
+    couponCode:sessionStorage.getItem('cribFlagActiveCoupon')||'',
+    expectedItemCount:cart.length,
+    expectedCustomRequestIds:cart.filter(isCustomCartItem).map(item=>item.customRequestId).filter(Boolean),
+    items:cart.map(item=>({
+      id:item.id,
+      title:item.title,
+      category:item.category,
+      qty:item.qty,
+      size:item.size,
+      fabric:item.fabric,
+      customRequestId:item.customRequestId,
+      requestType:item.requestType
+    }))
+  });
+
+  const refreshCheckoutQuote=async({silent=false}={})=>{
+    if(!cart.length)return false;
+    const requestedKey=checkoutPricingKey();
+    try{
+      const result=await api('/api/orders/quote',{method:'POST',body:JSON.stringify(checkoutQuotePayload())});
+      if(requestedKey!==checkoutPricingKey())return false;
+      checkoutServerQuote={
+        subtotal:Number(result.subtotal||0),
+        discount:Number(result.discount||0),
+        tax:Number(result.tax||0),
+        total:Number(result.total||0),
+        paymentMethod:String(result.paymentMethod||document.querySelector('input[name="payment"]:checked')?.value||'zarinpal')
+      };
+      checkoutServerQuoteKey=requestedKey;
+      discountAmount=checkoutServerQuote.discount;
+      renderCheckout();
+      return true;
+    }catch(error){
+      clearCheckoutQuote();
+      renderCheckout();
+      if(!silent)showToast(error.message||'محاسبه مبلغ نهایی سفارش انجام نشد؛ دوباره تلاش کنید.');
+      return false;
+    }
+  };
+
   const refreshTorobPayEligibility=async()=>{
     const option=get('torobPayOption');
     const info=get('torobPayAvailability');
     if(!option)return false;
 
-    const total=Math.max(0,cartSubtotal()-discountAmount);
+    const baseTotal=Math.max(0,cartSubtotal()-discountAmount);
+    const total=baseTotal+Math.round(baseTotal*.10);
     const switchAway=()=>{
       const torobInput=option.querySelector('input[name="payment"]');
       if(torobInput?.checked){
         const zarinpal=document.querySelector('input[name="payment"][value="zarinpal"]');
         if(zarinpal)zarinpal.checked=true;
+        renderCheckout();
       }
     };
 
@@ -946,7 +1083,11 @@ function initCheckout(){
           <p><strong>${escapeHTML(get('checkoutName')?.value)}</strong> — ${escapeHTML(get('checkoutPhone')?.value)}</p>
           <p>${escapeHTML(get('checkoutProvince')?.value)}، ${escapeHTML(get('checkoutCity')?.value)}، ${escapeHTML(get('checkoutAddress')?.value)}، ${escapeHTML(get('checkoutUnit')?.value)}</p>${get('checkoutNote')?.value.trim()?`<p><strong>یادداشت سفارش:</strong> ${escapeHTML(get('checkoutNote').value.trim())}</p>`:''}`;
       }
+      clearCheckoutQuote();
       renderCheckout();
+      const paymentButton=get('finalPaymentBtn');
+      if(paymentButton)paymentButton.disabled=true;
+      refreshCheckoutQuote().then(ok=>{if(paymentButton)paymentButton.disabled=!ok;});
     }
   };
 
@@ -983,6 +1124,7 @@ function initCheckout(){
     shippingPrice=Number(document.querySelector('input[name="shipping"]:checked')?.dataset.shippingPrice||0);
     renderCheckout();
   }));
+  document.querySelectorAll('input[name="payment"]').forEach(input=>input.addEventListener('change',()=>{clearCheckoutQuote();renderCheckout();}));
 
   const validateDiscount=async(code,{silent=false}={})=>{
     const normalized=String(code||'').trim();
@@ -1011,8 +1153,8 @@ function initCheckout(){
       renderCheckout();return false;
     }
   };
-  get('applyDiscountBtn')?.addEventListener('click',async()=>{await validateDiscount(get('discountCodeInput').value);await refreshTorobPayEligibility();});
-  get('removeDiscountBtn')?.addEventListener('click',()=>{clearAppliedDiscount('کد تخفیف از سفارش حذف شد.','neutral');showToast('کد تخفیف حذف شد.');refreshTorobPayEligibility();});
+  get('applyDiscountBtn')?.addEventListener('click',async()=>{clearCheckoutQuote();await validateDiscount(get('discountCodeInput').value);await refreshTorobPayEligibility();if(current===3)await refreshCheckoutQuote();});
+  get('removeDiscountBtn')?.addEventListener('click',async()=>{clearCheckoutQuote();clearAppliedDiscount('کد تخفیف از سفارش حذف شد.','neutral');showToast('کد تخفیف حذف شد.');await refreshTorobPayEligibility();if(current===3)await refreshCheckoutQuote();});
   const savedCoupon=sessionStorage.getItem('cribFlagActiveCoupon');if(savedCoupon){get('discountCodeInput').value=savedCoupon;validateDiscount(savedCoupon,{silent:true}).then(refreshTorobPayEligibility);}
 
   get('finalPaymentBtn')?.addEventListener('click',async()=>{
@@ -1025,6 +1167,10 @@ function initCheckout(){
     button.disabled=true;
 
     try{
+      const quoteReady=await refreshCheckoutQuote();
+      if(!quoteReady){button.disabled=false;return;}
+      button.disabled=true;
+      const verifiedTotals=checkoutTotals();
       const shippingMethod=document.querySelector('input[name="shipping"]:checked')?.value||'tipax';
       const paymentMethod=document.querySelector('input[name="payment"]:checked')?.value||'zarinpal';
       const province=get('checkoutProvince')?.value.trim()||'';
@@ -1044,7 +1190,10 @@ function initCheckout(){
         couponCode:sessionStorage.getItem('cribFlagActiveCoupon')||'',
         expectedItemCount:cart.length,
         expectedCustomRequestIds:cart.filter(isCustomCartItem).map(item=>item.customRequestId).filter(Boolean),
-        expectedSubtotal:cartSubtotal(),
+        expectedSubtotal:verifiedTotals.subtotal,
+        expectedDiscount:verifiedTotals.discount,
+        expectedTax:verifiedTotals.tax,
+        expectedTotal:verifiedTotals.total,
         items:cart.map(item=>({
           id:item.id,
           title:item.title,
@@ -1079,6 +1228,7 @@ function initCheckout(){
       window.CribLoader?.hide(true);
       showToast(error.message||'ثبت سفارش انجام نشد.');
       button.disabled=false;
+      if(current===3)await refreshCheckoutQuote({silent:true});
     }
   });
 }
@@ -1106,7 +1256,7 @@ function initScrollPerformanceMode(){
   window.addEventListener('touchmove',markScrolling,{passive:true});
 }
 
-function initPage(){initScrollPerformanceMode();initHeader();const p=body.dataset.page;if(p==='home')initHome();if(p==='store')initStore();if(p==='product')initProduct();if(p==='custom')initCustomOrder();if(p==='cart')initCart();if(p==='faq')initFaq();if(p==='ready')initReady();if(p==='blog')initBlog();if(p==='blog-detail')initBlogDetail();if(p==='checkout')initCheckout();if(p==='success')initSuccess();}
+function initPage(){syncCartPricingFromCatalog();initScrollPerformanceMode();initHeader();const p=body.dataset.page;if(p==='home')initHome();if(p==='store')initStore();if(p==='product')initProduct();if(p==='custom')initCustomOrder();if(p==='cart')initCart();if(p==='faq')initFaq();if(p==='ready')initReady();if(p==='blog')initBlog();if(p==='blog-detail')initBlogDetail();if(p==='checkout')initCheckout();if(p==='success')initSuccess();}
 function loadPerformanceDiagnostics(){
   const params=new URLSearchParams(location.search);
   if(!params.has('perf'))return;

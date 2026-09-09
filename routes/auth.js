@@ -8,7 +8,7 @@ const Otp = require('../models/Otp');
 const env = require('../config/env');
 const { sendPatternSms } = require('../services/sms');
 const { asyncHandler, ok, AppError } = require('../utils/http');
-const { normalizeMobile } = require('../utils/formatters');
+const { normalizeMobile, normalizeDigits } = require('../utils/formatters');
 const { requireUser } = require('../middlewares/auth');
 const S = require('../services/serializers');
 
@@ -22,16 +22,20 @@ const validate = req => {
   if (!errors.isEmpty()) throw new AppError(400, 'خطا در اعتبارسنجی', errors.array());
 };
 const mobileRule = body('mobile').customSanitizer(normalizeMobile).matches(/^09\d{9}$/).withMessage('شماره موبایل معتبر نیست');
-const otpRule = body('otp').trim().matches(/^\d{5}$/).withMessage('کد تأیید باید ۵ رقم باشد');
+const normalizeOtp = value => normalizeDigits(value).replace(/[^0-9]/g, '');
+const otpRule = body('otp').customSanitizer(normalizeOtp).matches(/^\d{5}$/).withMessage('کد تأیید باید ۵ رقم باشد');
 const saveSession = req => new Promise((resolve, reject) => req.session.save(error => error ? reject(error) : resolve()));
 const regenerateSession = req => new Promise((resolve, reject) => req.session.regenerate(error => error ? reject(error) : resolve()));
 const destroySession = req => new Promise((resolve, reject) => req.session.destroy(error => error ? reject(error) : resolve()));
 
 async function regenerateUserSession(req) {
   // ادمین و کاربر یک کوکی مشترک دارند؛ هنگام ورود کاربر، نشست فعال ادمین را حفظ می‌کنیم.
+  // اطلاعات منبع ورود نیز باید بعد از regenerate باقی بماند تا سفارش به کمپین درست نسبت داده شود.
   const adminId = req.session?.adminId;
+  const attribution = req.session?.attribution;
   await regenerateSession(req);
   if (adminId) req.session.adminId = adminId;
+  if (attribution) req.session.attribution = attribution;
 }
 
 async function logoutUserOnly(req, res) {

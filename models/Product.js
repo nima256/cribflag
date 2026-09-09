@@ -23,6 +23,9 @@ const productSchema = new mongoose.Schema({
   oldPrice: { type: Number, min: 0, default: null },
   variantPrices: { type: [variantPriceSchema], default: [] },
   badge: { type: String, default: '' },
+  // جایگاه‌های مستقل صفحه اصلی؛ null یعنی این محصول در آن بخش انتخاب نشده است.
+  homeSpecialPosition: { type: Number, min: 1, max: 4, default: null },
+  homeBestSellerPosition: { type: Number, min: 1, max: 4, default: null },
   sortDate: { type: Number, default: 1 },
   rate: { type: Number, default: 4.7, min: 0, max: 5 },
   status: { type: String, enum: ['active', 'draft'], default: 'active' },

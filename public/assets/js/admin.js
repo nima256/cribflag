@@ -11,7 +11,7 @@ D.ensure();
 const q=selector=>document.querySelector(selector);
 const qa=selector=>[...document.querySelectorAll(selector)];
 const labels={
-  processing:'در حال آماده‌سازی','design-review':'بررسی طراحی','print-preparation':'آماده‌سازی برای چاپ',shipped:'ارسال شده',delivered:'تحویل شده',cancelled:'لغو شده',
+  processing:'در حال آماده‌سازی','design-review':'بررسی طراحی','print-preparation':'آماده‌سازی برای چاپ',printed:'چاپ شده',shipped:'ارسال شده',delivered:'تحویل شده',cancelled:'لغو شده',
   active:'فعال',draft:'پیش‌نویس',expired:'منقضی',open:'باز',answered:'پاسخ داده شده',closed:'بسته',review:'در حال بررسی',
   'preview-ready':'پیش‌نمایش آماده',approved:'تأیید شده',unpaid:'پرداخت نشده',pending:'در انتظار پرداخت',paid:'پرداخت شده',failed:'پرداخت ناموفق',refunded:'مسترد شده'
 };
@@ -19,11 +19,20 @@ const ORDER_STATUS_CHART=[
   {key:'processing',label:'در حال آماده‌سازی',color:'#f2a51a'},
   {key:'design-review',label:'بررسی طراحی',color:'#8b5cf6'},
   {key:'print-preparation',label:'آماده‌سازی برای چاپ',color:'#0ea5a4'},
+  {key:'printed',label:'چاپ شده',color:'#d97706'},
   {key:'shipped',label:'ارسال شده',color:'#3157d5'},
   {key:'delivered',label:'تحویل شده',color:'#22a881'},
   {key:'cancelled',label:'لغو شده',color:'#e95b70'}
 ];
 let activeOrder=null,activeCustomer=null,activeTicket=null,activeCustom=null;
+let galleryImages=[];
+let galleryLoaded=false;
+let galleryLoading=false;
+let customPricingConfig=null;
+let customPricingLoaded=false;
+let customPricingLoading=false;
+let categoryBulkPricingData=null;
+let categoryBulkPricingLoading=false;
 let productImageItems=[];
 let categoryImageFile=null;
 let categoryImagePreviewUrl='';
@@ -201,6 +210,19 @@ function orderItemDownloadMarkup(item={}){
   return `${fileMeta}<a href="${D.esc(downloadUrl)}" class="portal-btn portal-btn-soft" style="display:inline-flex;width:max-content;margin-top:7px">دانلود فایل طرح</a>`;
 }
 
+function orderItemPreviewMarkup(item={}){
+  const customRequestId=String(item?.customRequestId||'').trim();
+  if(!customRequestId)return '';
+  const fileName=String(item?.fileName||'').trim();
+  const previewUrl=String(item?.previewUrl||'').trim();
+  const isImage=/\.(?:png|jpe?g|webp|gif|svg|avif)$/i.test(fileName);
+  if(isImage&&previewUrl){
+    const downloadUrl=String(item?.downloadUrl||previewUrl).trim();
+    return `<a class="custom-order-thumb" href="${D.esc(downloadUrl)}" target="_blank" rel="noopener" title="مشاهده طرح ${D.esc(customRequestId)}"><img src="${D.esc(previewUrl)}" alt="پیش‌نمایش ${D.esc(fileName||customRequestId)}"></a>`;
+  }
+  return `<span class="list-icon">${/\.pdf$/i.test(fileName)?'PDF':'DS'}</span>`;
+}
+
 function customRequestIdsFromDisplayOrder(order={}){
   return [...new Set(
     (order.items||[])
@@ -311,6 +333,9 @@ function showView(view){
   q('#adminViewTitle').textContent=button?.dataset.viewTitle||'مدیریت';
   q('#adminSidebar')?.classList.remove('open');
   q('#adminSideOverlay')?.classList.remove('open');
+  if(view==='gallery')loadGallery();
+  if(view==='custom-pricing')loadCustomPricing();
+  if(view==='category-pricing')renderCategoryPricingCategoryOptions();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function getAnalytics(){
@@ -507,6 +532,11 @@ function orderRow(order, compact = false) {
       </td>
 
       <td>
+        <span class="table-primary">${D.esc(order.acquisition?.source||'ثبت نشده')}</span>
+        <span class="table-secondary">${D.esc(order.acquisition?.medium||'—')}</span>
+      </td>
+
+      <td>
         ${orderStatus}
       </td>
 
@@ -636,6 +666,9 @@ function renderOrders() {
   const paymentStatus =
     q('#adminPaymentStatus')?.value || '';
 
+  const paymentGateway =
+    q('#adminPaymentGateway')?.value || '';
+
   let list = getOrdersForDisplay().sort((a, b) => {
     const firstDate = String(a.createdAt || a.date || '');
     const secondDate = String(b.createdAt || b.date || '');
@@ -658,6 +691,8 @@ function renderOrders() {
         ${order.phone || ''}
         ${order.fileName || ''}
         ${order.linkedOrderNumber || ''}
+        ${order.acquisition?.source || ''}
+        ${order.acquisition?.medium || ''}
         ${itemSearch}
       `.toLowerCase();
 
@@ -675,6 +710,10 @@ function renderOrders() {
     );
   }
 
+  if (paymentGateway) {
+    list = list.filter(order => paymentGatewayLabel(order) === paymentGateway);
+  }
+
   const table = q('#adminOrdersTable');
 
   if (!table) return;
@@ -683,7 +722,7 @@ function renderOrders() {
     list.map(order => orderRow(order)).join('') ||
     `
       <tr>
-        <td colspan="7">
+        <td colspan="8">
           <div class="empty-panel">
             سفارشی پیدا نشد.
           </div>
@@ -694,7 +733,7 @@ function renderOrders() {
   const all = getOrdersForDisplay();
 
   q('#orderStatToday').textContent = D.fa(
-    all.filter(order => ['processing', 'design-review', 'print-preparation'].includes(order.status)).length
+    all.filter(order => ['processing', 'design-review', 'print-preparation', 'printed'].includes(order.status)).length
   );
 
   q('#orderStatProcessing').textContent = D.fa(
@@ -1097,8 +1136,285 @@ function renderReports(){
   monthlyChart('#reportRevenueChart',analytics.monthlySales||[]);
 }
 
+
+function formatFileSize(bytes=0){
+  const value=Math.max(0,Number(bytes)||0);
+  if(value<1024)return `${D.fa(Math.round(value))} بایت`;
+  const units=['کیلوبایت','مگابایت','گیگابایت'];
+  let size=value/1024,index=0;
+  while(size>=1024&&index<units.length-1){size/=1024;index+=1;}
+  return `${new Intl.NumberFormat('fa-IR',{maximumFractionDigits:2}).format(size)} ${units[index]}`;
+}
+
+function renderGallery(){
+  const grid=q('#adminGalleryGrid');
+  if(!grid)return;
+  const term=String(q('#adminGallerySearch')?.value||'').trim().toLowerCase();
+  const source=String(q('#adminGallerySource')?.value||'');
+  const reference=String(q('#adminGalleryReference')?.value||'');
+  let list=[...galleryImages];
+  if(term)list=list.filter(image=>`${image.name||''} ${image.path||''}`.toLowerCase().includes(term));
+  if(source)list=list.filter(image=>image.source===source);
+  if(reference==='used')list=list.filter(image=>image.referenced);
+  if(reference==='unused')list=list.filter(image=>!image.referenced);
+
+  const totalBytes=galleryImages.reduce((sum,image)=>sum+Number(image.bytes||0),0);
+  if(q('#galleryStatCount'))q('#galleryStatCount').textContent=D.fa(galleryImages.length);
+  if(q('#galleryStatSize'))q('#galleryStatSize').textContent=formatFileSize(totalBytes);
+  if(q('#galleryStatUsed'))q('#galleryStatUsed').textContent=D.fa(galleryImages.filter(image=>image.referenced).length);
+  if(q('#galleryResultCount'))q('#galleryResultCount').textContent=`${D.fa(list.length)} تصویر`;
+
+  grid.innerHTML=list.map(image=>`
+    <article class="admin-gallery-card">
+      <a class="admin-gallery-preview" href="${D.esc(image.previewUrl||'#')}" target="_blank" rel="noopener">
+        <img src="${D.esc(image.previewUrl||'')}" alt="${D.esc(image.name||'تصویر')}" loading="lazy">
+      </a>
+      <div class="admin-gallery-info">
+        <strong title="${D.esc(image.name||'')}">${D.esc(image.name||'بدون نام')}</strong>
+        <small title="${D.esc(image.path||'')}">${D.esc(image.path||'')}</small>
+        <div class="admin-gallery-meta">
+          <span>${formatFileSize(image.bytes)}</span>
+          <span>${image.source==='uploads'?'آپلودها':'public'}</span>
+          <span class="${image.referenced?'is-used':'is-unused'}">${image.referenced?'در حال استفاده':'بدون ارجاع ثبت‌شده'}</span>
+        </div>
+        <div class="admin-gallery-actions">
+          <a class="portal-btn portal-btn-soft" href="${D.esc(image.previewUrl||'#')}" target="_blank" rel="noopener">نمایش</a>
+          <button class="portal-btn portal-btn-danger delete-gallery-image" type="button" data-gallery-id="${D.esc(image.id||'')}" data-gallery-path="${D.esc(image.path||'')}" data-gallery-used="${image.referenced?'1':'0'}">حذف از هاست</button>
+        </div>
+      </div>
+    </article>
+  `).join('')||'<div class="empty-panel gallery-empty">تصویری با این فیلتر پیدا نشد.</div>';
+}
+
+async function loadGallery(force=false){
+  if(galleryLoading||(!force&&galleryLoaded))return;
+  galleryLoading=true;
+  const grid=q('#adminGalleryGrid');
+  if(grid)grid.innerHTML='<div class="empty-panel gallery-empty">در حال خواندن تصاویر هاست...</div>';
+  try{
+    const response=await window.CribAPI.request('/api/admin/gallery');
+    galleryImages=Array.isArray(response.images)?response.images:[];
+    galleryLoaded=true;
+    renderGallery();
+  }catch(error){
+    if(grid)grid.innerHTML=`<div class="empty-panel gallery-empty">${D.esc(error.message||'خواندن گالری ناموفق بود.')}</div>`;
+    D.toast(error.message||'خواندن گالری ناموفق بود.','error');
+  }finally{
+    galleryLoading=false;
+  }
+}
+
+function pricingTierLabel(tier={}){
+  return `${D.fa(tier.maxLongSide||0)} × ${D.fa(tier.maxShortSide||0)} سانتی‌متر`;
+}
+
+function renderCustomPricing(){
+  const box=q('#customPricingEditor');
+  if(!box||!customPricingConfig)return;
+  const tiers=Array.isArray(customPricingConfig.flagTiers)?customPricingConfig.flagTiers:[];
+  const pillows=customPricingConfig.pillows||{};
+  const pillowSections=Object.entries(pillows).map(([mode,config])=>`
+    <div class="pricing-panel">
+      <div class="pricing-panel-head"><div><h3>${D.esc(config.title||mode)}</h3><p>قیمت طرح دلخواه برای حالت‌های این محصول</p></div></div>
+      <div class="pricing-rows">
+        ${(config.variants||[]).map((variant,index)=>`
+          <label class="pricing-row">
+            <span><strong>${D.esc(variant.option||'')}</strong><small>${D.esc(variant.size||'')}</small></span>
+            <span class="input-suffix"><input class="custom-pricing-input" type="number" min="0" step="1000" value="${Number(variant.price||0)}" data-pricing-kind="pillow" data-pricing-mode="${D.esc(mode)}" data-pricing-index="${index}"><em>تومان</em></span>
+          </label>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  box.innerHTML=`
+    <div class="pricing-panel pricing-panel-wide">
+      <div class="pricing-panel-head"><div><h3>پرچم طرح دلخواه</h3><p>قیمت بر اساس سقف ابعاد و جنس پارچه</p></div></div>
+      <div class="portal-table-wrap">
+        <table class="portal-table custom-pricing-table">
+          <thead><tr><th>حداکثر ابعاد</th><th>ساتن براق</th><th>ساتن آمریکایی</th><th>مخمل</th></tr></thead>
+          <tbody>${tiers.map((tier,index)=>`
+            <tr>
+              <td><strong>${pricingTierLabel(tier)}</strong></td>
+              <td><div class="input-suffix"><input class="custom-pricing-input" type="number" min="0" step="1000" value="${Number(tier.price||0)}" data-pricing-kind="flag" data-pricing-index="${index}" data-pricing-field="price"><em>تومان</em></div></td>
+              <td><div class="input-suffix"><input class="custom-pricing-input" type="number" min="0" step="1000" value="${Number(tier.americanSatinPrice||0)}" data-pricing-kind="flag" data-pricing-index="${index}" data-pricing-field="americanSatinPrice"><em>تومان</em></div></td>
+              <td><div class="input-suffix"><input class="custom-pricing-input" type="number" min="0" step="1000" value="${Number(tier.velvetPrice||0)}" data-pricing-kind="flag" data-pricing-index="${index}" data-pricing-field="velvetPrice"><em>تومان</em></div></td>
+            </tr>
+          `).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="pricing-grid">${pillowSections}</div>
+  `;
+}
+
+async function loadCustomPricing(force=false){
+  if(customPricingLoading||(!force&&customPricingLoaded))return;
+  customPricingLoading=true;
+  const box=q('#customPricingEditor');
+  if(box)box.innerHTML='<div class="empty-panel">در حال خواندن قیمت‌ها...</div>';
+  try{
+    const response=await window.CribAPI.request('/api/admin/settings/custom-pricing');
+    customPricingConfig=response.pricing||null;
+    customPricingLoaded=Boolean(customPricingConfig);
+    renderCustomPricing();
+  }catch(error){
+    if(box)box.innerHTML=`<div class="empty-panel">${D.esc(error.message||'خواندن قیمت‌ها ناموفق بود.')}</div>`;
+    D.toast(error.message||'خواندن قیمت‌ها ناموفق بود.','error');
+  }finally{
+    customPricingLoading=false;
+  }
+}
+
+async function saveCustomPricing(){
+  if(!customPricingConfig)return;
+  const payload=JSON.parse(JSON.stringify(customPricingConfig));
+  qa('.custom-pricing-input').forEach(input=>{
+    const value=Math.max(0,Math.round(Number(input.value)||0));
+    if(input.dataset.pricingKind==='flag'){
+      const tier=payload.flagTiers?.[Number(input.dataset.pricingIndex)];
+      if(tier&&input.dataset.pricingField)tier[input.dataset.pricingField]=value;
+    }else if(input.dataset.pricingKind==='pillow'){
+      const variant=payload.pillows?.[input.dataset.pricingMode]?.variants?.[Number(input.dataset.pricingIndex)];
+      if(variant)variant.price=value;
+    }
+  });
+  const button=q('#saveCustomPricingBtn');
+  if(button){button.disabled=true;button.textContent='در حال ذخیره...';}
+  try{
+    const response=await window.CribAPI.request('/api/admin/settings/custom-pricing',{method:'PUT',body:JSON.stringify(payload)});
+    customPricingConfig=response.pricing||payload;
+    customPricingLoaded=true;
+    renderCustomPricing();
+    D.toast('قیمت‌های طرح دلخواه ذخیره شد.');
+  }catch(error){
+    D.toast(error.message||'ذخیره قیمت‌ها ناموفق بود.','error');
+  }finally{
+    if(button){button.disabled=false;button.textContent='ذخیره قیمت‌ها';}
+  }
+}
+
+
+function renderCategoryPricingCategoryOptions(){
+  const select=q('#categoryPricingCategory');
+  if(!select)return;
+  const previous=select.value||String(categoryBulkPricingData?.category?.id||'');
+  const categories=D.get('categories');
+  select.innerHTML='<option value="">یک دسته‌بندی انتخاب کنید</option>'+categories.map(category=>
+    `<option value="${D.esc(category.id)}">${D.esc(category.name)} — ${D.fa(category.productCount||0)} محصول</option>`
+  ).join('');
+  if(previous&&[...select.options].some(option=>option.value===previous))select.value=previous;
+}
+
+function categoryPricingSizeParts(value=''){
+  const text=String(value||'').trim();
+  const parts=text.split(' — ').map(item=>item.trim()).filter(Boolean);
+  if(parts.length>1&&(parts[0].includes('الیاف')||parts[0].includes('کاور'))){
+    return {option:parts[0],size:parts.slice(1).join(' — ')};
+  }
+  return {option:'',size:text};
+}
+
+function renderCategoryBulkPricing(){
+  const box=q('#categoryPricingEditor');
+  const saveButton=q('#saveCategoryPricingBtn');
+  if(!box)return;
+  if(!categoryBulkPricingData){
+    box.innerHTML='<div class="empty-panel">یک دسته‌بندی را انتخاب کنید تا حالت‌های قیمت‌گذاری آن نمایش داده شود.</div>';
+    if(saveButton)saveButton.disabled=true;
+    return;
+  }
+  const variants=Array.isArray(categoryBulkPricingData.variants)?categoryBulkPricingData.variants:[];
+  const category=categoryBulkPricingData.category||{};
+  const withoutVariants=Number(categoryBulkPricingData.productsWithoutVariants||0);
+  if(saveButton)saveButton.disabled=!variants.length;
+  const rows=variants.map((variant,index)=>{
+    const parts=categoryPricingSizeParts(variant.size);
+    const priceValue=variant.mixed?'':Number(variant.price||0);
+    const mixedHint=variant.mixed
+      ? `قیمت فعلی متفاوت: ${D.toman(variant.minPrice||0)} تا ${D.toman(variant.maxPrice||0)}`
+      : `قیمت فعلی: ${D.toman(variant.price||0)}`;
+    return `<tr class="category-pricing-row" data-size="${D.esc(variant.size)}" data-fabric="${D.esc(variant.fabric)}">
+      <td><strong>${D.esc(parts.option||'—')}</strong></td>
+      <td><strong>${D.esc(parts.size||variant.size)}</strong></td>
+      <td>${D.esc(variant.fabric||'—')}</td>
+      <td><span class="category-pricing-count">${D.fa(variant.affectedProducts||0)} محصول</span></td>
+      <td><div class="input-suffix category-pricing-input-wrap"><input class="category-bulk-pricing-input" type="number" min="0" step="1000" value="${priceValue===''?'':D.esc(priceValue)}" placeholder="${variant.mixed?'قیمت جدید را وارد کنید':''}" data-index="${index}"><em>تومان</em></div><small class="category-pricing-current${variant.mixed?' is-mixed':''}">${D.esc(mixedHint)}</small></td>
+    </tr>`;
+  }).join('');
+  box.innerHTML=`
+    <div class="stats-grid category-pricing-stats">
+      <article class="stat-card"><h3>${D.fa(categoryBulkPricingData.productCount||0)}</h3><p>محصول در دسته ${D.esc(category.name||'')}</p></article>
+      <article class="stat-card"><h3>${D.fa(variants.length)}</h3><p>ترکیب قیمت قابل ویرایش</p></article>
+      <article class="stat-card"><h3>${D.fa(withoutVariants)}</h3><p>محصول بدون قیمت ترکیبی</p></article>
+    </div>
+    <div class="portal-card">
+      <div class="pricing-panel-head"><div><h3>${D.esc(category.name||'دسته‌بندی')}</h3><p>هر عددی که در جدول ثبت شود روی تمام محصولات دارای همان ترکیب اعمال می‌شود.</p></div></div>
+      ${variants.length?`<div class="portal-table-wrap"><table class="portal-table category-bulk-pricing-table"><thead><tr><th>حالت</th><th>سایز</th><th>جنس</th><th>تعداد محصول</th><th>قیمت</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div class="empty-panel category-pricing-empty">این دسته محصولی با قیمت ترکیبی سایز/جنس ندارد.</div>'}
+    </div>`;
+}
+
+async function loadCategoryBulkPricing(force=false){
+  const select=q('#categoryPricingCategory');
+  const categoryId=Number(select?.value||0);
+  if(!categoryId){
+    categoryBulkPricingData=null;
+    renderCategoryBulkPricing();
+    return D.toast('اول یک دسته‌بندی انتخاب کنید.','error');
+  }
+  if(categoryBulkPricingLoading)return;
+  if(!force&&Number(categoryBulkPricingData?.category?.id)===categoryId){renderCategoryBulkPricing();return;}
+  categoryBulkPricingLoading=true;
+  const box=q('#categoryPricingEditor');
+  if(box)box.innerHTML='<div class="empty-panel">در حال خواندن قیمت‌های محصولات این دسته...</div>';
+  const saveButton=q('#saveCategoryPricingBtn');
+  if(saveButton)saveButton.disabled=true;
+  try{
+    categoryBulkPricingData=await window.CribAPI.request(`/api/admin/category-pricing/${categoryId}`);
+    renderCategoryBulkPricing();
+  }catch(error){
+    categoryBulkPricingData=null;
+    if(box)box.innerHTML=`<div class="empty-panel">${D.esc(error.message||'خواندن قیمت‌های دسته ناموفق بود.')}</div>`;
+    D.toast(error.message||'خواندن قیمت‌های دسته ناموفق بود.','error');
+  }finally{
+    categoryBulkPricingLoading=false;
+  }
+}
+
+async function saveCategoryBulkPricing(){
+  const categoryId=Number(q('#categoryPricingCategory')?.value||0);
+  if(!categoryId||!categoryBulkPricingData)return D.toast('دسته‌بندی را انتخاب کنید.','error');
+  const variants=qa('.category-pricing-row').map(row=>{
+    const input=row.querySelector('.category-bulk-pricing-input');
+    if(!input||input.value==='')return null;
+    const price=Number(input.value);
+    if(!Number.isInteger(price)||price<0)return {invalid:true};
+    return {size:row.dataset.size||'',fabric:row.dataset.fabric||'',price};
+  }).filter(Boolean);
+  if(variants.some(item=>item.invalid))return D.toast('همه قیمت‌ها باید عدد صحیح صفر یا بیشتر باشند.','error');
+  if(!variants.length)return D.toast('حداقل یک قیمت جدید وارد کنید.','error');
+  const categoryName=categoryBulkPricingData.category?.name||'این دسته';
+  if(!confirm(`قیمت‌های واردشده روی همه محصولات دسته «${categoryName}» اعمال شود؟`))return;
+  const button=q('#saveCategoryPricingBtn');
+  if(button){button.disabled=true;button.textContent='در حال اعمال...';}
+  try{
+    const response=await window.CribAPI.request(`/api/admin/category-pricing/${categoryId}`,{method:'PUT',body:JSON.stringify({variants})});
+    categoryBulkPricingData=response;
+    await D.syncFromApi('admin');
+    renderAll();
+    renderCategoryPricingCategoryOptions();
+    renderCategoryBulkPricing();
+    const unmatched=Array.isArray(response.unmatchedVariants)?response.unmatchedVariants.length:0;
+    D.toast(unmatched?`${response.message}؛ ${D.fa(unmatched)} ردیف در محصولی پیدا نشد.`:(response.message||'قیمت‌های دسته‌بندی به‌روزرسانی شد.'));
+  }catch(error){
+    D.toast(error.message||'اعمال دسته‌جمعی قیمت‌ها ناموفق بود.','error');
+  }finally{
+    if(button){button.disabled=false;button.textContent='اعمال روی همه محصولات';}
+  }
+}
+
 function renderNotifications(){
-  const orders=D.get('orders').filter(order=>['processing','design-review','print-preparation'].includes(order.status));
+  const orders=D.get('orders').filter(order=>['processing','design-review','print-preparation','printed'].includes(order.status));
   const tickets=D.get('tickets').filter(ticket=>ticket.status==='open');
   const items=[
     ...orders.slice(0,4).map(order=>({title:'سفارش نیازمند اقدام',text:`سفارش ${order.id} در وضعیت ${labels[order.status]} است.`,date:registrationDateTime(order)})),
@@ -1106,7 +1422,7 @@ function renderNotifications(){
   ];
   q('#adminNotificationList').innerHTML=items.map(item=>`<div class="notification-item unread"><span class="notification-mark"></span><div><strong>${D.esc(item.title)}</strong><p>${D.esc(item.text)}</p><small>${D.esc(item.date)}</small></div></div>`).join('')||'<div class="empty-panel">اعلان جدیدی وجود ندارد.</div>';
 }
-function renderAll(){renderDashboard();renderOrders();renderProducts();renderCategories();renderCoupons();renderCustomers();renderTickets();renderCustom();renderReports();renderNotifications();}
+function renderAll(){renderDashboard();renderOrders();renderProducts();renderCategories();renderCategoryPricingCategoryOptions();renderCoupons();renderCustomers();renderTickets();renderCustom();renderReports();renderNotifications();if(galleryLoaded)renderGallery();if(customPricingLoaded)renderCustomPricing();if(categoryBulkPricingData)renderCategoryBulkPricing();}
 
 function ensureSelectOption(select,value){
   if(!select||!value)return;
@@ -1287,6 +1603,25 @@ function renderVariantPricing(seedVariants=null){
   })).join('');
   toggleDiscountFields();
 }
+function normalizeHomePosition(value){const position=Number(value);return Number.isInteger(position)&&position>=1&&position<=4?position:null;}
+function renderHomePositionSelect(selector,field,value,currentProductId){
+  const select=q(selector);if(!select)return;
+  const current=normalizeHomePosition(value);
+  const products=D.get('products');
+  select.innerHTML='<option value="">انتخاب جایگاه</option>'+[1,2,3,4].map(position=>{
+    const occupied=products.find(product=>Number(product.id)!==Number(currentProductId)&&normalizeHomePosition(product?.[field])===position);
+    return `<option value="${position}" ${occupied?'disabled':''}>جایگاه ${D.fa(position)}${occupied?` — ${D.esc(occupied.title)}`:''}</option>`;
+  }).join('');
+  select.value=current?String(current):'';
+}
+function toggleHomePlacementFields(){
+  const specialEnabled=Boolean(q('#productHomeSpecialEnabled')?.checked);
+  const bestEnabled=Boolean(q('#productHomeBestSellerEnabled')?.checked);
+  const specialField=q('#productHomeSpecialPositionField'),specialSelect=q('#productHomeSpecialPosition');
+  const bestField=q('#productHomeBestSellerPositionField'),bestSelect=q('#productHomeBestSellerPosition');
+  specialField?.classList.toggle('is-disabled',!specialEnabled);if(specialSelect)specialSelect.disabled=!specialEnabled;
+  bestField?.classList.toggle('is-disabled',!bestEnabled);if(bestSelect)bestSelect.disabled=!bestEnabled;
+}
 function productModal(id=null){
   const product=id?D.get('products').find(item=>Number(item.id)===Number(id)):null;
   const form=q('#productForm');form?.reset();
@@ -1299,6 +1634,11 @@ function productModal(id=null){
   q('#productHasDiscount').checked=Boolean(product?.hasDiscount);
   q('#productOldPrice').value=product?.old??'';
   ensureSelectOption(q('#productBadge'),product?.badge);q('#productBadge').value=product?.badge||'';
+  renderHomePositionSelect('#productHomeSpecialPosition','homeSpecialPosition',product?.homeSpecialPosition,product?.id);
+  renderHomePositionSelect('#productHomeBestSellerPosition','homeBestSellerPosition',product?.homeBestSellerPosition,product?.id);
+  q('#productHomeSpecialEnabled').checked=Boolean(normalizeHomePosition(product?.homeSpecialPosition));
+  q('#productHomeBestSellerEnabled').checked=Boolean(normalizeHomePosition(product?.homeBestSellerPosition));
+  toggleHomePlacementFields();
   q('#productStatus').value=product?.status||'active';
   q('#productInventoryMode').value=product?.inventoryMode==='managed'?'managed':'unlimited';
   q('#productStock').value=product?.inventoryMode==='managed'?Math.max(0,Number(product?.stock||0)):0;
@@ -1327,13 +1667,19 @@ function orderModal(id){
       <div class="detail-chip"><small>مبلغ نهایی</small><strong>${D.toman(order.total)}</strong></div>
       <div class="detail-chip"><small>وضعیت پرداخت</small><strong>${labels[order.paymentStatus]||order.paymentStatus}</strong></div>
       <div class="detail-chip"><small>درگاه پرداخت</small><strong>${D.esc(paymentGatewayLabel(order))}</strong></div>
+      <div class="detail-chip"><small>منبع ورود</small><strong>${D.esc(order.acquisition?.source||'ثبت نشده')}${order.acquisition?.medium?` / ${D.esc(order.acquisition.medium)}`:''}</strong></div>
+    </div>
+    <div class="order-payment-breakdown" style="margin:12px 0 16px">
+      <div><span>صفحه ورود</span><strong style="direction:ltr;text-align:left;max-width:65%;overflow-wrap:anywhere">${D.esc(order.acquisition?.landingPage||'ثبت نشده')}</strong></div>
+      <div><span>Referrer</span><strong style="direction:ltr;text-align:left;max-width:65%;overflow-wrap:anywhere">${D.esc(order.acquisition?.referrer||'ثبت نشده')}</strong></div>
+      ${order.acquisition?.campaign?`<div><span>Campaign</span><strong>${D.esc(order.acquisition.campaign)}</strong></div>`:''}
     </div>
     <div class="portal-grid-equal"><div>
       <h4>اقلام سفارش</h4>
       <div class="order-items-mini">${orderItems.map(item=>{
         const qty=Math.max(1,Number(item?.qty||1));
         const customId=String(item?.customRequestId||'').trim();
-        const thumb=customId?`<span class="list-icon">DS</span>`:productThumb(item.title,productImage(item.id));
+        const thumb=customId?orderItemPreviewMarkup(item):productThumb(item.title,productImage(item.id));
         const customAdminNote=customId?String(item?.adminNote||'').trim():'';
         return `<div class="order-item-mini">${thumb}<span><strong>${D.esc(item.title)}</strong><small>${orderItemOptions(item)}</small>${item.notes?`<small>یادداشت کالا: ${D.esc(item.notes)}</small>`:''}${customAdminNote?`<small><strong>یادداشت ادمین:</strong> ${D.esc(customAdminNote)}</small>`:''}${orderItemDownloadMarkup(item)}</span><b>${D.toman(Number(item?.price||0)*qty)}</b></div>`;
       }).join('')||'<div class="empty-panel">آیتمی برای این سفارش ثبت نشده است.</div>'}</div>
@@ -1348,7 +1694,7 @@ function orderModal(id){
       <h4 style="margin-top:16px">یادداشت ثبت‌شده توسط کاربر</h4>
       <p class="order-customer-note ${order.customerNote?'':'is-empty'}">${order.customerNote?D.esc(order.customerNote):'کاربر یادداشتی برای این سفارش ثبت نکرده است.'}</p>
       <h4 style="margin-top:16px">نشانی تحویل</h4><p style="font-size:11px;line-height:2;color:var(--portal-muted)">${D.esc(order.address)}<br>${D.esc(order.phone)} — ${D.esc(order.email||'')}</p>
-    </div><div><div class="form-grid"><div class="field full"><label>وضعیت سفارش</label><select id="modalOrderStatus"><option value="processing">در حال آماده‌سازی</option><option value="design-review">بررسی طراحی</option><option value="print-preparation">آماده‌سازی برای چاپ</option><option value="shipped">ارسال شده</option><option value="delivered">تحویل شده</option><option value="cancelled">لغو شده</option></select></div><div class="field full"><label>وضعیت پرداخت</label><select id="modalPaymentStatus"><option value="paid">پرداخت شده</option><option value="review">در انتظار بررسی</option><option value="refunded">مسترد شده</option></select></div><div class="field full"><label>کد رهگیری</label><input id="modalTracking" value="${D.esc(order.tracking||'')}"></div><div class="field full"><label>یادداشت داخلی</label><textarea id="modalAdminNote">${D.esc(order.adminNote||'')}</textarea></div></div></div></div>`;
+    </div><div><div class="form-grid"><div class="field full"><label>وضعیت سفارش</label><select id="modalOrderStatus"><option value="processing">در حال آماده‌سازی</option><option value="design-review">بررسی طراحی</option><option value="print-preparation">آماده‌سازی برای چاپ</option><option value="printed">چاپ شده</option><option value="shipped">ارسال شده</option><option value="delivered">تحویل شده</option><option value="cancelled">لغو شده</option></select></div><div class="field full"><label>وضعیت پرداخت</label><select id="modalPaymentStatus"><option value="paid">پرداخت شده</option><option value="review">در انتظار بررسی</option><option value="refunded">مسترد شده</option></select></div><div class="field full"><label>کد رهگیری</label><input id="modalTracking" value="${D.esc(order.tracking||'')}"></div><div class="field full"><label>یادداشت داخلی</label><textarea id="modalAdminNote">${D.esc(order.adminNote||'')}</textarea></div></div></div></div>`;
   q('#modalOrderStatus').value=order.status;q('#modalPaymentStatus').value=order.paymentStatus;openModal('#adminOrderModal');
 }
 
@@ -1479,6 +1825,7 @@ function customModal(id) {
           <option value="design-review">بررسی طراحی</option>
           <option value="processing">در حال آماده‌سازی</option>
           <option value="print-preparation">آماده‌سازی برای چاپ</option>
+          <option value="printed">چاپ شده</option>
           <option value="shipped">ارسال شده</option>
           <option value="delivered">تحویل شده</option>
           <option value="cancelled">لغو شده</option>
@@ -1634,13 +1981,47 @@ document.addEventListener('change',event=>{
 document.addEventListener('click',event=>{if(!event.target.closest('#adminNotificationPanel')&&!event.target.closest('#adminNotificationBtn'))q('#adminNotificationPanel')?.classList.remove('open');});
 
 [
-  ['#adminOrderSearch','input',renderOrders],['#adminOrderStatus','change',renderOrders],['#adminPaymentStatus','change',renderOrders],
+  ['#adminOrderSearch','input',renderOrders],['#adminOrderStatus','change',renderOrders],['#adminPaymentStatus','change',renderOrders],['#adminPaymentGateway','change',renderOrders],
   ['#adminProductSearch','input',()=>{adminProductPage=1;renderProducts();}],['#adminProductCategory','change',()=>{adminProductPage=1;renderProducts();}],['#adminProductStatus','change',()=>{adminProductPage=1;renderProducts();}],
   ['#adminCategorySearch','input',renderCategories],['#adminCategoryStatus','change',renderCategories],['#adminCategoryPlacement','change',renderCategories],
   ['#couponSearch','input',renderCoupons],['#couponStatus','change',renderCoupons],['#customerSearch','input',renderCustomers],['#customerRole','change',renderCustomers],
   ['#adminTicketSearch','input',renderTickets],['#adminTicketStatus','change',renderTickets],['#adminTicketPriority','change',renderTickets],
   ['#adminCustomSearch','input',renderCustom],['#adminCustomStatus','change',renderCustom],['#adminCustomPaymentStatus','change',renderCustom]
 ].forEach(([selector,eventName,handler])=>q(selector)?.addEventListener(eventName,handler));
+
+q('#adminGallerySearch')?.addEventListener('input',renderGallery);
+q('#adminGallerySource')?.addEventListener('change',renderGallery);
+q('#adminGalleryReference')?.addEventListener('change',renderGallery);
+q('#refreshGalleryBtn')?.addEventListener('click',()=>loadGallery(true));
+q('#adminGalleryGrid')?.addEventListener('click',async event=>{
+  const button=event.target.closest('.delete-gallery-image');
+  if(!button)return;
+  const id=String(button.dataset.galleryId||'').trim();
+  if(!id)return;
+  const filePath=String(button.dataset.galleryPath||'تصویر انتخاب‌شده');
+  const isUsed=button.dataset.galleryUsed==='1';
+  const warning=isUsed?'\n\nهشدار: این تصویر در اطلاعات محصولات/دسته‌ها یا سفارش اختصاصی ارجاع دارد و حذف آن می‌تواند باعث نمایش تصویر شکسته شود.':'';
+  if(!confirm(`فایل «${filePath}» از هاست حذف شود؟ این عملیات قابل بازگشت نیست.${warning}`))return;
+  button.disabled=true;
+  try{
+    const response=await window.CribAPI.request(`/api/admin/gallery/${encodeURIComponent(id)}`,{method:'DELETE'});
+    galleryImages=galleryImages.filter(image=>String(image.id)!==id);
+    renderGallery();
+    D.toast(response.message||'تصویر از هاست حذف شد.');
+  }catch(error){
+    button.disabled=false;
+    D.toast(error.message||'حذف تصویر ناموفق بود.','error');
+  }
+});
+q('#reloadCustomPricingBtn')?.addEventListener('click',()=>loadCustomPricing(true));
+q('#saveCustomPricingBtn')?.addEventListener('click',saveCustomPricing);
+q('#categoryPricingCategory')?.addEventListener('change',()=>{categoryBulkPricingData=null;loadCategoryBulkPricing(true);});
+q('#loadCategoryPricingBtn')?.addEventListener('click',()=>loadCategoryBulkPricing(true));
+q('#reloadCategoryPricingBtn')?.addEventListener('click',()=>loadCategoryBulkPricing(true));
+q('#saveCategoryPricingBtn')?.addEventListener('click',saveCategoryBulkPricing);
+
+q('#productHomeSpecialEnabled')?.addEventListener('change',toggleHomePlacementFields);
+q('#productHomeBestSellerEnabled')?.addEventListener('change',toggleHomePlacementFields);
 
 q('#productForm')?.addEventListener('submit',async event=>{
   event.preventDefault();
@@ -1666,9 +2047,18 @@ q('#productForm')?.addEventListener('submit',async event=>{
   if(variantPrices.some(item=>!Number.isFinite(item.price)||item.price<0))return D.toast('قیمت فروش همه ترکیب‌ها باید معتبر باشد.','error');
   if(hasDiscount&&variantPrices.some(item=>!Number.isFinite(item.oldPrice)||item.oldPrice<=item.price))return D.toast('قیمت قبل تخفیف هر ترکیب باید از قیمت فروش بیشتر باشد.','error');
 
+  const specialEnabled=Boolean(q('#productHomeSpecialEnabled')?.checked);
+  const bestSellerEnabled=Boolean(q('#productHomeBestSellerEnabled')?.checked);
+  const homeSpecialPosition=specialEnabled?normalizeHomePosition(q('#productHomeSpecialPosition')?.value):null;
+  const homeBestSellerPosition=bestSellerEnabled?normalizeHomePosition(q('#productHomeBestSellerPosition')?.value):null;
+  if(specialEnabled&&!homeSpecialPosition)return D.toast('جایگاه پیشنهاد ویژه را از ۱ تا ۴ انتخاب کنید.','error');
+  if(bestSellerEnabled&&!homeBestSellerPosition)return D.toast('جایگاه پرفروش‌ترین را از ۱ تا ۴ انتخاب کنید.','error');
+
   let all=D.get('products');
   const id=Number(q('#productId').value)||Math.max(0,...all.map(product=>Number(product.id)||0))+1;
   const previous=all.find(product=>Number(product.id)===id);
+  if(homeSpecialPosition&&all.some(product=>Number(product.id)!==id&&normalizeHomePosition(product.homeSpecialPosition)===homeSpecialPosition))return D.toast('این جایگاه پیشنهاد ویژه قبلاً توسط محصول دیگری گرفته شده است.','error');
+  if(homeBestSellerPosition&&all.some(product=>Number(product.id)!==id&&normalizeHomePosition(product.homeBestSellerPosition)===homeBestSellerPosition))return D.toast('این جایگاه پرفروش‌ترین قبلاً توسط محصول دیگری گرفته شده است.','error');
   const cheapest=variantPrices.reduce((best,item)=>item.price<best.price?item:best,variantPrices[0]);
   const sku=(q('#productSku').value.trim()||generateRandomSku(id)).toUpperCase();
   if(all.some(item=>Number(item.id)!==id&&String(item.sku||'').toUpperCase()===sku))return D.toast('این کد محصول قبلاً استفاده شده است.','error');
@@ -1696,7 +2086,7 @@ q('#productForm')?.addEventListener('submit',async event=>{
     primaryCategoryId:categoryIds[0],categoryIds,categorySlugs,
     price:cheapest.price,hasDiscount,old:hasDiscount?cheapest.oldPrice:null,
     variantPrices:variantPrices.map(item=>({...item,hasDiscount,oldPrice:hasDiscount?item.oldPrice:null})),
-    badge:q('#productBadge').value,status:q('#productStatus').value,inventoryMode,stock,sizes,fabrics,
+    badge:q('#productBadge').value,homeSpecialPosition,homeBestSellerPosition,status:q('#productStatus').value,inventoryMode,stock,sizes,fabrics,
     rate:previous?.rate||4.7,date:previous?.date||15,sales:previous?.sales||0,image,images
   };
   delete data.description;
@@ -1852,12 +2242,12 @@ document.addEventListener('click',async event=>{
 });
 
 function exportRows(name,rows){D.downloadCSV(`${name}-${new Date().toISOString().slice(0,10)}.csv`,rows);}
-q('#exportOrdersBtn')?.addEventListener('click',()=>exportRows('orders',getOrdersForDisplay().map(order=>({order:order.id,customer:order.customer,phone:order.phone,date:registrationDateTime(order),subtotal:order.subtotal,coupon:order.couponCode||'',discount:order.discount,total:order.total,note:order.customerNote||'',status:labels[order.status],payment:labels[order.paymentStatus]||order.paymentStatus,paymentGateway:paymentGatewayLabel(order)}))));
+q('#exportOrdersBtn')?.addEventListener('click',()=>exportRows('orders',getOrdersForDisplay().map(order=>({order:order.id,customer:order.customer,phone:order.phone,date:registrationDateTime(order),subtotal:order.subtotal,coupon:order.couponCode||'',discount:order.discount,total:order.total,note:order.customerNote||'',status:labels[order.status],payment:labels[order.paymentStatus]||order.paymentStatus,paymentGateway:paymentGatewayLabel(order),source:order.acquisition?.source||'ثبت نشده',medium:order.acquisition?.medium||'',campaign:order.acquisition?.campaign||'',landingPage:order.acquisition?.landingPage||'',referrer:order.acquisition?.referrer||''}))));
 q('#exportProductsBtn')?.addEventListener('click',()=>exportRows('products',D.get('products').map(product=>({id:product.id,sku:product.sku,title:product.title,category:(product.categories||[product.category]).join(' | '),sizes:(product.sizes||[]).join(' | '),fabrics:(product.fabrics||[]).join(' | '),price:product.price,badge:product.badge,status:labels[product.status]}))));
 q('#exportCategoriesBtn')?.addEventListener('click',()=>exportRows('categories',D.get('categories').map(category=>({id:category.id,name:category.name,slug:category.slug,sortOrder:category.sortOrder,status:labels[category.status]||category.status,placements:categoryPlacements(category).join(' | '),productCount:category.productCount||0}))));
 q('#exportCustomersBtn')?.addEventListener('click',()=>exportRows('customers',D.get('users').map(user=>({id:user.id,name:user.name,phone:user.phone,email:user.email,orders:user.orders,total:user.total,role:user.role}))));
 q('#exportCustomBtn')?.addEventListener('click',()=>exportRows('custom-designs',D.get('custom')));
-q('#downloadFullReport')?.addEventListener('click',()=>exportRows('full-sales-report',D.get('orders').map(order=>({order:order.id,customer:order.customer,phone:order.phone,date:registrationDateTime(order),subtotal:order.subtotal,discount:order.discount,shipping:order.shipping,total:order.total,paymentStatus:labels[order.paymentStatus]||order.paymentStatus,paymentGateway:paymentGatewayLabel(order),status:labels[order.status]||order.status,includedInSales:order.paymentStatus==='paid'&&order.status!=='cancelled'?'بله':'خیر',coupon:order.couponCode||'',customerNote:order.customerNote||''}))));
+q('#downloadFullReport')?.addEventListener('click',()=>exportRows('full-sales-report',D.get('orders').map(order=>({order:order.id,customer:order.customer,phone:order.phone,date:registrationDateTime(order),subtotal:order.subtotal,discount:order.discount,shipping:order.shipping,total:order.total,paymentStatus:labels[order.paymentStatus]||order.paymentStatus,paymentGateway:paymentGatewayLabel(order),status:labels[order.status]||order.status,includedInSales:order.paymentStatus==='paid'&&order.status!=='cancelled'?'بله':'خیر',coupon:order.couponCode||'',customerNote:order.customerNote||'',source:order.acquisition?.source||'ثبت نشده',medium:order.acquisition?.medium||'',campaign:order.acquisition?.campaign||'',landingPage:order.acquisition?.landingPage||'',referrer:order.acquisition?.referrer||''}))));
 
 q('#adminLogout')?.addEventListener('click',async()=>{try{await window.CribAPI.request('/api/admin/logout',{method:'POST',body:'{}'});}catch{}location.reload();});
 async function bootstrapAdmin(){

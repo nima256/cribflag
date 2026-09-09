@@ -128,7 +128,7 @@ function cartForOrder(order) {
   return [{
     cartId: String(order.orderNumber),
     totalAmount: toRial(order.subtotal),
-    taxAmount: 0,
+    taxAmount: toRial(order.tax),
     shippingAmount: toRial(order.shipping),
     isTaxIncluded: false,
     isShipmentIncluded: Number(order.shipping || 0) > 0,

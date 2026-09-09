@@ -10,7 +10,7 @@ const upload = require('../middlewares/upload');
 const { requireUser } = require('../middlewares/auth');
 const { asyncHandler, ok, AppError } = require('../utils/http');
 const { publicCode, normalizeMobile } = require('../utils/formatters');
-const { calculateCustomPrice, normalizeCustomProductType, isCustomPillow, CUSTOM_FLAG_FABRICS } = require('../utils/customPricing');
+const { calculateCustomPrice, getCustomPricingConfig, normalizeCustomProductType, isCustomPillow, CUSTOM_FLAG_FABRICS } = require('../utils/customPricing');
 const { isPaidSale } = require('../services/analytics');
 const { assertUploadedFile } = require('../utils/uploadValidation');
 const S = require('../services/serializers');
@@ -130,7 +130,8 @@ router.post('/custom', uploadCustomDesign, asyncHandler(async (req, res) => {
     if (!CUSTOM_FLAG_FABRICS.includes(fabric)) {
       throw new AppError(400, 'جنس پارچه انتخاب‌شده معتبر نیست');
     }
-    const pricing = calculateCustomPrice(req.body.size, undefined, fabric, requestType);
+    const customPricingConfig = await getCustomPricingConfig();
+    const pricing = calculateCustomPrice(req.body.size, undefined, fabric, requestType, '', customPricingConfig);
     if (!pricing.valid) {
       throw new AppError(400, pricing.reason === 'too-large'
         ? 'حداکثر سایز قابل ثبت ۱۵۰ × ۹۰ سانتی‌متر است'

@@ -19,7 +19,7 @@ const customRequestSchema = new mongoose.Schema({
   requestType: String,
   notes: String,
   status: { type: String, enum: ['draft','review','preview-ready','approved'], default: 'review' },
-  orderStatus: { type: String, enum: ['processing','design-review','print-preparation','shipped','delivered','cancelled'], default: 'design-review' },
+  orderStatus: { type: String, enum: ['processing','design-review','print-preparation','printed','shipped','delivered','cancelled'], default: 'design-review' },
   price: { type: Number, default: 0 },
   orderNumber: { type: String, trim: true, default: '', index: true },
   payment: { type: String, trim: true, default: 'ثبت نشده' },

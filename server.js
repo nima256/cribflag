@@ -18,27 +18,15 @@ app.disable('x-powered-by');
 
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
 app.use(compression());
-if (env.corsOrigin) app.use(cors({ origin: env.corsOrigin, credentials: true }));
+// Allow requests from every Origin (including Telegram/Instagram in-app browsers).
+// Using `origin: true` reflects the incoming Origin so credentialed requests remain valid.
+app.use(cors({ origin: true, credentials: true }));
 
 // Torob server-to-server routes are authenticated with Torob's signed JWT headers.
-// Mount them before the browser Origin guard so a valid Torob request is not treated as CSRF.
 app.use('/', require('./routes/torobRoutes'));
 
-// جلوگیری از درخواست‌های تغییردهنده بین‌سایتی. درخواست‌های سروربه‌سرور که Origin ندارند
-// (مانند برخی وب‌هوک‌ها) همچنان مجاز می‌مانند.
-const allowedOrigins = new Set([env.siteUrl, env.corsOrigin].filter(Boolean).map(value => {
-  try { return new URL(value).origin; } catch { return ''; }
-}).filter(Boolean));
-app.use((req, _res, next) => {
-  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
-  // TorobPay returns the customer's browser with a cross-site POST form.
-  // The callback does not trust browser fields; it verifies the stored paymentToken server-to-server.
-  if (req.path === '/api/orders/torobpay/callback') return next();
-  const origin = req.get('origin');
-  if (!origin) return next();
-  if (allowedOrigins.has(origin)) return next();
-  return next(new AppError(403, 'مبدأ درخواست مجاز نیست'));
-});
+// Origin filtering is intentionally disabled. Requests are accepted regardless of
+// the browser/app Origin so in-app browsers such as Telegram can use the site.
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
@@ -68,6 +56,52 @@ if (env.sessionStore === 'mongo' || env.isProduction) {
   });
 }
 app.use(session(sessionOptions));
+
+const cleanAttributionValue = (value, maxLength = 300) => String(value || '').trim().slice(0, maxLength);
+const requestSiteOrigin = req => {
+  try { return new URL(env.siteUrl).origin; } catch {
+    return `${req.protocol}://${req.get('host')}`;
+  }
+};
+const externalReferrerHost = (req, referrer) => {
+  if (!referrer) return '';
+  try {
+    const url = new URL(referrer);
+    if (url.origin === requestSiteOrigin(req)) return '';
+    return url.hostname.replace(/^www\./i, '');
+  } catch { return ''; }
+};
+
+// UTM/referral را در اولین ورود معنادار داخل session نگه می‌داریم تا حتی بعد از چند صفحه و ورود کاربر،
+// موقع ثبت سفارش منبع خرید قابل گزارش باشد.
+app.use((req, _res, next) => {
+  if (req.method !== 'GET' || req.path.startsWith('/api/') || req.path.startsWith('/assets/') || req.path.startsWith('/uploads/')) return next();
+
+  const utmSource = cleanAttributionValue(req.query?.utm_source, 120);
+  const utmMedium = cleanAttributionValue(req.query?.utm_medium, 120);
+  const utmCampaign = cleanAttributionValue(req.query?.utm_campaign, 180);
+  const utmTerm = cleanAttributionValue(req.query?.utm_term, 180);
+  const utmContent = cleanAttributionValue(req.query?.utm_content, 180);
+  const referrer = cleanAttributionValue(req.get('referer'), 500);
+  const referrerHost = externalReferrerHost(req, referrer);
+  const hasUtm = Boolean(utmSource || utmMedium || utmCampaign || utmTerm || utmContent);
+  if (!hasUtm && !referrerHost) return next();
+
+  const touch = {
+    source: utmSource || referrerHost || 'Referral',
+    medium: utmMedium || (referrerHost ? 'referral' : ''),
+    campaign: utmCampaign,
+    term: utmTerm,
+    content: utmContent,
+    referrer,
+    landingPage: cleanAttributionValue(req.originalUrl, 500),
+    capturedAt: new Date().toISOString()
+  };
+  req.session.attribution ||= {};
+  if (!req.session.attribution.firstTouch) req.session.attribution.firstTouch = touch;
+  req.session.attribution.lastTouch = touch;
+  next();
+});
 
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), {
   maxAge: env.isProduction ? '30d' : 0,

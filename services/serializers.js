@@ -1,10 +1,11 @@
 const { faDate, faDateTime } = require('../utils/formatters');
+const { normalizeVariantPrices } = require('../utils/productPricing');
 
 const product = (p, categoryLookup = null) => {
   const source = p;
   const price = Number(source.price || 0);
   const rawOldPrice = Number(source.oldPrice);
-  const rawVariants = Array.isArray(source.variantPrices) ? source.variantPrices : [];
+  const rawVariants = normalizeVariantPrices(source.variantPrices, Boolean(source.hasDiscount));
   const legacyDiscount = p.hasDiscount === undefined && Number.isFinite(rawOldPrice) && rawOldPrice > price;
   const hasDiscount = Boolean(
     source.hasDiscount ||
@@ -72,6 +73,8 @@ const product = (p, categoryLookup = null) => {
     old,
     variantPrices,
     badge: p.badge || '',
+    homeSpecialPosition: p.homeSpecialPosition !== null && p.homeSpecialPosition !== undefined && Number.isInteger(Number(p.homeSpecialPosition)) && Number(p.homeSpecialPosition) >= 1 && Number(p.homeSpecialPosition) <= 4 ? Number(p.homeSpecialPosition) : null,
+    homeBestSellerPosition: p.homeBestSellerPosition !== null && p.homeBestSellerPosition !== undefined && Number.isInteger(Number(p.homeBestSellerPosition)) && Number(p.homeBestSellerPosition) >= 1 && Number(p.homeBestSellerPosition) <= 4 ? Number(p.homeBestSellerPosition) : null,
     date: p.sortDate || 1,
     rate: p.rate || 4.7,
     status: p.status,
@@ -97,7 +100,18 @@ const order = (o) => ({
   id: o.orderNumber, userId: o.user && typeof o.user === 'object' ? o.user.publicId : o.userPublicId,
   customer: o.customer, phone: o.phone, email: o.email || '', date: faDate(o.createdAt), dateTime: faDateTime(o.createdAt), createdAt: o.createdAt,
   total: o.total, subtotal: o.subtotal, shipping: o.shipping, discount: o.discount, couponCode: o.couponCode || '',
-  customerNote: o.customerNote || '', status: o.status,
+  customerNote: o.customerNote || '',
+  acquisition: {
+    source: o.acquisition?.source || 'ثبت نشده',
+    medium: o.acquisition?.medium || '',
+    campaign: o.acquisition?.campaign || '',
+    term: o.acquisition?.term || '',
+    content: o.acquisition?.content || '',
+    referrer: o.acquisition?.referrer || '',
+    landingPage: o.acquisition?.landingPage || '',
+    capturedAt: o.acquisition?.capturedAt || null
+  },
+  status: o.status,
   payment: o.payment, paymentStatus: o.paymentStatus, shippingMethod: o.shippingMethod, tracking: o.tracking || '',
   address: o.address, adminNote: o.adminNote || '', items: (o.items || []).map((item, index) => {
     const value = item.toObject ? item.toObject() : item;
@@ -110,6 +124,9 @@ const order = (o) => ({
       id: value.productId ?? value.customRequestId ?? `order-item-${index}`,
       downloadUrl: isCustomItem && (filePath || value.customRequestId)
         ? `/admin/download/custom-file/${encodeURIComponent(String(o._id))}/${index}`
+        : '',
+      previewUrl: isCustomItem && (filePath || value.customRequestId)
+        ? `/admin/download/custom-preview/${encodeURIComponent(String(o._id))}/${index}`
         : ''
     };
   })

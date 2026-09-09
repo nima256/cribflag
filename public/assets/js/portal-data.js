@@ -146,6 +146,9 @@
       if(!next.images.length)next.images=[PRODUCT_IMAGE];
       next.image=next.images[0];
       next.badge=next.badge||'';
+      const normalizeHomePosition=value=>{const position=Number(value);return Number.isInteger(position)&&position>=1&&position<=4?position:null;};
+      next.homeSpecialPosition=normalizeHomePosition(next.homeSpecialPosition);
+      next.homeBestSellerPosition=normalizeHomePosition(next.homeBestSellerPosition);
       return next;
     });
   }
