@@ -36,6 +36,51 @@ const {
   syncCustomRequestsFromOrder
 } = require('../services/customOrderSync');
 
+const ORDER_STATUS_LABELS = Object.freeze({
+  processing: 'در حال آماده‌سازی',
+  'design-review': 'بررسی طراحی',
+  'print-preparation': 'آماده‌سازی برای چاپ',
+  printed: 'چاپ شده',
+  packed: 'بسته‌بندی شده',
+  shipped: 'ارسال شده',
+  delivered: 'تحویل شده',
+  cancelled: 'لغو شده'
+});
+const ORDER_STATUSES = new Set(Object.keys(ORDER_STATUS_LABELS));
+
+async function applyBulkOrderStatus(order, status) {
+  let paymentStatus = order.paymentStatus;
+  const isTorobPayOrder = order.payment === 'پرداخت اقساطی ترب‌پی';
+  const shouldCancelTorob = status === 'cancelled' &&
+    paymentStatus === 'paid' &&
+    isTorobPayOrder &&
+    Boolean(order.paymentInfo?.torobPaymentToken);
+
+  if (shouldCancelTorob) {
+    try {
+      await torobPay.cancelPayment(order.paymentInfo.torobPaymentToken);
+      order.paymentInfo.torobStatus = 'REVERT';
+      paymentStatus = 'refunded';
+    } catch (error) {
+      throw new AppError(502, `لغو سفارش ${order.orderNumber} در ترب‌پی انجام نشد؛ وضعیت سفارش تغییر نکرد: ${error?.message || 'خطای نامشخص'}`);
+    }
+  }
+
+  const shouldRelease = status === 'cancelled' || ['failed', 'refunded'].includes(paymentStatus);
+  if (shouldRelease) {
+    await releaseInventory(order);
+    await releaseCoupon(order);
+  } else if (paymentStatus === 'paid') {
+    await applyInventory(order);
+    await consumeCoupon(order);
+  }
+
+  order.status = status;
+  order.paymentStatus = paymentStatus;
+  await order.save();
+  await syncCustomRequestsFromOrder(order);
+}
+
 function addOrderRelations(order, orderNumbers, customRequestIds) {
   if (!order) return false;
   let changed = false;
@@ -844,6 +889,75 @@ router.post('/orders/manual', asyncHandler(async (req, res) => {
   }
 }));
 
+router.patch('/orders/bulk-status', asyncHandler(async (req, res) => {
+  const status = String(req.body?.status || '').trim();
+  if (!ORDER_STATUSES.has(status)) throw new AppError(400, 'وضعیت دسته‌جمعی معتبر نیست');
+
+  const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
+  if (!rawItems.length) throw new AppError(400, 'حداقل یک سفارش باید انتخاب شود');
+  if (rawItems.length > 200) throw new AppError(400, 'در هر عملیات حداکثر ۲۰۰ سفارش قابل انتخاب است');
+
+  const unique = new Map();
+  for (const item of rawItems) {
+    const id = String(item?.id || '').trim();
+    const source = item?.source === 'custom' ? 'custom' : 'order';
+    if (!id || id.length > 120) continue;
+    unique.set(`${source}:${id}`, { id, source });
+  }
+  if (!unique.size) throw new AppError(400, 'شناسه سفارش‌های انتخاب‌شده معتبر نیست');
+
+  let updated = 0;
+  const missing = [];
+  for (const { id, source } of unique.values()) {
+    if (source === 'order') {
+      const order = await Order.findOne({ orderNumber: id });
+      if (!order) {
+        missing.push(id);
+        continue;
+      }
+      await applyBulkOrderStatus(order, status);
+      updated += 1;
+      continue;
+    }
+
+    const customRequest = await CustomRequest.findOne({ publicId: id });
+    if (!customRequest) {
+      missing.push(id);
+      continue;
+    }
+
+    const linkedOrder = await Order.findOne({
+      $or: [
+        ...(customRequest.orderNumber ? [{ orderNumber: customRequest.orderNumber }] : []),
+        { 'items.customRequestId': id }
+      ]
+    }).sort({ createdAt: -1 });
+
+    if (linkedOrder) {
+      await applyBulkOrderStatus(linkedOrder, status);
+    } else {
+      customRequest.orderStatus = status;
+      await customRequest.save();
+    }
+    updated += 1;
+  }
+
+  await RecentAction.create({
+    action: 'order_bulk_status',
+    targetType: 'orders',
+    targetId: [...unique.values()].map(item => item.id).join(',').slice(0, 500),
+    targetName: `${status}:${updated}`,
+    adminId: req.session.adminId,
+    ipAddress: req.ip
+  });
+
+  ok(res, {
+    message: `وضعیت ${updated} سفارش به «${ORDER_STATUS_LABELS[status]}» تغییر کرد`,
+    updated,
+    missing
+  });
+}));
+
 router.delete('/orders/:identifier', asyncHandler(async (req, res) => {
   const identifier = String(req.params.identifier || '').trim();
   if (!identifier || identifier.length > 120) throw new AppError(400, 'شناسه سفارش معتبر نیست');
@@ -1047,7 +1161,7 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
     }
     await Coupon.deleteMany({ publicId: { $nin: ids } });
   }else if(name==='orders'){
-    const validStatuses = new Set(['processing', 'design-review', 'print-preparation', 'printed', 'shipped', 'delivered', 'cancelled']);
+    const validStatuses = ORDER_STATUSES;
     const validPaymentStatuses = new Set(['pending', 'review', 'paid', 'failed', 'refunded']);
     for (const submitted of value) {
       const order = await Order.findOne({ orderNumber: submitted.id });
@@ -1087,7 +1201,7 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
   }else if(name==='tickets'){
     for(const t of value){const user=await User.findOne({publicId:Number(t.userId)});if(user)await Ticket.findOneAndUpdate({publicId:t.id},{$set:{user:user._id,customer:t.customer||user.fullName,subject:t.subject,department:t.department,priority:t.priority,status:t.status,messages:t.messages}},{upsert:true,setDefaultsOnInsert:true});}
   }else if(name==='custom'){
-    const validCustomOrderStatuses = new Set(['processing', 'design-review', 'print-preparation', 'printed', 'shipped', 'delivered', 'cancelled']);
+    const validCustomOrderStatuses = ORDER_STATUSES;
     for (const submitted of value) {
       const user = await User.findOne({ publicId: Number(submitted.userId) });
       if (!user) continue;

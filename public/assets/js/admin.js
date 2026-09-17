@@ -11,7 +11,7 @@ D.ensure();
 const q=selector=>document.querySelector(selector);
 const qa=selector=>[...document.querySelectorAll(selector)];
 const labels={
-  processing:'در حال آماده‌سازی','design-review':'بررسی طراحی','print-preparation':'آماده‌سازی برای چاپ',printed:'چاپ شده',shipped:'ارسال شده',delivered:'تحویل شده',cancelled:'لغو شده',
+  processing:'در حال آماده‌سازی','design-review':'بررسی طراحی','print-preparation':'آماده‌سازی برای چاپ',printed:'چاپ شده',packed:'بسته‌بندی شده',shipped:'ارسال شده',delivered:'تحویل شده',cancelled:'لغو شده',
   active:'فعال',draft:'پیش‌نویس',expired:'منقضی',open:'باز',answered:'پاسخ داده شده',closed:'بسته',review:'در حال بررسی',
   'preview-ready':'پیش‌نمایش آماده',approved:'تأیید شده',unpaid:'پرداخت نشده',pending:'در انتظار پرداخت',paid:'پرداخت شده',failed:'پرداخت ناموفق',refunded:'مسترد شده'
 };
@@ -20,11 +20,13 @@ const ORDER_STATUS_CHART=[
   {key:'design-review',label:'بررسی طراحی',color:'#8b5cf6'},
   {key:'print-preparation',label:'آماده‌سازی برای چاپ',color:'#0ea5a4'},
   {key:'printed',label:'چاپ شده',color:'#d97706'},
+  {key:'packed',label:'بسته‌بندی شده',color:'#7451c8'},
   {key:'shipped',label:'ارسال شده',color:'#3157d5'},
   {key:'delivered',label:'تحویل شده',color:'#22a881'},
   {key:'cancelled',label:'لغو شده',color:'#e95b70'}
 ];
 let activeOrder=null,activeCustomer=null,activeTicket=null,activeCustom=null;
+const selectedAdminOrders=new Map();
 let galleryImages=[];
 let galleryLoaded=false;
 let galleryLoading=false;
@@ -396,7 +398,12 @@ function paymentGatewayLabel(order = {}) {
   return raw;
 }
 
-function orderRow(order, compact = false) {
+function orderSelectionKey(order){
+  const source=order?.displayType==='custom'?'custom':'order';
+  return `${source}::${String(order?.id||'').trim()}`;
+}
+
+function orderRow(order, compact = false, rowNumber = null) {
   const isCustom = order.displayType === 'custom';
 
   const orderStatus = status(order.status || (isCustom ? 'design-review' : 'processing'));
@@ -496,8 +503,16 @@ function orderRow(order, compact = false) {
     `;
   }
 
+  const selectionKey=orderSelectionKey(order);
+  const selectionSource=isCustom?'custom':'order';
+  const selected=selectedAdminOrders.has(selectionKey);
+
   return `
-    <tr>
+    <tr data-order-selection-key="${D.esc(selectionKey)}">
+      <td class="order-select-column">
+        <input type="checkbox" class="order-select-checkbox admin-order-select" data-id="${D.esc(order.id)}" data-source="${selectionSource}" ${selected?'checked':''} aria-label="انتخاب سفارش ${D.esc(order.id)}"/>
+      </td>
+      <td class="order-row-number-column"><span class="order-row-number">${D.fa(rowNumber||0)}</span></td>
       <td>
         <span class="table-primary">
           ${D.esc(order.id)}
@@ -655,6 +670,82 @@ function renderDashboard(){
   q('#adminOpenTickets').textContent=D.fa(D.get('tickets').filter(ticket=>ticket.status==='open').length);
 }
 
+function visibleOrderSelectionItems(list=[]){
+  return list.map(order=>({
+    key:orderSelectionKey(order),
+    id:String(order.id||'').trim(),
+    source:order.displayType==='custom'?'custom':'order'
+  })).filter(item=>item.id);
+}
+
+function syncOrderBulkControls(visibleItems=null){
+  const count=selectedAdminOrders.size;
+  const countEl=q('#adminOrderSelectionCount');
+  const applyBtn=q('#applyOrderBulkAction');
+  const action=q('#adminOrderBulkAction');
+  if(countEl)countEl.textContent=`${D.fa(count)} انتخاب`;
+  if(applyBtn)applyBtn.disabled=!count||!action?.value;
+
+  const selectAll=q('#adminOrdersSelectAll');
+  if(selectAll){
+    const items=Array.isArray(visibleItems)?visibleItems:qa('.admin-order-select').map(input=>({
+      key:`${input.dataset.source||'order'}::${String(input.dataset.id||'').trim()}`
+    }));
+    const selectedVisible=items.filter(item=>selectedAdminOrders.has(item.key)).length;
+    selectAll.checked=Boolean(items.length)&&selectedVisible===items.length;
+    selectAll.indeterminate=selectedVisible>0&&selectedVisible<items.length;
+  }
+}
+
+async function applyOrderBulkAction(){
+  const action=q('#adminOrderBulkAction')?.value||'';
+  const selections=[...selectedAdminOrders.values()];
+  if(!action)return D.toast('یک کار دسته‌جمعی انتخاب کنید.','error');
+  if(!selections.length)return D.toast('حداقل یک سفارش را انتخاب کنید.','error');
+
+  const button=q('#applyOrderBulkAction');
+  const label=action==='delete'?'حذف':`تغییر وضعیت به ${labels[action]||action}`;
+  if(!confirm(`${label} برای ${D.fa(selections.length)} سفارش انتخاب‌شده انجام شود؟`))return;
+  if(button)button.disabled=true;
+
+  try{
+    if(action==='delete'){
+      let removed=0;
+      const failures=[];
+      for(const item of selections){
+        try{
+          await window.CribAPI.request(`/api/admin/orders/${encodeURIComponent(item.id)}?source=${encodeURIComponent(item.source)}`,{method:'DELETE'});
+          removed+=1;
+        }catch(error){
+          failures.push(`${item.id}: ${error.message||'خطا در حذف'}`);
+        }
+      }
+      selectedAdminOrders.clear();
+      await D.syncFromApi('admin');
+      renderAll();
+      if(failures.length){
+        D.toast(`${D.fa(removed)} سفارش حذف شد؛ ${D.fa(failures.length)} مورد حذف نشد. ${failures[0]}`,'error');
+      }else{
+        D.toast(`${D.fa(removed)} سفارش با موفقیت حذف شد.`);
+      }
+      return;
+    }
+
+    const result=await window.CribAPI.request('/api/admin/orders/bulk-status',{
+      method:'PATCH',
+      body:JSON.stringify({status:action,items:selections.map(({id,source})=>({id,source}))})
+    });
+    selectedAdminOrders.clear();
+    await D.syncFromApi('admin');
+    renderAll();
+    D.toast(result.message||`وضعیت ${D.fa(selections.length)} سفارش تغییر کرد.`);
+  }catch(error){
+    D.toast(error.message||'عملیات دسته‌جمعی انجام نشد.','error');
+  }finally{
+    syncOrderBulkControls();
+  }
+}
+
 function renderOrders() {
   const term = (
     q('#adminOrderSearch')?.value || ''
@@ -718,17 +809,25 @@ function renderOrders() {
 
   if (!table) return;
 
+  const visibleSelections=visibleOrderSelectionItems(list);
+  const visibleKeys=new Set(visibleSelections.map(item=>item.key));
+  for(const key of [...selectedAdminOrders.keys()]){
+    if(!visibleKeys.has(key))selectedAdminOrders.delete(key);
+  }
+
   table.innerHTML =
-    list.map(order => orderRow(order)).join('') ||
+    list.map((order,index) => orderRow(order,false,index+1)).join('') ||
     `
       <tr>
-        <td colspan="8">
+        <td colspan="10">
           <div class="empty-panel">
             سفارشی پیدا نشد.
           </div>
         </td>
       </tr>
     `;
+
+  syncOrderBulkControls(visibleSelections);
 
   const all = getOrdersForDisplay();
 
@@ -743,7 +842,7 @@ function renderOrders() {
   q('#orderStatShipping').textContent = D.fa(
     all.filter(order =>
       order.displayType !== 'custom' &&
-      order.status === 'shipped'
+      ['packed', 'shipped'].includes(order.status)
     ).length
   );
 
@@ -1414,7 +1513,7 @@ async function saveCategoryBulkPricing(){
 }
 
 function renderNotifications(){
-  const orders=D.get('orders').filter(order=>['processing','design-review','print-preparation','printed'].includes(order.status));
+  const orders=D.get('orders').filter(order=>['processing','design-review','print-preparation','printed','packed'].includes(order.status));
   const tickets=D.get('tickets').filter(ticket=>ticket.status==='open');
   const items=[
     ...orders.slice(0,4).map(order=>({title:'سفارش نیازمند اقدام',text:`سفارش ${order.id} در وضعیت ${labels[order.status]} است.`,date:registrationDateTime(order)})),
@@ -1694,7 +1793,7 @@ function orderModal(id){
       <h4 style="margin-top:16px">یادداشت ثبت‌شده توسط کاربر</h4>
       <p class="order-customer-note ${order.customerNote?'':'is-empty'}">${order.customerNote?D.esc(order.customerNote):'کاربر یادداشتی برای این سفارش ثبت نکرده است.'}</p>
       <h4 style="margin-top:16px">نشانی تحویل</h4><p style="font-size:11px;line-height:2;color:var(--portal-muted)">${D.esc(order.address)}<br>${D.esc(order.phone)} — ${D.esc(order.email||'')}</p>
-    </div><div><div class="form-grid"><div class="field full"><label>وضعیت سفارش</label><select id="modalOrderStatus"><option value="processing">در حال آماده‌سازی</option><option value="design-review">بررسی طراحی</option><option value="print-preparation">آماده‌سازی برای چاپ</option><option value="printed">چاپ شده</option><option value="shipped">ارسال شده</option><option value="delivered">تحویل شده</option><option value="cancelled">لغو شده</option></select></div><div class="field full"><label>وضعیت پرداخت</label><select id="modalPaymentStatus"><option value="paid">پرداخت شده</option><option value="review">در انتظار بررسی</option><option value="refunded">مسترد شده</option></select></div><div class="field full"><label>کد رهگیری</label><input id="modalTracking" value="${D.esc(order.tracking||'')}"></div><div class="field full"><label>یادداشت داخلی</label><textarea id="modalAdminNote">${D.esc(order.adminNote||'')}</textarea></div></div></div></div>`;
+    </div><div><div class="form-grid"><div class="field full"><label>وضعیت سفارش</label><select id="modalOrderStatus"><option value="processing">در حال آماده‌سازی</option><option value="design-review">بررسی طراحی</option><option value="print-preparation">آماده‌سازی برای چاپ</option><option value="printed">چاپ شده</option><option value="packed">بسته‌بندی شده</option><option value="shipped">ارسال شده</option><option value="delivered">تحویل شده</option><option value="cancelled">لغو شده</option></select></div><div class="field full"><label>وضعیت پرداخت</label><select id="modalPaymentStatus"><option value="paid">پرداخت شده</option><option value="review">در انتظار بررسی</option><option value="refunded">مسترد شده</option></select></div><div class="field full"><label>کد رهگیری</label><input id="modalTracking" value="${D.esc(order.tracking||'')}"></div><div class="field full"><label>یادداشت داخلی</label><textarea id="modalAdminNote">${D.esc(order.adminNote||'')}</textarea></div></div></div></div>`;
   q('#modalOrderStatus').value=order.status;q('#modalPaymentStatus').value=order.paymentStatus;openModal('#adminOrderModal');
 }
 
@@ -1826,6 +1925,7 @@ function customModal(id) {
           <option value="processing">در حال آماده‌سازی</option>
           <option value="print-preparation">آماده‌سازی برای چاپ</option>
           <option value="printed">چاپ شده</option>
+          <option value="packed">بسته‌بندی شده</option>
           <option value="shipped">ارسال شده</option>
           <option value="delivered">تحویل شده</option>
           <option value="cancelled">لغو شده</option>
@@ -2192,6 +2292,29 @@ q('#couponForm')?.addEventListener('submit',event=>{
 q('#refreshDashboard')?.addEventListener('click',()=>{D.syncFromApi('admin').then(()=>{renderAll();D.toast('اطلاعات داشبورد به‌روزرسانی شد.');}).catch(error=>D.toast(error.message,'error'));});
 q('#createOrderBtn')?.addEventListener('click',async()=>{const customer=prompt('نام مشتری:');if(!customer)return;const phone=prompt('شماره تماس مشتری:');if(!phone)return;const productId=prompt('شناسه عددی محصول:','1');if(!productId)return;const qty=prompt('تعداد:','1');if(!qty)return;try{await window.CribAPI.request('/api/admin/orders/manual',{method:'POST',body:JSON.stringify({customer,phone,productId:Number(productId),qty:Number(qty),paymentStatus:'paid'})});await D.syncFromApi('admin');renderAll();D.toast('سفارش دستی ثبت شد.');}catch(error){D.toast(error.message,'error');}});
 q('#adminGlobalSearch')?.addEventListener('keydown',event=>{if(event.key==='Enter'){const value=event.target.value.trim();if(!value)return;showView('orders');q('#adminOrderSearch').value=value;renderOrders();}});
+q('#adminOrderBulkAction')?.addEventListener('change',()=>syncOrderBulkControls());
+q('#applyOrderBulkAction')?.addEventListener('click',applyOrderBulkAction);
+q('#adminOrdersSelectAll')?.addEventListener('change',event=>{
+  qa('.admin-order-select').forEach(input=>{
+    const id=String(input.dataset.id||'').trim();
+    const source=input.dataset.source==='custom'?'custom':'order';
+    const key=`${source}::${id}`;
+    input.checked=event.target.checked;
+    if(event.target.checked)selectedAdminOrders.set(key,{key,id,source});
+    else selectedAdminOrders.delete(key);
+  });
+  syncOrderBulkControls();
+});
+q('#adminOrdersTable')?.addEventListener('change',event=>{
+  const input=event.target.closest('.admin-order-select');
+  if(!input)return;
+  const id=String(input.dataset.id||'').trim();
+  const source=input.dataset.source==='custom'?'custom':'order';
+  const key=`${source}::${id}`;
+  if(input.checked)selectedAdminOrders.set(key,{key,id,source});
+  else selectedAdminOrders.delete(key);
+  syncOrderBulkControls();
+});
 
 document.addEventListener('click',async event=>{
   const deleteOrderButton=event.target.closest('.delete-order');

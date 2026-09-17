@@ -43,7 +43,7 @@ const orderSchema = new mongoose.Schema({
     landingPage: { type: String, trim: true, default: '' },
     capturedAt: Date
   },
-  status: { type: String, enum: ['processing','design-review','print-preparation','printed','shipped','delivered','cancelled'], default: 'processing' },
+  status: { type: String, enum: ['processing','design-review','print-preparation','printed','packed','shipped','delivered','cancelled'], default: 'processing' },
   payment: { type: String, default: 'پرداخت آنلاین' },
   paymentStatus: { type: String, enum: ['pending','review','paid','failed','refunded'], default: 'pending' },
   shippingMethod: String,

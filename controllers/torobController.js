@@ -150,6 +150,60 @@ const loadAllFormattedVariants = async () => {
   return variants;
 };
 
+const sitemapUrlEntry = ({ loc, lastmod = '', changefreq = 'weekly', priority = '0.5' }) => {
+  const lastmodLine = lastmod ? `\n    <lastmod>${escapeXml(lastmod)}</lastmod>` : '';
+  return `  <url>\n    <loc>${escapeXml(loc)}</loc>${lastmodLine}\n    <changefreq>${escapeXml(changefreq)}</changefreq>\n    <priority>${escapeXml(priority)}</priority>\n  </url>`;
+};
+
+exports.siteSitemapXml = async (_req, res) => {
+  try {
+    const variants = await loadAllFormattedVariants();
+    const base = baseUrl();
+    const staticPages = [
+      { loc: `${base}/`, changefreq: 'daily', priority: '1.0' },
+      { loc: `${base}/store`, changefreq: 'daily', priority: '0.9' },
+      { loc: `${base}/custom`, changefreq: 'weekly', priority: '0.7' },
+      { loc: `${base}/ready`, changefreq: 'weekly', priority: '0.7' },
+      { loc: `${base}/blog`, changefreq: 'weekly', priority: '0.6' },
+      { loc: `${base}/faq`, changefreq: 'monthly', priority: '0.4' }
+    ];
+    const productPages = variants.map(item => ({
+      loc: item.page_url,
+      lastmod: item.date_updated,
+      changefreq: 'daily',
+      priority: '0.8'
+    }));
+    const seen = new Set();
+    const urls = [...staticPages, ...productPages]
+      .filter(item => {
+        if (!item.loc || seen.has(item.loc)) return false;
+        seen.add(item.loc);
+        return true;
+      })
+      .map(sitemapUrlEntry)
+      .join('\n');
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>`;
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, max-age=0');
+    return res.send(xml);
+  } catch (error) {
+    console.error('Site Sitemap Error:', error);
+    return res.status(500).type('text/plain').send('خطا در تولید نقشه سایت');
+  }
+};
+
+exports.robotsTxt = (_req, res) => {
+  const base = baseUrl();
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  return res.send([
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /admin/',
+    `Sitemap: ${base}/sitemap.xml`,
+    `Sitemap: ${base}/torob-sitemap.xml`
+  ].join('\n'));
+};
+
 exports.torobSitemapXml = async (_req, res) => {
   try {
     const variants = await loadAllFormattedVariants();

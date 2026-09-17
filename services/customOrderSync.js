@@ -74,6 +74,7 @@ async function syncCustomRequestsFromOrder(order) {
     {
       $set: {
         orderNumber: String(order.orderNumber || '').trim(),
+        orderStatus: String(order.status || 'design-review').trim(),
         payment: String(order.payment || '').trim(),
         paymentStatus: ORDER_PAYMENT_STATUSES.has(order.paymentStatus)
           ? order.paymentStatus

@@ -5,7 +5,7 @@ const PERSIAN_MONTHS = [
   'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
 ];
 
-const ORDER_STATUSES = ['processing', 'design-review', 'print-preparation', 'printed', 'shipped', 'delivered', 'cancelled'];
+const ORDER_STATUSES = ['processing', 'design-review', 'print-preparation', 'printed', 'packed', 'shipped', 'delivered', 'cancelled'];
 const ANALYTICS_TIME_ZONE = 'Asia/Tehran';
 
 const faToEn = value => String(value || '')

@@ -97,7 +97,7 @@
 @media(max-width:700px){.coupon-variant-tools{grid-template-columns:1fr}.coupon-variant-tools span{justify-self:stretch}.coupon-product-head{align-items:flex-start;flex-direction:column}.coupon-product-actions{width:100%}.coupon-product-actions button{flex:1}.coupon-product-meta{width:100%}}
 
 /* Admin custom order preview, gallery and editable custom pricing */
-.status-printed{background:#fff3df;color:#a85b00}
+.status-printed{background:#fff3df;color:#a85b00}.status-packed{background:#f3efff;color:#7451c8}
 .custom-order-thumb{width:54px;height:54px;border-radius:12px;overflow:hidden;display:block;flex:0 0 54px;border:1px solid #e2e6ee;background:#f4f6fa}
 .custom-order-thumb img{width:100%;height:100%;display:block;object-fit:cover}
 .gallery-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -133,3 +133,8 @@
 /* Category-wide variant pricing */
 .category-pricing-picker-card{margin-bottom:16px}.category-pricing-picker{display:grid;grid-template-columns:minmax(260px,1fr) auto;gap:14px;align-items:end;padding:18px}.category-pricing-picker .field{margin:0}.category-pricing-picker .field>span{display:block;margin-bottom:7px;font-size:9px;color:var(--portal-muted)}.category-pricing-picker-action{display:flex;align-items:end}.category-pricing-stats{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:16px}.category-bulk-pricing-table td{vertical-align:middle;min-width:120px}.category-bulk-pricing-table td:nth-child(2){min-width:190px}.category-bulk-pricing-table td:last-child{min-width:250px}.category-pricing-input-wrap{min-width:185px}.category-pricing-current{display:block;margin-top:5px;color:var(--portal-muted);font-size:8px;line-height:1.6}.category-pricing-current.is-mixed{color:#b45309}.category-pricing-count{display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;background:#f2f5fb;color:#556078;font-size:8px;white-space:nowrap}.category-pricing-empty{margin:18px}.category-bulk-pricing-input:placeholder-shown{background:#fffaf0;border-color:#f4d28c}
 @media(max-width:800px){.category-pricing-picker{grid-template-columns:1fr}.category-pricing-picker-action .portal-btn{width:100%}.category-pricing-stats{grid-template-columns:1fr}.category-bulk-pricing-table td:last-child{min-width:210px}}
+
+
+/* Admin orders: row selection and bulk actions */
+.order-table-tools{align-items:center}.order-bulk-tools{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}.order-selection-count{display:inline-flex;align-items:center;min-height:36px;padding:0 10px;border-radius:10px;background:#f4f6fb;color:var(--portal-muted);font-size:10px;font-weight:700;white-space:nowrap}.order-select-column{width:44px;min-width:44px;text-align:center!important}.order-row-number-column{width:58px;min-width:58px;text-align:center!important}.order-row-number{display:inline-grid;place-items:center;min-width:28px;height:28px;padding:0 7px;border-radius:9px;background:#f4f6fb;color:var(--portal-text);font-size:10px;font-weight:800}.order-select-checkbox{width:17px;height:17px;accent-color:var(--portal-primary);cursor:pointer;vertical-align:middle}.portal-table tbody tr:has(.admin-order-select:checked){background:#f7f9ff}.portal-table tbody tr:has(.admin-order-select:checked) td{border-bottom-color:#dfe6ff}
+@media(max-width:900px){.order-bulk-tools{width:100%;margin-left:0}.order-bulk-tools .table-filter{flex:1;min-width:180px}.order-table-tools .table-search{flex:1;min-width:220px}}

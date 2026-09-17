@@ -76,6 +76,12 @@ const buildPageUrl = (product, descriptor = null) => {
   const id = Number(product?.publicId ?? product?.id);
   const url = new URL(`/product/${encodeURIComponent(id)}`, baseUrl());
   const variant = descriptor || getProductVariants(product)[0] || {};
+
+  // ترب برای هر تنوع، شناسه و URL مستقل می‌خواهد. variantKey شناسه پایدار
+  // ترکیب سایز + جنس است؛ size/fabric هم برای رندر مستقیم همان انتخاب حفظ می‌شوند.
+  if (variant.variantKey && variant.variantKey !== BASE_VARIANT_ID) {
+    url.searchParams.set('variant', variant.variantKey);
+  }
   if (variant.size) url.searchParams.set('size', variant.size);
   if (variant.fabric) url.searchParams.set('fabric', variant.fabric);
   return url.toString();
@@ -174,6 +180,7 @@ const buildProductPageMeta = (product, requestedSize = '', requestedFabric = '')
     oldPrice: oldPrice === null ? null : Math.max(0, Math.trunc(oldPrice)),
     availability,
     pageUnique,
+    variantKey: variant?.variantKey || BASE_VARIANT_ID,
     productGroupId: productId,
     categoryName: categoryName(product),
     spec: buildSpec(product, variant)

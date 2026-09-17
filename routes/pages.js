@@ -10,6 +10,7 @@ const { asyncHandler } = require('../utils/http');
 const iranCity = require('iran-city');
 const { performance } = require('node:perf_hooks');
 const { buildProductPageMeta } = require('../helper/torobProductMeta');
+const { getCustomPricingConfig } = require('../utils/customPricing');
 
 const router = express.Router();
 
@@ -199,7 +200,13 @@ async function requirePageUser(req, res, next) {
 
 router.get('/', asyncHandler((req, res) => render(req, res, 'index')));
 router.get('/store', asyncHandler((req, res) => render(req, res, 'store')));
-router.get('/custom', asyncHandler((req, res) => { res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); return render(req, res, 'custom'); }));
+router.get('/custom', asyncHandler(async (req, res) => {
+  const customPricing = await getCustomPricingConfig();
+  const selectedTier = customPricing.flagTiers.find(tier => tier.key === '100x70') || customPricing.flagTiers[0];
+  const initialCustomPrice = Number(selectedTier?.americanSatinPrice ?? selectedTier?.price ?? 0);
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  return render(req, res, 'custom', { customPricing, initialCustomPrice });
+}));
 router.get('/ready', asyncHandler((req, res) => render(req, res, 'ready')));
 router.get('/faq', asyncHandler((req, res) => render(req, res, 'faq')));
 router.get('/blog', asyncHandler((req, res) => render(req, res, 'blog')));

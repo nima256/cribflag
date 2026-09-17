@@ -3,7 +3,7 @@
 const D=window.CribData;D.ensure();
 let users=D.get('users'),session=D.get('session'),currentUser=users.find(u=>u.id===Number(session.userId))||users[0];
 let currentOrderId=null,currentTicketId=null;
-const statusLabels={processing:'در حال آماده‌سازی','design-review':'بررسی طراحی','print-preparation':'آماده‌سازی برای چاپ',printed:'چاپ شده',shipped:'ارسال شده',delivered:'تحویل شده',cancelled:'لغو شده',open:'باز',answered:'پاسخ داده شده',closed:'بسته',review:'در حال بررسی','preview-ready':'پیش‌نمایش آماده',approved:'تأیید شده',draft:'پیش‌نویس سبد'};
+const statusLabels={processing:'در حال آماده‌سازی','design-review':'بررسی طراحی','print-preparation':'آماده‌سازی برای چاپ',printed:'چاپ شده',packed:'بسته‌بندی شده',shipped:'ارسال شده',delivered:'تحویل شده',cancelled:'لغو شده',open:'باز',answered:'پاسخ داده شده',closed:'بسته',review:'در حال بررسی','preview-ready':'پیش‌نمایش آماده',approved:'تأیید شده',draft:'پیش‌نویس سبد'};
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];
 function isManagedProduct(product){return product?.inventoryMode==='managed';}
 function stockOf(product){return isManagedProduct(product)?Math.max(0,Math.trunc(Number(product?.stock||0))):Infinity;}
@@ -42,7 +42,7 @@ function renderOverview(){const orders=[...userOrders()].sort((a,b)=>String(b.cr
 function renderOrders(){const term=(q('#accountOrderSearch')?.value||'').trim().toLowerCase(),st=q('#accountOrderStatus')?.value||'';let list=[...userOrders()].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));if(term)list=list.filter(o=>`${o.id} ${(o.items||[]).map(i=>i.title).join(' ')}`.toLowerCase().includes(term));if(st)list=list.filter(o=>o.status===st);q('#accountOrdersTable').innerHTML=list.map(o=>orderRow(o)).join('')||`<tr><td colspan="6"><div class="empty-panel"><h3>سفارشی پیدا نشد</h3><p>فیلترها را تغییر دهید.</p></div></td></tr>`;}
 function orderDetail(id){
   const o=userOrders().find(x=>x.id===id);if(!o)return;currentOrderId=id;
-  const activeStage=({processing:1,'design-review':1,'print-preparation':2,printed:2,shipped:3,delivered:4})[o.status]??0;
+  const activeStage=({processing:1,'design-review':1,'print-preparation':2,printed:2,packed:2,shipped:3,delivered:4})[o.status]??0;
   const discount=Number(o.discount||0),shipping=Number(o.shipping||0),subtotal=Number.isFinite(Number(o.subtotal))?Number(o.subtotal):Math.max(0,Number(o.total||0)+discount-shipping);
   const couponText=o.couponCode?`کد ${D.esc(o.couponCode)}`:'بدون کد تخفیف';
   q('#accountOrderModalBody').innerHTML=`

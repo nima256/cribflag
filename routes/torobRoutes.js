@@ -1,5 +1,5 @@
 const express = require('express');
-const { torobApiV3, torobSitemapXml, torobSitemapHtml } = require('../controllers/torobController');
+const { torobApiV3, torobSitemapXml, torobSitemapHtml, siteSitemapXml, robotsTxt } = require('../controllers/torobController');
 const { torobAuth } = require('../middlewares/torobAuth');
 
 const router = express.Router();
@@ -11,6 +11,8 @@ router.post(
   torobAuth,
   torobApiV3
 );
+router.get('/sitemap.xml', siteSitemapXml);
+router.get('/robots.txt', robotsTxt);
 router.get('/torob-sitemap', torobSitemapXml);
 router.get('/torob-sitemap.xml', torobSitemapXml);
 router.get('/torob-sitemap-view', torobSitemapHtml);

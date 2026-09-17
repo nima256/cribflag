@@ -9,6 +9,7 @@ const request = require('supertest');
 const app = require('../server');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
+const SiteSetting = require('../models/SiteSetting');
 
 const safeJson = value => JSON.stringify(value).replace(/</g, '\\u003c');
 const categories = [
@@ -67,6 +68,7 @@ const product = {
   const originalFind = Product.find;
   const originalCategoryFind = Category.find;
   const originalProductAggregate = Product.aggregate;
+  const originalSiteSettingFindOne = SiteSetting.findOne;
   const productRows = Array.from({ length: 6 }, (_, index) => ({
     _id: `65b00000000000000000000${index + 1}`,
     publicId: index + 1,
@@ -96,6 +98,11 @@ const product = {
     return query;
   };
   Category.find = () => ({ sort: () => ({ lean: async () => categories }) });
+  SiteSetting.findOne = () => ({ lean: async () => ({
+    value: {
+      flagTiers: [{ key: '100x70', maxLongSide: 100, maxShortSide: 70, price: 990000, americanSatinPrice: 990000, velvetPrice: 1200000 }]
+    }
+  }) });
   Product.aggregate = async () => [{ _id: categories[0]._id, count: 6 }];
   const categoryApi = await request(app).get('/api/categories').expect(200);
   if (categoryApi.body.categories?.[0]?.slug !== 'wall-flag' || categoryApi.body.categories[0].productCount !== 6) throw new Error('Category API failed');
@@ -105,11 +112,15 @@ const product = {
   Product.find = originalFind;
   Category.find = originalCategoryFind;
   Product.aggregate = originalProductAggregate;
+  SiteSetting.findOne = originalSiteSettingFindOne;
   if (!routedHome.text.includes('پرچم آزمایشی 1') || !routedHome.text.includes('/product/1')) throw new Error('Express EJS product route failed');
   if (!routedHome.text.includes('پرچم دیواری') || !routedHome.text.includes('wall-flag')) throw new Error('Express dynamic category navbar route failed');
   if (!routedReady.text.includes('<h3>پرچم آزمایشی 1</h3>') || routedReady.text.includes('<h3>پرچم آزمایشی 2</h3>')) throw new Error('Ready route database category filtering failed');
   if (!routedCustom.text.includes('data-page=\"custom\"') || !routedCustom.text.includes('customFileInput') || routedCustom.text.includes('checkoutProvince')) {
     throw new Error('Custom page route/template regression failed');
+  }
+  if (!routedCustom.text.includes('۹۹۰٬۰۰۰ تومان') || !routedCustom.text.includes('20260915-custom-live-pricing-v1')) {
+    throw new Error('Custom page did not render the live admin price or current asset version');
   }
 
   const html = await ejs.renderFile(path.join(__dirname, '..', 'views', 'index.ejs'), {

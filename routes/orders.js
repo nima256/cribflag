@@ -355,7 +355,18 @@ router.post('/quote', requireUser, asyncHandler(async (req, res) => {
   const tax = paymentMethod === 'torobpay' ? Math.round(payableBeforeTax * 0.10) : 0;
   const total = payableBeforeTax + tax;
 
-  return ok(res, { subtotal, discount, tax, total, paymentMethod });
+  const pricedItems = items.map(item => ({
+    productId: item.productId,
+    customRequestId: item.customRequestId,
+    title: item.title,
+    price: item.price,
+    qty: item.qty,
+    size: item.size,
+    fabric: item.fabric,
+    requestType: item.requestType
+  }));
+
+  return ok(res, { subtotal, discount, tax, total, paymentMethod, items: pricedItems });
 }));
 
 router.get('/torobpay/eligibility', requireUser, asyncHandler(async (req, res) => {

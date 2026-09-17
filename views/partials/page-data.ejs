@@ -10,6 +10,7 @@ window.__READY_DESIGNS__ = window.__INITIAL_PRODUCTS__.filter(function (product)
 });
 window.__CURRENT_USER__ = <%- safeJson(currentUser || null) %>;
 window.__CURRENT_PRODUCT__ = <%- safeJson(product || null) %>;
+window.__CUSTOM_PRICING__ = <%- safeJson(typeof customPricing === "object" ? customPricing : null) %>;
 window.__PAYMENT_FAILED__ = <%- safeJson(typeof paymentFailed === "boolean" ? paymentFailed : false) %>;
 </script>
 <div
