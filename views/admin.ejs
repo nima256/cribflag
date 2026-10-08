@@ -9,9 +9,8 @@
 <link href="/assets/css/dashboard.css?v=20260916-packed-status-v1" rel="stylesheet"/>
 <link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
 <style>
-    * {
-      font-family: "Vazirmatn", system-ui, sans-serif;
-    }
+    * { font-family: "Vazirmatn", system-ui, sans-serif; }
+    .cf-admin-review-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.cf-admin-review-card{border:1px solid #e6e8ee;border-radius:18px;padding:14px;background:#fff}.cf-admin-review-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.cf-admin-review-head h4{margin:0 0 4px}.cf-admin-review-meta{font-size:12px;color:#727784}.cf-admin-review-text{white-space:pre-line;line-height:1.9;margin:10px 0}.cf-admin-review-images{display:flex;gap:8px;flex-wrap:wrap}.cf-admin-review-images img{width:76px;height:76px;object-fit:cover;border-radius:12px}.cf-admin-review-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.cf-review-pill{font-size:11px;padding:5px 8px;border-radius:999px;background:#f2f3f6}.cf-review-pill.pending{background:#fff4d4;color:#806000}.cf-review-pill.approved{background:#e8f8ed;color:#216d37}.cf-review-pill.rejected{background:#ffe9e9;color:#982b2b}@media(max-width:850px){.cf-admin-review-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body class="portal-body" data-portal="admin">
@@ -36,6 +35,7 @@
 <div class="portal-nav-label">مشتریان و ارتباطات</div>
 <button class="portal-nav-btn" data-admin-view="customers" data-view-title="مدیریت مشتریان"><svg viewbox="0 0 24 24"><circle cx="9" cy="8" r="4"></circle><path d="M2 21a7 7 0 0 1 14 0M16 3a4 4 0 0 1 0 8M17 14a6 6 0 0 1 5 7"></path></svg>مشتریان</button>
 <button class="portal-nav-btn" data-admin-view="tickets" data-view-title="مرکز پشتیبانی"><svg viewbox="0 0 24 24"><path d="M4 5h16v12H8l-4 4V5Z"></path></svg>تیکت‌ها<span class="nav-count" id="adminOpenTickets">۰</span></button>
+<button class="portal-nav-btn" data-admin-view="reviews" data-view-title="رضایت مشتریان"><svg viewbox="0 0 24 24"><path d="M4 5h16v11H8l-4 4V5Z"></path><path d="m8 10 2 2 5-5"></path></svg>رضایت مشتریان<span class="nav-count" id="adminPendingReviews">۰</span></button>
 <div class="portal-nav-label">تحلیل فروش</div>
 <button class="portal-nav-btn" data-admin-view="reports" data-view-title="گزارش‌ها و تحلیل"><svg viewbox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg>گزارش‌ها</button>
 
@@ -131,6 +131,15 @@
 <section class="portal-view" data-admin-section="tickets">
 <div class="view-head"><div><h2>مرکز پشتیبانی</h2><p>پاسخ‌گویی و مدیریت سطح اولویت درخواست‌ها</p></div></div>
 <div class="portal-card"><div class="table-tools"><input class="table-search" id="adminTicketSearch" placeholder="موضوع، مشتری یا کد تیکت"/><select class="table-filter" id="adminTicketStatus"><option value="">همه وضعیت‌ها</option><option value="open">باز</option><option value="answered">پاسخ داده شده</option><option value="closed">بسته</option></select><select class="table-filter" id="adminTicketPriority"><option value="">همه اولویت‌ها</option><option value="high">فوری</option><option value="normal">عادی</option></select></div><div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>تیکت</th><th>مشتری</th><th>بخش</th><th>اولویت</th><th>آخرین پیام</th><th>وضعیت</th><th></th></tr></thead><tbody id="adminTicketsTable"></tbody></table></div></div>
+</section>
+<section class="portal-view" data-admin-section="reviews">
+<div class="view-head"><div><h2>رضایت مشتریان</h2><p>تأیید نظرهای ارسالی مشتریان و ثبت دستی رضایت‌های اینستاگرام، تلگرام و سایر کانال‌ها.</p></div><div class="view-actions"><button class="portal-btn portal-btn-light" id="refreshReviewsBtn" type="button">به‌روزرسانی</button><a class="portal-btn portal-btn-soft" href="/reviews" target="_blank">صفحه عمومی</a></div></div>
+<div class="stats-grid"><article class="stat-card"><h3 id="reviewStatPending">۰</h3><p>در انتظار تأیید</p></article><article class="stat-card"><h3 id="reviewStatApproved">۰</h3><p>منتشر شده</p></article><article class="stat-card"><h3 id="reviewStatRejected">۰</h3><p>رد شده</p></article></div>
+<div class="portal-grid-2">
+<div class="portal-card"><div class="portal-card-head"><div><h3>ثبت دستی رضایت</h3><p>برای مشتریانی که نظر یا عکس را در شبکه‌های اجتماعی فرستاده‌اند.</p></div></div><div class="portal-card-body"><form id="adminManualReviewForm"><div class="form-grid"><div class="field full"><label>محصول</label><select id="adminReviewProduct" name="productId" required><option value="">انتخاب محصول</option><option value="custom-design">طرح دلخواه (بدون اتصال به محصول)</option><% (products || []).forEach(item => { %><option value="<%= item.id %>"><%= item.title %></option><% }) %></select></div><div class="field"><label>نام نمایشی مشتری</label><input id="adminReviewCustomer" name="customerName" placeholder="مثلاً سارا" required/></div><div class="field"><label>منبع</label><select id="adminReviewSource" name="source"><option value="instagram">اینستاگرام</option><option value="telegram">تلگرام</option><option value="whatsapp">واتساپ</option><option value="admin">ثبت توسط فروشگاه</option><option value="other">سایر</option></select></div><div class="field full"><label>متن نظر</label><textarea id="adminReviewText" name="text" maxlength="2000"></textarea></div><div class="field full"><label>تصاویر (حداکثر ۴ عدد)</label><input id="adminReviewImages" type="file" accept="image/jpeg,image/png,image/webp" multiple/></div><div class="field"><label>وضعیت اولیه</label><select id="adminReviewInitialStatus"><option value="approved">انتشار فوری</option><option value="pending">در انتظار تأیید</option></select></div><div class="field" style="align-self:end"><button class="portal-btn portal-btn-primary" type="submit">ثبت رضایت</button></div></div></form></div></div>
+<div class="portal-card"><div class="portal-card-head"><div><h3>صف تأیید</h3><p>نظر مشتری سایت تا زمان تأیید اینجا می‌ماند.</p></div></div><div class="portal-card-body"><div class="field"><label>فیلتر وضعیت</label><select id="adminReviewFilter"><option value="pending">در انتظار تأیید</option><option value="">همه</option><option value="approved">منتشر شده</option><option value="rejected">رد شده</option></select></div></div></div>
+</div>
+<div class="portal-card" style="margin-top:16px"><div class="portal-card-body"><div class="cf-admin-review-grid" id="adminReviewsList"><div class="empty-panel">در حال بارگذاری...</div></div></div></div>
 </section>
 <section class="portal-view" data-admin-section="reports">
 <div class="view-head"><div><h2>گزارش‌ها و تحلیل</h2><p>نمای تحلیلی فروش، محصول و مشتری</p></div><button class="portal-btn portal-btn-primary" id="downloadFullReport">دانلود گزارش کامل</button></div>
@@ -282,5 +291,68 @@
 <script src="/assets/js/api.js?v=20260725-categories-1"></script>
 <script src="/assets/js/portal-data.js?v=20260827-home-attribution-v2"></script>
 <script src="/assets/js/admin.js?v=20260916-packed-status-v1"></script>
+<script>
+(() => {
+  const list = document.getElementById('adminReviewsList');
+  const filter = document.getElementById('adminReviewFilter');
+  const pendingNav = document.getElementById('adminPendingReviews');
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const statusLabel = status => ({pending:'در انتظار تأیید',approved:'منتشر شده',rejected:'رد شده'}[status] || status);
+  const reviewNavButton = document.querySelector('[data-admin-view="reviews"]');
+  const activateReviewsView = () => {
+    document.querySelectorAll('[data-admin-section]').forEach(section => section.classList.toggle('active', section.dataset.adminSection === 'reviews'));
+    document.querySelectorAll('[data-admin-view]').forEach(button => button.classList.toggle('active', button.dataset.adminView === 'reviews'));
+    const title = document.getElementById('adminViewTitle');
+    if (title) title.textContent = 'رضایت مشتریان';
+  };
+  reviewNavButton?.addEventListener('click', activateReviewsView);
+
+  async function request(url, options = {}) {
+    const response = await fetch(url, { credentials:'same-origin', ...options });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.message || 'عملیات انجام نشد');
+    return data;
+  }
+
+  async function loadReviews() {
+    const query = filter?.value ? `?status=${encodeURIComponent(filter.value)}` : '';
+    const data = await request(`/api/admin/reviews${query}`);
+    document.getElementById('reviewStatPending').textContent = new Intl.NumberFormat('fa-IR').format(data.counts.pending || 0);
+    document.getElementById('reviewStatApproved').textContent = new Intl.NumberFormat('fa-IR').format(data.counts.approved || 0);
+    document.getElementById('reviewStatRejected').textContent = new Intl.NumberFormat('fa-IR').format(data.counts.rejected || 0);
+    if (pendingNav) pendingNav.textContent = new Intl.NumberFormat('fa-IR').format(data.counts.pending || 0);
+    list.innerHTML = (data.reviews || []).length ? data.reviews.map(review => `<article class="cf-admin-review-card" data-id="${esc(review.id)}"><div class="cf-admin-review-head"><div><h4>${esc(review.customerName)}</h4><div class="cf-admin-review-meta">${esc(review.productTitle)}${review.orderNumber ? ` • سفارش ${esc(review.orderNumber)}` : ''} • ${esc(review.sourceLabel || '')}</div></div><span class="cf-review-pill ${esc(review.status)}">${esc(statusLabel(review.status))}</span></div>${review.text ? `<div class="cf-admin-review-text">${esc(review.text)}</div>` : ''}${review.images?.length ? `<div class="cf-admin-review-images">${review.images.map(img => `<a href="${esc(img.image)}" target="_blank" rel="noopener"><img src="${esc(img.thumbnail || img.image)}" alt=""></a>`).join('')}</div>` : ''}<div class="cf-admin-review-actions">${review.status !== 'approved' ? '<button class="portal-btn portal-btn-primary cf-review-approve" type="button">تأیید و انتشار</button>' : ''}${review.status !== 'rejected' ? '<button class="portal-btn portal-btn-light cf-review-reject" type="button">رد</button>' : ''}<button class="portal-btn portal-btn-light cf-review-delete" type="button">حذف</button>${review.productId ? `<a class="portal-btn portal-btn-soft" href="/product/${esc(review.productId)}#customer-reviews" target="_blank">محصول</a>` : '<a class="portal-btn portal-btn-soft" href="/reviews" target="_blank">صفحه رضایت‌ها</a>'}</div></article>`).join('') : '<div class="empty-panel">موردی در این وضعیت نیست.</div>';
+
+    list.querySelectorAll('.cf-review-approve').forEach(btn => btn.addEventListener('click', async () => { const card=btn.closest('[data-id]'); await request(`/api/admin/reviews/${card.dataset.id}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'approved'})}); await loadReviews(); }));
+    list.querySelectorAll('.cf-review-reject').forEach(btn => btn.addEventListener('click', async () => { const card=btn.closest('[data-id]'); await request(`/api/admin/reviews/${card.dataset.id}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'rejected'})}); await loadReviews(); }));
+    list.querySelectorAll('.cf-review-delete').forEach(btn => btn.addEventListener('click', async () => { if(!confirm('این رضایت و تصاویرش حذف شود؟')) return; const card=btn.closest('[data-id]'); await request(`/api/admin/reviews/${card.dataset.id}`, {method:'DELETE'}); await loadReviews(); }));
+  }
+
+  document.getElementById('adminManualReviewForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      const payload = new FormData();
+      payload.append('productId', document.getElementById('adminReviewProduct').value);
+      payload.append('customerName', document.getElementById('adminReviewCustomer').value);
+      payload.append('source', document.getElementById('adminReviewSource').value);
+      payload.append('text', document.getElementById('adminReviewText').value);
+      payload.append('status', document.getElementById('adminReviewInitialStatus').value);
+      [...document.getElementById('adminReviewImages').files].slice(0,4).forEach(file => payload.append('images', file));
+      const data = await request('/api/admin/reviews', {method:'POST',body:payload});
+      alert(data.message || 'ثبت شد');
+      form.reset();
+      await loadReviews();
+    } catch (error) { alert(error.message); } finally { button.disabled = false; }
+  });
+
+  filter?.addEventListener('change', () => loadReviews().catch(error => alert(error.message)));
+  document.getElementById('refreshReviewsBtn')?.addEventListener('click', () => loadReviews().catch(error => alert(error.message)));
+  document.querySelector('[data-admin-view="reviews"]')?.addEventListener('click', () => loadReviews().catch(error => alert(error.message)));
+  loadReviews().catch(error => { if (list) list.innerHTML = `<div class="empty-panel">${esc(error.message)}</div>`; });
+})();
+</script>
 </body>
 </html>

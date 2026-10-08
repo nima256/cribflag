@@ -1,8 +1,10 @@
 const Product = require('../models/Product');
 const {
   getProductVariants,
-  findVariant,
   findVariantByKey,
+  resolveVariant,
+  parsePageUnique,
+  parseProductPageUrl,
   formatProductForTorob,
   baseUrl
 } = require('../helper/torobProductMeta');
@@ -15,10 +17,21 @@ const buildResponse = ({ products, currentPage = 1, total = products.length, max
   current_page: currentPage,
   total,
   max_pages: maxPages,
+  next_cursor: null,
   products
 });
 
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+
+const validateLookupArray = (body, key) => {
+  if (!Array.isArray(body[key]) || body[key].length < 1 || body[key].length > PAGE_SIZE) {
+    return `${key} must contain between 1 and ${PAGE_SIZE} items`;
+  }
+  if (body[key].some(value => typeof value !== 'string' || !value.trim())) {
+    return `every ${key} item must be a non-empty string`;
+  }
+  return '';
+};
 
 const validateRequestMode = body => {
   const hasUrls = hasOwn(body, 'page_urls');
@@ -29,44 +42,36 @@ const validateRequestMode = body => {
   if (modeCount !== 1) return { error: 'Provide exactly one request mode: page_urls, page_uniques, or page with sort' };
 
   if (hasUrls) {
-    if (!Array.isArray(body.page_urls) || body.page_urls.length < 1) return { error: 'page_urls must be a non-empty array' };
-    if (body.page_urls.some(value => typeof value !== 'string' || !value.trim())) return { error: 'every page_urls item must be a non-empty string' };
-    return { mode: 'urls' };
+    const error = validateLookupArray(body, 'page_urls');
+    return error ? { error } : { mode: 'urls' };
   }
 
   if (hasUniques) {
-    if (!Array.isArray(body.page_uniques) || body.page_uniques.length < 1) return { error: 'page_uniques must be a non-empty array' };
-    if (body.page_uniques.some(value => typeof value !== 'string' || !value.trim())) return { error: 'every page_uniques item must be a non-empty string' };
-    return { mode: 'uniques' };
+    const error = validateLookupArray(body, 'page_uniques');
+    return error ? { error } : { mode: 'uniques' };
   }
 
   if (!hasOwn(body, 'page')) return { error: 'page parameter is not provided' };
   if (!hasOwn(body, 'sort')) return { error: 'sort parameter is not provided' };
 
   const page = Number.parseInt(body.page, 10);
-  if (!Number.isInteger(page) || page < 1 || String(page) !== String(body.page).trim()) return { error: 'page must be a positive integer' };
-  if (!['date_added_desc', 'date_updated_desc'].includes(body.sort)) return { error: 'sort parameter must be date_added_desc or date_updated_desc' };
+  if (!Number.isInteger(page) || page < 1 || page > 100000 || String(page) !== String(body.page).trim()) {
+    return { error: 'page must be a positive integer' };
+  }
+  if (!['date_added_desc', 'date_updated_desc', 'product_id_desc'].includes(body.sort)) {
+    return { error: 'sort parameter must be date_added_desc, date_updated_desc or product_id_desc' };
+  }
   return { mode: 'pagination', page, sort: body.sort };
 };
 
-const parseProductPageUrl = rawUrl => {
-  try {
-    const url = new URL(rawUrl, baseUrl());
-    const match = url.pathname.match(/^\/product\/(\d+)\/?$/i);
-    if (!match) return null;
-    const publicId = Number(match[1]);
-    if (!Number.isInteger(publicId) || publicId < 1) return null;
-    return {
-      publicId,
-      size: String(url.searchParams.get('size') || '').trim(),
-      fabric: String(url.searchParams.get('fabric') || '').trim()
-    };
-  } catch {
-    return null;
-  }
+const findActiveProducts = async publicIds => {
+  const ids = [...new Set(publicIds.filter(id => Number.isInteger(id) && id > 0))];
+  if (!ids.length) return new Map();
+  const rows = await Product.find({ publicId: { $in: ids }, status: 'active' })
+    .select(PRODUCT_SELECT)
+    .lean();
+  return new Map(rows.map(product => [Number(product.publicId), product]));
 };
-
-const findActiveProductByPublicId = publicId => Product.findOne({ publicId, status: 'active' }).select(PRODUCT_SELECT).lean();
 
 exports.torobApiV3 = async (req, res) => {
   try {
@@ -75,42 +80,50 @@ exports.torobApiV3 = async (req, res) => {
     if (validation.error) return res.status(400).json({ error: validation.error });
 
     if (validation.mode === 'urls') {
-      const products = [];
-      for (const rawUrl of requestBody.page_urls.slice(0, PAGE_SIZE)) {
-        const parsed = parseProductPageUrl(rawUrl);
-        if (!parsed) continue;
-        const product = await findActiveProductByPublicId(parsed.publicId);
-        if (!product) continue;
-        const variant = findVariant(product, parsed.size, parsed.fabric);
-        if (!variant) continue;
-        products.push(formatProductForTorob(product, variant));
-      }
+      const requests = requestBody.page_urls.map(parseProductPageUrl);
+      const lookup = await findActiveProducts(requests.filter(Boolean).map(item => item.publicId));
+      const products = requests.map(request => {
+        if (!request) return null;
+        const product = lookup.get(request.publicId);
+        if (!product) return null;
+        const variant = resolveVariant(product, request);
+        return variant ? formatProductForTorob(product, variant) : null;
+      }).filter(Boolean);
       return res.json(buildResponse({ products }));
     }
 
     if (validation.mode === 'uniques') {
-      const products = [];
-      for (const unique of requestBody.page_uniques.slice(0, PAGE_SIZE)) {
-        const match = String(unique).match(/^(\d+)_(.+)$/);
-        if (!match) continue;
-        const publicId = Number(match[1]);
-        const key = match[2];
-        const product = await findActiveProductByPublicId(publicId);
-        if (!product) continue;
-        const variant = findVariantByKey(product, key);
-        if (!variant) continue;
-        products.push(formatProductForTorob(product, variant));
-      }
+      const requests = requestBody.page_uniques.map(parsePageUnique);
+      const lookup = await findActiveProducts(requests.filter(Boolean).map(item => item.publicId));
+      const products = requests.map(request => {
+        if (!request) return null;
+        const product = lookup.get(request.publicId);
+        if (!product) return null;
+        const variant = findVariantByKey(product, request.variantKey);
+        if (!variant) return null;
+        const formatted = formatProductForTorob(product, variant);
+        return formatted.page_unique === request.raw ? formatted : null;
+      }).filter(Boolean);
       return res.json(buildResponse({ products }));
     }
 
     const sortQuery = validation.sort === 'date_added_desc'
       ? { createdAt: -1, _id: -1 }
-      : { updatedAt: -1, _id: -1 };
-    const sourceProducts = await Product.find({ status: 'active' }).select(PRODUCT_SELECT).sort(sortQuery).lean();
+      : validation.sort === 'product_id_desc'
+        ? { publicId: -1, _id: -1 }
+        : { updatedAt: -1, _id: -1 };
+
+    const sourceProducts = await Product.find({ status: 'active' })
+      .select(PRODUCT_SELECT)
+      .sort(sortQuery)
+      .lean();
+
+    // Torob pagination is over individual size × fabric offers, not parent products.
     const allVariants = [];
     for (const product of sourceProducts) {
-      for (const variant of getProductVariants(product)) allVariants.push(formatProductForTorob(product, variant));
+      for (const variant of getProductVariants(product)) {
+        allVariants.push(formatProductForTorob(product, variant));
+      }
     }
 
     const total = allVariants.length;

@@ -37,5 +37,7 @@ const createUpload = fileSize => multer({
 const upload = createUpload(20 * 1024 * 1024);
 // فایل طرح دلخواه جداگانه محدود می‌شود تا آپلود تصاویر مدیریت همچنان سقف قبلی را داشته باشد.
 upload.customDesign = createUpload(3 * 1024 * 1024);
+// تصاویر رضایت مشتری بعد از اعتبارسنجی و پردازش در uploads/reviews ذخیره می‌شوند.
+upload.reviewPhotos = createUpload(5 * 1024 * 1024);
 
 module.exports = upload;

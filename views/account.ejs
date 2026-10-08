@@ -9,9 +9,8 @@
 <link href="/assets/css/dashboard.css?v=20260916-packed-status-v1" rel="stylesheet"/>
 <link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
 <style>
-    * {
-      font-family: "Vazirmatn", system-ui, sans-serif;
-    }
+    * { font-family: "Vazirmatn", system-ui, sans-serif; }
+    .cf-feedback-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.cf-feedback-card{border:1px solid #e7e9ee;border-radius:18px;padding:14px;background:#fff}.cf-feedback-card-head{display:flex;gap:12px;align-items:center}.cf-feedback-card img{width:64px;height:64px;border-radius:14px;object-fit:cover;background:#f3f4f6}.cf-feedback-card h4{margin:0 0 4px}.cf-feedback-card p{margin:4px 0;color:#6d7280;font-size:13px}.cf-feedback-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px}.cf-feedback-status{font-size:12px;padding:5px 9px;border-radius:999px;background:#f4f5f7}.cf-feedback-status.pending{background:#fff5d8;color:#8a6500}.cf-feedback-status.approved{background:#e9f8ee;color:#24743b}.cf-feedback-status.rejected{background:#ffeaea;color:#9f2f2f}.cf-review-modal-preview{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.cf-review-modal-preview img{width:70px;height:70px;border-radius:12px;object-fit:cover}.cf-open{display:flex!important}@media(max-width:760px){.cf-feedback-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body class="portal-body" data-portal="account">
@@ -24,6 +23,7 @@
 <div class="portal-nav-label">حساب کاربری</div>
 <button class="portal-nav-btn active" data-account-view="overview" data-view-title="داشبورد من"><svg viewbox="0 0 24 24"><path d="M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-3H4v3Zm10-13h6V4h-6v3Z"></path></svg>داشبورد</button>
 <button class="portal-nav-btn" data-account-view="orders" data-view-title="سفارش‌های من"><svg viewbox="0 0 24 24"><path d="M5 7h14l-1 13H6L5 7Zm3 0V5a4 4 0 0 1 8 0v2"></path></svg>سفارش‌های من<span class="nav-count" id="accountOrdersCount">۰</span></button>
+<button class="portal-nav-btn" data-account-view="reviews" data-view-title="رضایت خرید"><svg viewbox="0 0 24 24"><path d="M4 5h16v11H8l-4 4V5Z"></path><path d="m8 10 2 2 5-5"></path></svg>رضایت خرید<span class="nav-count" id="accountReviewsCount">۰</span></button>
 <button class="portal-nav-btn" data-account-view="custom" data-view-title="طرح‌های اختصاصی"><svg viewbox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h9l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"></path><path d="M14 3v6h6M8 15l2-2 2 2 3-4 3 4"></path></svg>طرح‌های اختصاصی</button>
 <div class="portal-nav-label">پروفایل و پشتیبانی</div>
 <button class="portal-nav-btn" data-account-view="profile" data-view-title="اطلاعات حساب"><svg viewbox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>اطلاعات حساب</button>
@@ -62,6 +62,11 @@
 <div class="view-head"><div><h2>سفارش‌های من</h2><p>جزئیات، وضعیت آماده‌سازی و کد رهگیری سفارش‌ها</p></div><div class="view-actions"><a class="portal-btn portal-btn-primary" href="/store">ثبت سفارش جدید</a></div></div>
 <div class="portal-card"><div class="table-tools"><input class="table-search" id="accountOrderSearch" placeholder="جستجو با شماره سفارش یا محصول"/><select class="table-filter" id="accountOrderStatus"><option value="">همه وضعیت‌ها</option><option value="processing">در حال آماده‌سازی</option><option value="design-review">بررسی طراحی</option><option value="print-preparation">آماده‌سازی برای چاپ</option><option value="printed">چاپ شده</option><option value="packed">بسته‌بندی شده</option><option value="shipped">ارسال شده</option><option value="delivered">تحویل شده</option><option value="cancelled">لغو شده</option></select></div><div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>سفارش</th><th>محصولات</th><th>تاریخ</th><th>مبلغ</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="accountOrdersTable"></tbody></table></div></div>
 </section>
+<section class="portal-view" data-account-section="reviews">
+<div class="view-head"><div><h2>رضایت خرید</h2><p>بعد از تحویل سفارش، تجربه و عکس محصولت را برای ما بفرست.</p></div><div class="view-actions"><a class="portal-btn portal-btn-light" href="/reviews">رضایت مشتری‌ها در سایت</a></div></div>
+<div class="portal-card"><div class="portal-card-head"><div><h3>محصولات تحویل‌شده</h3><p>برای هر محصول یک نظر قابل ثبت است و قبل از انتشار توسط Crib Flag بررسی می‌شود.</p></div></div><div class="portal-card-body"><div class="cf-feedback-grid" id="accountReviewEligible"><div class="empty-panel">در حال بارگذاری...</div></div></div></div>
+<div class="portal-card" style="margin-top:16px"><div class="portal-card-head"><div><h3>نظرهای ثبت‌شده من</h3><p>وضعیت بررسی رضایت‌هایی که قبلاً ارسال کرده‌ای.</p></div></div><div class="portal-card-body"><div class="cf-feedback-grid" id="accountReviewHistory"></div></div></div>
+</section>
 <section class="portal-view" data-account-section="custom">
 <div class="view-head"><div><h2>طرح‌های اختصاصی</h2><p>فایل‌ها، توضیحات اصلاح و وضعیت تأیید پیش‌نمایش</p></div></div>
 <div class="portal-card"><div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>کد درخواست</th><th>فایل</th><th>سایز</th><th>توضیحات</th><th>وضعیت</th><th>عملیات</th></tr></thead><tbody id="accountCustomTable"></tbody></table></div></div>
@@ -95,8 +100,99 @@
 <div class="portal-modal-backdrop" id="ticketModal"><div class="portal-modal"><div class="portal-modal-head"><h3>تیکت پشتیبانی</h3><button class="portal-modal-close" data-close-modal="">×</button></div><div class="portal-modal-body" id="ticketModalBody"></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="">بستن</button></div></div></div>
 <div class="portal-modal-backdrop" id="newTicketModal"><div class="portal-modal"><div class="portal-modal-head"><h3>ثبت تیکت جدید</h3><button class="portal-modal-close" data-close-modal="">×</button></div><form id="newTicketForm"><div class="portal-modal-body"><div class="form-grid"><div class="field full"><label>موضوع</label><input id="newTicketSubject" required=""/></div><div class="field"><label>بخش مرتبط</label><select id="newTicketDepartment"><option>سفارش‌ها</option><option>طراحی</option><option>ارسال</option><option>مالی</option><option>سایر</option></select></div><div class="field"><label>اولویت</label><select id="newTicketPriority"><option value="normal">عادی</option><option value="high">فوری</option></select></div><div class="field full"><label>متن درخواست</label><textarea id="newTicketMessage" required=""></textarea></div></div></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="" type="button">انصراف</button><button class="portal-btn portal-btn-primary" type="submit">ارسال تیکت</button></div></form></div></div>
 <div class="portal-modal-backdrop" id="customRequestModal"><div class="portal-modal"><div class="portal-modal-head"><h3>ارسال طرح اختصاصی</h3><button class="portal-modal-close" data-close-modal="">×</button></div><form id="customRequestForm"><div class="portal-modal-body"><label class="upload-zone"><input accept="image/jpeg,image/png,image/webp,application/pdf" id="accountCustomFile" required="" type="file"/><strong id="accountCustomFileLabel">انتخاب فایل طرح</strong><p>PNG، JPG، WEBP یا PDF تا حجم ۳ مگابایت</p></label><div class="form-grid" style="margin-top:15px"><div class="field"><label>سایز</label><select id="accountCustomSize"><option value="150 × 90 سانتی‌متر">۱۵۰ × ۹۰ پیشنهادی</option><option value="100 × 70 سانتی‌متر">۱۰۰ × ۷۰ پیشنهادی</option><option value="50 × 70 سانتی‌متر">۵۰ × ۷۰</option></select></div><div class="field"><label>جنس پارچه</label><select id="accountCustomFabric"><option>ساتن آمریکایی</option><option>ساتن براق</option><option>مخمل</option></select></div><div class="field"><label>نوع درخواست</label><select id="accountCustomType"><option>چاپ مستقیم</option><option>نیازمند اصلاح طراحی</option></select></div><div class="field full"><label>توضیحات تغییرات</label><textarea id="accountCustomNotes" placeholder="برش، جای لوگو یا هر تغییر موردنیاز را بنویسید."></textarea></div></div></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" data-close-modal="" type="button">انصراف</button><button class="portal-btn portal-btn-primary" type="submit">ثبت درخواست</button></div></form></div></div>
+<div class="portal-modal-backdrop" id="reviewSubmitModal"><div class="portal-modal"><div class="portal-modal-head"><h3>ثبت رضایت خرید</h3><button class="portal-modal-close" id="reviewModalClose" type="button">×</button></div><form id="reviewSubmitForm"><div class="portal-modal-body"><input type="hidden" id="reviewOrderNumber" name="orderNumber"/><input type="hidden" id="reviewProductId" name="productId"/><div class="field full"><label>محصول</label><input id="reviewProductTitle" disabled/></div><div class="field full"><label>نظر شما</label><textarea id="reviewText" name="text" maxlength="2000" placeholder="از کیفیت چاپ، پارچه، بسته‌بندی یا تجربه خریدت برامون بنویس..."></textarea></div><div class="field full"><label>عکس محصول بعد از دریافت (حداکثر ۴ تصویر)</label><input id="reviewImages" name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple/></div><div class="cf-review-modal-preview" id="reviewImagePreview"></div><p style="font-size:12px;color:#777">نظر و تصاویر فقط بعد از تأیید مدیریت در سایت منتشر می‌شوند.</p></div><div class="portal-modal-foot"><button class="portal-btn portal-btn-light" id="reviewModalCancel" type="button">انصراف</button><button class="portal-btn portal-btn-primary" type="submit">ارسال برای بررسی</button></div></form></div></div>
 <script src="/assets/js/api.js"></script>
 <script src="/assets/js/portal-data.js"></script>
 <script src="/assets/js/account.js?v=20260916-packed-status-v1"></script>
+<script>
+(() => {
+  const eligibleBox = document.getElementById('accountReviewEligible');
+  const historyBox = document.getElementById('accountReviewHistory');
+  const countBox = document.getElementById('accountReviewsCount');
+  const modal = document.getElementById('reviewSubmitModal');
+  const form = document.getElementById('reviewSubmitForm');
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const statusLabel = status => ({pending:'در انتظار تأیید',approved:'منتشر شده',rejected:'نیازمند ارسال مجدد'}[status] || status || '');
+  const closeModal = () => modal?.classList.remove('cf-open');
+  const reviewNav = document.querySelector('[data-account-view="reviews"]');
+  const activateReviewView = () => {
+    document.querySelectorAll('[data-account-section]').forEach(section => section.classList.toggle('active', section.dataset.accountSection === 'reviews'));
+    document.querySelectorAll('[data-account-view]').forEach(button => button.classList.toggle('active', button.dataset.accountView === 'reviews'));
+    const title = document.getElementById('accountViewTitle');
+    if (title) title.textContent = 'رضایت خرید';
+  };
+  reviewNav?.addEventListener('click', activateReviewView);
+
+  function openModal(item, orderNumber) {
+    if (!modal) return;
+    document.getElementById('reviewOrderNumber').value = orderNumber;
+    document.getElementById('reviewProductId').value = item.productId;
+    document.getElementById('reviewProductTitle').value = item.title;
+    document.getElementById('reviewText').value = item.review?.status === 'rejected' ? (item.review.text || '') : '';
+    document.getElementById('reviewImages').value = '';
+    document.getElementById('reviewImagePreview').innerHTML = '';
+    modal.classList.add('cf-open');
+  }
+
+  async function loadReviews() {
+    const response = await fetch('/api/account/reviews', { credentials: 'same-origin' });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.message || 'خطا در دریافت رضایت‌ها');
+    const cards = [];
+    for (const order of data.eligible || []) {
+      for (const item of order.items || []) cards.push({ ...item, orderNumber: order.orderNumber });
+    }
+    countBox.textContent = new Intl.NumberFormat('fa-IR').format(cards.filter(item => !item.review || item.review.status === 'rejected').length);
+    eligibleBox.innerHTML = cards.length ? cards.map(item => {
+      const review = item.review;
+      const canSend = !review || review.status === 'rejected';
+      return `<article class="cf-feedback-card"><div class="cf-feedback-card-head">${item.image ? `<img src="${esc(item.image)}" alt="">` : ''}<div><h4>${esc(item.title)}</h4><p>سفارش ${esc(item.orderNumber)}</p><p>${esc([item.size,item.fabric].filter(Boolean).join(' • '))}</p></div></div><div class="cf-feedback-actions">${review ? `<span class="cf-feedback-status ${esc(review.status)}">${esc(statusLabel(review.status))}</span>` : '<span class="cf-feedback-status">هنوز نظری ثبت نشده</span>'}${canSend ? `<button class="portal-btn portal-btn-primary cf-review-open" type="button" data-order="${esc(item.orderNumber)}" data-product="${esc(item.productId)}">${review ? 'ارسال مجدد' : 'ثبت نظر و عکس'}</button>` : ''}</div></article>`;
+    }).join('') : '<div class="empty-panel">فعلاً محصول تحویل‌شده‌ای برای ثبت نظر نداری.</div>';
+
+    const itemMap = new Map(cards.map(item => [`${item.orderNumber}:${item.productId}`, item]));
+    eligibleBox.querySelectorAll('.cf-review-open').forEach(button => button.addEventListener('click', () => {
+      const item = itemMap.get(`${button.dataset.order}:${Number(button.dataset.product)}`);
+      if (item) openModal(item, button.dataset.order);
+    }));
+
+    historyBox.innerHTML = (data.reviews || []).length ? data.reviews.map(review => `<article class="cf-feedback-card"><div><h4>${esc(review.productTitle)}</h4><p>${esc(review.text || 'بدون متن')}</p></div><div class="cf-feedback-actions"><span class="cf-feedback-status ${esc(review.status)}">${esc(statusLabel(review.status))}</span><small>${esc(review.orderNumber || '')}</small></div></article>`).join('') : '<div class="empty-panel">هنوز رضایتی ثبت نکرده‌ای.</div>';
+  }
+
+  document.getElementById('reviewModalClose')?.addEventListener('click', closeModal);
+  document.getElementById('reviewModalCancel')?.addEventListener('click', closeModal);
+  modal?.addEventListener('click', event => { if (event.target === modal) closeModal(); });
+  document.getElementById('reviewImages')?.addEventListener('change', event => {
+    const files = [...event.target.files].slice(0,4);
+    const preview = document.getElementById('reviewImagePreview');
+    preview.innerHTML = '';
+    files.forEach(file => { const img = document.createElement('img'); img.src = URL.createObjectURL(file); preview.appendChild(img); });
+  });
+  form?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      const payload = new FormData();
+      payload.append('orderNumber', document.getElementById('reviewOrderNumber').value);
+      payload.append('productId', document.getElementById('reviewProductId').value);
+      payload.append('text', document.getElementById('reviewText').value);
+      [...document.getElementById('reviewImages').files].slice(0,4).forEach(file => payload.append('images', file));
+      const response = await fetch('/api/account/reviews', { method:'POST', body:payload, credentials:'same-origin' });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.message || 'ثبت نظر انجام نشد');
+      closeModal();
+      alert(data.message || 'نظر ثبت شد');
+      await loadReviews();
+    } catch (error) { alert(error.message); } finally { button.disabled = false; }
+  });
+
+  loadReviews().catch(error => { if (eligibleBox) eligibleBox.innerHTML = `<div class="empty-panel">${esc(error.message)}</div>`; });
+  const wantedOrder = new URLSearchParams(location.search).get('review');
+  if (wantedOrder) {
+    const button = document.querySelector('[data-account-view="reviews"]');
+    setTimeout(() => button?.click(), 100);
+  }
+})();
+</script>
 </body>
 </html>

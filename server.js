@@ -16,7 +16,16 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.disable('x-powered-by');
 
-app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: false,
+    referrerPolicy: {
+      policy: "strict-origin-when-cross-origin",
+    },
+  })
+);
+
 app.use(compression());
 // Allow requests from every Origin (including Telegram/Instagram in-app browsers).
 // Using `origin: true` reflects the incoming Origin so credentialed requests remain valid.
@@ -141,7 +150,9 @@ app.use('/api/categories', require('./routes/categories'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/discounts', require('./routes/discounts'));
 app.use('/api/orders', require('./routes/orders'));
+app.use('/api/account/reviews', require('./routes/account-reviews'));
 app.use('/api/account', require('./routes/account'));
+app.use('/api/admin/reviews', require('./routes/admin-reviews'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/admin/download', require('./routes/admin-download'));
 app.use('/api', (_req, _res, next) => next(new AppError(404, 'مسیر API یافت نشد')));
@@ -168,6 +179,7 @@ async function start() {
   await mongoose.connect(env.mongodbUri);
   await require('./services/adminAccount').ensureAdminFromEnv();
   await require('./services/categories').ensureLegacyCategories();
+  require('./services/reviewRequestSms').startReviewSmsWorker();
   app.listen(env.port, () => console.log(`Crib Flag listening on ${env.siteUrl} | EJS enabled`));
 }
 if (require.main === module) start().catch(err => { console.error('Startup failed:', err); process.exit(1); });

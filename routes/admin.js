@@ -10,6 +10,7 @@ const Ticket = require('../models/Ticket');
 const CustomRequest = require('../models/CustomRequest');
 const Notification = require('../models/Notification');
 const RecentAction = require('../models/RecentAction');
+const CustomerReview = require('../models/CustomerReview');
 const { requireAdmin } = require('../middlewares/auth');
 const { asyncHandler, ok, AppError } = require('../utils/http');
 const S = require('../services/serializers');
@@ -29,6 +30,7 @@ const { categoryPayload, ensureLegacyCategories, nextCategoryId, resolveCategory
 const { parsePersianDate } = require('../utils/formatters');
 const { detectPillowMode, getPillowConfig } = require('../utils/pillowPricing');
 const { getCustomPricingConfig, saveCustomPricingConfig } = require('../utils/customPricing');
+const { markReviewRequestEligible } = require('../services/reviewRequestSms');
 const {
   CUSTOM_PAYMENT_STATUSES,
   ORDER_PAYMENT_STATUSES,
@@ -49,6 +51,7 @@ const ORDER_STATUS_LABELS = Object.freeze({
 const ORDER_STATUSES = new Set(Object.keys(ORDER_STATUS_LABELS));
 
 async function applyBulkOrderStatus(order, status) {
+  const previousStatus = order.status;
   let paymentStatus = order.paymentStatus;
   const isTorobPayOrder = order.payment === 'پرداخت اقساطی ترب‌پی';
   const shouldCancelTorob = status === 'cancelled' &&
@@ -79,6 +82,7 @@ async function applyBulkOrderStatus(order, status) {
   order.paymentStatus = paymentStatus;
   await order.save();
   await syncCustomRequestsFromOrder(order);
+  await markReviewRequestEligible(order, previousStatus);
 }
 
 function addOrderRelations(order, orderNumbers, customRequestIds) {
@@ -291,12 +295,14 @@ function galleryPublicUrl(rootKey, relativePath) {
 }
 
 async function galleryReferenceSets() {
-  const [products, categories, customRequests] = await Promise.all([
+  const [products, categories, customRequests, customerReviews] = await Promise.all([
     Product.find().select('image images').lean(),
     Category.find().select('image').lean(),
-    CustomRequest.find().select('filePath').lean()
+    CustomRequest.find().select('filePath').lean(),
+    CustomerReview.find().select('images').lean()
   ]);
   const urls = new Set();
+  const reviewUrls = new Set();
   for (const product of products) {
     for (const image of (Array.isArray(product.images) && product.images.length ? product.images : [product.image])) {
       const normalized = String(image || '').split('?')[0].trim();
@@ -307,8 +313,16 @@ async function galleryReferenceSets() {
     const normalized = String(category.image || '').split('?')[0].trim();
     if (normalized) urls.add(normalized.startsWith('/') ? normalized : `/${normalized.replace(/^\.\//, '')}`);
   }
+  for (const review of customerReviews) {
+    for (const item of Array.isArray(review.images) ? review.images : []) {
+      for (const value of [item?.image, item?.thumbnail]) {
+        const normalized = String(value || '').split('?')[0].trim();
+        if (normalized) reviewUrls.add(normalized.startsWith('/') ? normalized : `/${normalized.replace(/^\.\//, '')}`);
+      }
+    }
+  }
   const customPaths = new Set(customRequests.map(item => path.resolve(String(item.filePath || ''))).filter(Boolean));
-  return { urls, customPaths };
+  return { urls, reviewUrls, customPaths };
 }
 
 
@@ -647,6 +661,7 @@ router.get('/gallery', asyncHandler(async (_req, res) => {
   const images = [...publicFiles, ...uploadFiles].map(item => {
     const publicUrl = galleryPublicUrl(item.rootKey, item.relativePath);
     const usedByCatalog = Boolean(publicUrl && references.urls.has(publicUrl));
+    const usedByReview = Boolean(publicUrl && references.reviewUrls.has(publicUrl));
     const usedByCustom = item.rootKey === 'uploads' && references.customPaths.has(path.resolve(item.absolutePath));
     return {
       id: galleryFileId(item.rootKey, item.relativePath),
@@ -656,8 +671,8 @@ router.get('/gallery', asyncHandler(async (_req, res) => {
       bytes: item.bytes,
       modifiedAt: item.modifiedAt,
       previewUrl: `/api/admin/gallery/file/${galleryFileId(item.rootKey, item.relativePath)}`,
-      referenced: usedByCatalog || usedByCustom,
-      referenceType: usedByCustom ? 'طرح اختصاصی' : usedByCatalog ? 'کاتالوگ سایت' : ''
+      referenced: usedByCatalog || usedByReview || usedByCustom,
+      referenceType: usedByCustom ? 'طرح اختصاصی' : usedByReview ? 'رضایت مشتری' : usedByCatalog ? 'کاتالوگ سایت' : ''
     };
   }).sort((a, b) => Number(b.bytes || 0) - Number(a.bytes || 0));
   ok(res, { images, totalBytes: images.reduce((sum, image) => sum + Number(image.bytes || 0), 0) });
@@ -1166,6 +1181,7 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
     for (const submitted of value) {
       const order = await Order.findOne({ orderNumber: submitted.id });
       if (!order) continue;
+      const previousStatus = order.status;
       const status = validStatuses.has(submitted.status) ? submitted.status : order.status;
       const paymentStatus = validPaymentStatuses.has(submitted.paymentStatus) ? submitted.paymentStatus : order.paymentStatus;
       let finalStatus = status;
@@ -1195,6 +1211,7 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
       order.adminNote = String(submitted.adminNote || '').trim().slice(0, 2000);
       await order.save();
       await syncCustomRequestsFromOrder(order);
+      await markReviewRequestEligible(order, previousStatus);
     }
   }else if(name==='users'){
     for(const u of value)await User.updateOne({publicId:Number(u.id)},{$set:{fullName:u.name,mobile:u.phone,email:u.email||undefined,role:u.role||'customer',isActive:u.status!=='blocked'}});

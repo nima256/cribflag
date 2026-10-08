@@ -352,7 +352,7 @@ router.post('/quote', requireUser, asyncHandler(async (req, res) => {
   }
   const paymentMethod = requestedPaymentMethod || 'zarinpal';
   const payableBeforeTax = Math.max(0, subtotal - discount);
-  const tax = paymentMethod === 'torobpay' ? Math.round(payableBeforeTax * 0.10) : 0;
+  const tax = paymentMethod === 'torobpay' ? Math.round(payableBeforeTax * 0.15) : 0;
   const total = payableBeforeTax + tax;
 
   const pricedItems = items.map(item => ({
@@ -454,7 +454,7 @@ router.post('/', requireUser, asyncHandler(async (req, res) => {
   }
 
   const payableBeforeTax = Math.max(0, subtotal - discount);
-  const tax = paymentMethod === 'torobpay' ? Math.round(payableBeforeTax * 0.10) : 0;
+  const tax = paymentMethod === 'torobpay' ? Math.round(payableBeforeTax * 0.15) : 0;
   const total = payableBeforeTax + tax;
   const expectedDiscount = Number(req.body.expectedDiscount);
   const expectedTax = Number(req.body.expectedTax);

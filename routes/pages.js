@@ -5,7 +5,9 @@ const Product = require('../models/Product');
 const Category = require('../models/Category');
 const User = require('../models/User');
 const Admin = require('../models/Admin');
+const CustomerReview = require('../models/CustomerReview');
 const S = require('../services/serializers');
+const { publicReview } = require('../services/customerReviews');
 const { asyncHandler } = require('../utils/http');
 const iranCity = require('iran-city');
 const { performance } = require('node:perf_hooks');
@@ -198,7 +200,13 @@ async function requirePageUser(req, res, next) {
   }
 }
 
-router.get('/', asyncHandler((req, res) => render(req, res, 'index')));
+router.get('/', asyncHandler(async (req, res) => {
+  const reviews = await CustomerReview.find({ status: 'approved' })
+    .sort({ approvedAt: -1, createdAt: -1 })
+    .limit(12)
+    .lean();
+  return render(req, res, 'index', { customerReviews: reviews.map(publicReview) });
+}));
 router.get('/store', asyncHandler((req, res) => render(req, res, 'store')));
 router.get('/custom', asyncHandler(async (req, res) => {
   const customPricing = await getCustomPricingConfig();
@@ -211,6 +219,13 @@ router.get('/ready', asyncHandler((req, res) => render(req, res, 'ready')));
 router.get('/faq', asyncHandler((req, res) => render(req, res, 'faq')));
 router.get('/blog', asyncHandler((req, res) => render(req, res, 'blog')));
 router.get('/blog/:id', asyncHandler((req, res) => render(req, res, 'blog-detail', { blogId: Number(req.params.id) || 1 })));
+router.get('/review', (req, res) => res.redirect(302, '/reviews'));
+router.get('/reviews', asyncHandler(async (req, res) => {
+  const reviews = await CustomerReview.find({ status: 'approved' })
+    .sort({ approvedAt: -1, createdAt: -1 })
+    .lean();
+  return render(req, res, 'reviews', { customerReviews: reviews.map(publicReview) });
+}));
 router.get('/cart', asyncHandler((req, res) => render(req, res, 'cart')));
 router.get('/checkout', requirePageUser, asyncHandler(async (req, res) => {
   const user = await User.findById(req.session.userId)
@@ -241,8 +256,11 @@ router.get('/product/:id', asyncHandler(async (req, res) => {
   res.set('Server-Timing', `page-data;dur=${(performance.now() - startedAt).toFixed(1)};desc="catalog-${req.catalogCacheHit ? 'hit' : 'miss'}"`);
   const product = data.products.find(item => Number(item.id) === Number(req.params.id));
   if (!product) return res.status(404).render('404', { ...data, message: 'محصول موردنظر پیدا نشد.' });
-  const torobMeta = buildProductPageMeta(product, req.query.size, req.query.fabric);
-  res.render('product', { ...data, product, torobMeta });
+  const torobMeta = buildProductPageMeta(product, req.query.size, req.query.fabric, req.query.variant);
+  const reviews = await CustomerReview.find({ status: 'approved', productId: Number(product.id) })
+    .sort({ approvedAt: -1, createdAt: -1 })
+    .lean();
+  res.render('product', { ...data, product, torobMeta, productReviews: reviews.map(publicReview) });
 }));
 
 const legacy = {

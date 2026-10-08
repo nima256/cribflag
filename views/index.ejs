@@ -8,6 +8,7 @@
 <title>Crib Flag | فروشگاه تخصصی پرچم</title>
 <link href="/assets/css/style.css?v=20260801-final-scroll-v3" rel="stylesheet"/>
 <link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
+<%- include("partials/review-styles") %>
 </head>
 <body data-page="home">
 <div class="top-banner">
@@ -181,6 +182,15 @@ const homeBestSellerProducts = buildHomeSlots('homeBestSellerPosition', markedBe
 </div>
 <div class="horizontal-slider" id="bestSellerSlider"><% homeBestSellerProducts.forEach(product => { %><%- include("partials/product-card", { product, toman }) %><% }) %></div>
 </section>
+<% if (customerReviews && customerReviews.length) { %>
+<section class="section cf-review-section">
+  <div class="section-head cf-review-section-head">
+    <div><h2 class="section-title">رضایت مشتری‌ها</h2><p class="section-subtitle">عکس‌ها و تجربه واقعی مشتریان بعد از دریافت سفارش.</p></div>
+    <div class="cf-review-carousel-controls"><button class="round-control" id="reviewPrev" type="button">‹</button><button class="round-control" id="reviewNext" type="button">›</button><a class="view-all" href="/reviews">دیدن همه نظرات ←</a></div>
+  </div>
+  <div class="cf-review-carousel-wrap"><div class="cf-review-carousel" id="homeReviewCarousel"><% customerReviews.forEach(review => { %><%- include("partials/customer-review-card", { review }) %><% }) %></div></div>
+</section>
+<% } %>
 <!-- <section class="section">
 <div class="promo-grid">
 <article class="promo-card">
@@ -259,6 +269,7 @@ const homeBestSellerProducts = buildHomeSlots('homeBestSellerPosition', markedBe
 </div>
 <a class="mobile-link" data-page-link="custom" href="/custom">طرح دلخواه</a>
 <a class="mobile-link" data-page-link="ready" href="/ready">طرح‌های آماده</a>
+<a class="mobile-link" href="/reviews">رضایت مشتریان</a>
 <a class="mobile-link" data-page-link="faq" href="/faq">سوالات متداول</a>
 <a class="mobile-link" data-page-link="blog" href="/blog">مجله Crib Flag</a>
 <button class="mobile-link auth-open">ورود / حساب کاربری</button>
@@ -325,5 +336,13 @@ const homeBestSellerProducts = buildHomeSlots('homeBestSellerPosition', markedBe
 <script src="/assets/js/api.js"></script>
 <script src="/assets/js/portal-data.js"></script>
 <script src="/assets/js/app.js?v=20260915-custom-live-pricing-v1"></script>
+<script>
+(() => {
+  const slider = document.getElementById('homeReviewCarousel');
+  if (!slider) return;
+  document.getElementById('reviewPrev')?.addEventListener('click', () => slider.scrollBy({ left: 340, behavior: 'smooth' }));
+  document.getElementById('reviewNext')?.addEventListener('click', () => slider.scrollBy({ left: -340, behavior: 'smooth' }));
+})();
+</script>
 </body>
 </html>

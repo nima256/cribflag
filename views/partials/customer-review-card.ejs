@@ -1,0 +1,14 @@
+<article class="cf-review-card">
+  <div class="cf-review-card-head">
+    <div><div class="cf-review-card-name"><%= review.customerName %></div><div class="cf-review-source"><%= review.sourceLabel %></div></div>
+    <% if (review.verifiedPurchase) { %><span class="cf-review-badge">خرید تأییدشده</span><% } %>
+  </div>
+  <% if (review.productId) { %><a class="cf-review-product" href="/product/<%= review.productId %>"><%= review.productTitle %> ←</a><% } else if (review.isCustomDesign) { %><span class="cf-review-product">طرح دلخواه مشتری</span><% } %>
+  <% if (review.text) { %><div class="cf-review-text"><%= review.text %></div><% } %>
+  <% if (review.images && review.images.length) { %>
+    <div class="cf-review-images <%= review.images.length === 1 ? 'one' : '' %>">
+      <% review.images.slice(0, 4).forEach(item => { %><a href="<%= item.image %>" target="_blank" rel="noopener"><img loading="lazy" decoding="async" src="<%= item.thumbnail || item.image %>" alt="<%= review.isCustomDesign ? 'تصویر طرح دلخواه مشتری' : `تصویر ارسالی مشتری برای ${review.productTitle}` %>"/></a><% }) %>
+    </div>
+  <% } %>
+  <div class="cf-review-meta"><span><%= review.date %></span><span>Crib Flag</span></div>
+</article>

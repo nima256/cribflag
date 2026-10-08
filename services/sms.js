@@ -2,8 +2,9 @@ const https = require('https');
 const env = require('../config/env');
 const { normalizeMobile } = require('../utils/formatters');
 
-const ORDER_REGISTERED_BODY_ID = 503938;
-const ORDER_ADMIN_MOBILES = ['09014968828'];
+const ORDER_CUSTOMER_BODY_ID = 503938;
+const ORDER_ADMIN_BODY_ID = 547795;
+const ORDER_ADMIN_MOBILES = ['09014968828', '09054243464'];
 
 function normalizeArgs(args) {
   return (Array.isArray(args) ? args : []).map(value => String(value ?? '').trim());
@@ -67,33 +68,57 @@ function sendPatternSms(to, args) {
 
 async function sendOrderRegisteredSms(order, options = {}) {
   const customerMobile = normalizeRecipient(options.customerMobile || order.phone);
-  const recipients = [...new Set([customerMobile, ...ORDER_ADMIN_MOBILES].map(normalizeRecipient))];
+  const adminMobiles = normalizeRecipientList(ORDER_ADMIN_MOBILES);
+  const recipients = [...new Set([customerMobile, ...adminMobiles])];
   const alreadySentRecipients = new Set(normalizeRecipientList(options.alreadySentRecipients));
-  const attemptedRecipients = recipients.filter(to => !alreadySentRecipients.has(to));
-  const args = [
-    order.customer,
-    order.orderNumber
-  ];
+
+  const messages = [];
+  if (!alreadySentRecipients.has(customerMobile)) {
+    messages.push({
+      to: customerMobile,
+      bodyId: ORDER_CUSTOMER_BODY_ID,
+      args: [order.customer, order.orderNumber]
+    });
+  }
+  for (const to of adminMobiles) {
+    if (!alreadySentRecipients.has(to)) {
+      messages.push({ to, bodyId: ORDER_ADMIN_BODY_ID, args: [order.orderNumber] });
+    }
+  }
 
   const results = await Promise.allSettled(
-    attemptedRecipients.map(to => sendPatternSmsWithBodyId(to, args, ORDER_REGISTERED_BODY_ID))
+    messages.map(message => sendPatternSmsWithBodyId(message.to, message.args, message.bodyId))
   );
 
   const successfulRecipients = [];
   const failedRecipients = [];
   results.forEach((result, index) => {
-    const to = attemptedRecipients[index];
-    if (result.status === 'fulfilled') successfulRecipients.push(to);
-    else failedRecipients.push({ to, error: result.reason });
+    const message = messages[index];
+    if (result.status === 'fulfilled') successfulRecipients.push(message.to);
+    else failedRecipients.push({ to: message.to, bodyId: message.bodyId, error: result.reason });
   });
 
   return {
     recipients,
-    attemptedRecipients,
+    attemptedRecipients: messages.map(message => message.to),
     successfulRecipients,
     failedRecipients,
-    bodyId: ORDER_REGISTERED_BODY_ID
+    customerBodyId: ORDER_CUSTOMER_BODY_ID,
+    adminBodyId: ORDER_ADMIN_BODY_ID
   };
 }
 
-module.exports = { sendPatternSms, sendOrderRegisteredSms };
+async function sendDeliveredReviewSms(order, reviewUrl) {
+  if (!env.reviewSmsEnabled) return { skipped: true };
+  if (!Number.isInteger(env.reviewSmsBodyId) || env.reviewSmsBodyId <= 0) {
+    throw new Error('REVIEW_SMS_BODY_ID تنظیم نشده است');
+  }
+  const args = [
+    String(order.customer || 'مشتری').trim(),
+    String(order.orderNumber || '').trim(),
+    String(reviewUrl || '').trim()
+  ];
+  return sendPatternSmsWithBodyId(order.phone, args, env.reviewSmsBodyId);
+}
+
+module.exports = { sendPatternSms, sendOrderRegisteredSms, sendDeliveredReviewSms };

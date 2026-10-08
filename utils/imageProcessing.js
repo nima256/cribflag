@@ -17,6 +17,11 @@ const IMAGE_PROFILES = Object.freeze({
     folder: 'categories',
     original: { width: 1000, height: 1000, quality: 84 },
     thumbnail: { width: 400, height: 400, quality: 78 }
+  },
+  review: {
+    folder: 'reviews',
+    original: { width: 1600, height: 1600, quality: 84 },
+    thumbnail: { width: 560, height: 560, quality: 78 }
   }
 });
 
@@ -127,7 +132,7 @@ function stripQuery(value) {
 
 function managedImagePaths(value) {
   const image = stripQuery(value);
-  const match = image.match(/^\/uploads\/(products|categories)\/(?!thumbs\/)([^/]+)$/i);
+  const match = image.match(/^\/uploads\/(products|categories|reviews)\/(?!thumbs\/)([^/]+)$/i);
   if (!match) return [];
 
   const folder = match[1].toLowerCase();

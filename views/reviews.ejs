@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="description" content="نظرات و تصاویر واقعی مشتریان Crib Flag"/>
+<title>رضایت مشتریان | Crib Flag</title>
+<link href="/assets/css/style.css?v=20260801-final-scroll-v3" rel="stylesheet"/>
+<link rel="icon" type="image/x-icon" href="/assets/images/logo.ico"/>
+<%- include("partials/review-styles") %>
+</head>
+<body>
+<div class="top-banner">رضایت شما، بهترین تبلیغ Crib Flag است ❤️</div>
+<header class="site-header">
+  <div class="container">
+    <div class="desktop-main-nav">
+      <a class="logo" href="/"><span class="logo-mark"><img alt="Crib Flag" src="/assets/images/logo.png"/></span><strong>Crib Flag</strong></a>
+      <div class="nav-actions"><a class="btn btn-ghost" href="/store">فروشگاه</a><a class="btn btn-primary" href="/account">پنل کاربری</a></div>
+    </div>
+  </div>
+  <%- include("partials/nav") %>
+</header>
+<main class="main"><section class="page active"><div class="container">
+  <div class="breadcrumb"><a href="/">خانه</a><span>/</span><span>رضایت مشتریان</span></div>
+  <section class="cf-review-section" style="margin-top:18px">
+    <div class="cf-review-section-head">
+      <div><h1>رضایت مشتریان Crib Flag</h1><p>نظرها و عکس‌هایی که مشتریان بعد از دریافت سفارش برای ما فرستاده‌اند.</p></div>
+      <a class="btn btn-ghost" href="/store">مشاهده محصولات</a>
+    </div>
+    <% if (customerReviews && customerReviews.length) { %>
+      <div class="cf-review-grid"><% customerReviews.forEach(review => { %><%- include("partials/customer-review-card", { review }) %><% }) %></div>
+    <% } else { %>
+      <div class="cf-review-empty">هنوز رضایت تأییدشده‌ای برای نمایش ثبت نشده است.</div>
+    <% } %>
+  </section>
+</div></section></main>
+<%- include("partials/footer") %>
+</body>
+</html>

@@ -53,6 +53,13 @@ const orderSchema = new mongoose.Schema({
   orderRegisteredSmsRecipients: { type: [String], default: [] },
   orderRegisteredSmsSentAt: Date,
   orderRegisteredSmsLockAt: Date,
+  reviewRequest: {
+    eligibleAt: Date,
+    smsSentAt: Date,
+    smsLockAt: Date,
+    smsAttempts: { type: Number, default: 0 },
+    smsLastError: { type: String, default: '' }
+  },
   paymentInfo: {
     authority: String,
     url: String,

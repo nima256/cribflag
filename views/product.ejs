@@ -42,6 +42,7 @@
 }) %></script>
 <link href="/assets/css/style.css?v=20260801-final-scroll-v3" rel="stylesheet"/>
 <link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
+<%- include("partials/review-styles") %>
 </head>
 <body data-page="product">
 <% const productImages = Array.isArray(product.images) && product.images.length ? product.images : [product.image]; %>
@@ -122,7 +123,14 @@
 <% productImages.forEach((image,index) => { %>
 <button aria-label="نمایش تصویر <%= index + 1 %>" class="thumb <%= index===0 ? 'active' : '' %>" data-gallery-index="<%= index %>" type="button"><div class="static-image-box"><img alt="<%= product.title %> - نمای <%= index + 1 %>" class="product-thumb-img" src="<%= image %>"/></div></button>
 <% }) %>
-</div></section>
+</div>
+<% if (productReviews && productReviews.length) { const customerPhotoReviews = productReviews.filter(review => review.images && review.images.length); %>
+<a class="cf-review-shortcut" href="#customer-reviews">
+  <span><strong>نظرات و عکس‌های خریداران</strong><small><%= toFa(productReviews.length) %> تجربه تأییدشده را ببینید</small></span>
+  <% if (customerPhotoReviews.length) { %><span class="cf-review-mini-images"><% customerPhotoReviews.slice(0,3).forEach(review => { %><img src="<%= review.images[0].thumbnail || review.images[0].image %>" alt="تصویر مشتری"/><% }) %></span><% } else { %><span>←</span><% } %>
+</a>
+<% } %>
+</section>
 <section class="detail-card info-card"><span class="product-category-tag" id="detailCategory"><%= product.category %></span><h1 class="detail-title" id="detailTitle"><%= torobMeta.title %></h1>
 <div class="features-list"><div class="feature-item"><span>✓</span><div><strong>جنس پارچه</strong><small id="detailFabricSummary">ساتن آمریکایی، ساتن براق یا مخمل</small></div></div><div class="feature-item"><span>✓</span><div><strong>نوع چاپ</strong><small>تک‌رو، شفاف و تمیز</small></div></div><div class="feature-item"><span>✓</span><div><strong>ابعاد</strong><small id="detailSizeSummary">قابل انتخاب در چند سایز</small></div></div><div class="feature-item"><span>✓</span><div><strong>ارسال</strong><small>تا ۴ روز کاری با تیپاکس</small></div></div></div>
 <button aria-controls="sizeGuideModal" aria-expanded="false" class="size-guide-btn" type="button">مشاهده راهنمای سایز</button></section>
@@ -131,12 +139,18 @@
 <div class="detail-option-list" id="detailPillowOptions"></div>
 </div><div class="product-option-group">
 <div class="product-option-label"><strong>انتخاب سایز</strong><small id="detailSizeHelp">یکی از ابعاد قابل چاپ را انتخاب کنید</small></div>
-<div class="detail-option-list" id="detailSizeOptions"><% product.sizes.forEach((value,index) => { %><label class="detail-option"><input type="radio" name="detailSize" value="<%= value %>" <%= index===0 ? "checked" : "" %>><span><%= value %></span></label><% }) %></div>
+<div class="detail-option-list" id="detailSizeOptions"><% product.sizes.forEach((value,index) => { const selected = torobMeta.requestedSize ? value === torobMeta.requestedSize : index === 0; %><label class="detail-option"><input type="radio" name="detailSize" value="<%= value %>" <%= selected ? "checked" : "" %>><span><%= value %></span></label><% }) %></div>
 </div><div class="product-option-group" id="detailFabricGroup">
 <div class="product-option-label"><strong>انتخاب جنس پارچه</strong><small>نوع پارچه موردنظر را مشخص کنید</small></div>
-<div class="detail-option-list" id="detailFabricOptions"><% product.fabrics.forEach((value,index) => { %><label class="detail-option"><input type="radio" name="detailFabric" value="<%= value %>" <%= index===0 ? "checked" : "" %>><span><%= value %></span></label><% }) %></div>
+<div class="detail-option-list" id="detailFabricOptions"><% product.fabrics.forEach((value,index) => { const selected = torobMeta.requestedFabric ? value === torobMeta.requestedFabric : index === 0; %><label class="detail-option"><input type="radio" name="detailFabric" value="<%= value %>" <%= selected ? "checked" : "" %>><span><%= value %></span></label><% }) %></div>
 </div><div class="qty-box"><label>تعداد</label><div class="qty-control"><button class="detail-plus" type="button">+</button><span id="detailQty">۱</span><button class="detail-minus" type="button">−</button></div></div><button class="btn btn-primary detail-add-cart" type="button" <%= product.inventoryMode === 'managed' && product.stock <= 0 ? 'disabled' : '' %>><%= product.inventoryMode === 'managed' && product.stock <= 0 ? 'ناموجود' : 'افزودن به سبد خرید' %></button><a class="btn btn-ghost product-cart-link" href="/cart">مشاهده سبد خرید</a><div class="installment-box">خرید قسطی برای سفارش‌های عمده و سازمانی با هماهنگی پشتیبانی امکان‌پذیر است.</div></aside>
 </div>
+<% if (productReviews && productReviews.length) { %>
+<section class="cf-review-section" id="customer-reviews">
+  <div class="cf-review-section-head"><div><h2>نظر و عکس خریداران</h2><p>تجربه مشتریانی که این محصول را دریافت کرده‌اند.</p></div><a class="btn btn-ghost" href="/reviews">دیدن همه رضایت‌ها</a></div>
+  <div class="cf-review-grid"><% productReviews.forEach(review => { %><%- include("partials/customer-review-card", { review }) %><% }) %></div>
+</section>
+<% } %>
 
 </div></section></main>
 <%- include("partials/footer") %>
@@ -179,6 +193,7 @@
 </div>
 <a class="mobile-link" data-page-link="custom" href="/custom">طرح دلخواه</a>
 <a class="mobile-link" data-page-link="ready" href="/ready">طرح‌های آماده</a>
+<a class="mobile-link" href="/reviews">رضایت مشتریان</a>
 <a class="mobile-link" data-page-link="faq" href="/faq">سوالات متداول</a>
 <a class="mobile-link" data-page-link="blog" href="/blog">مجله Crib Flag</a>
 <button class="mobile-link auth-open">ورود / حساب کاربری</button>

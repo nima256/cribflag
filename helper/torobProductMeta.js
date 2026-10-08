@@ -1,17 +1,31 @@
 const crypto = require('crypto');
-const env = require('../config/env');
 const { prepareProductPricing, fallbackPricing } = require('../utils/productPricing');
 
 const BASE_VARIANT_ID = 'base';
+const MAX_PAGE_UNIQUE_LENGTH = 200;
 const clean = value => String(value ?? '').trim();
-const unique = values => [...new Set(values.map(clean).filter(Boolean))];
+const unique = values => [...new Set((values || []).map(clean).filter(Boolean))];
 
+// IMPORTANT: this is a feed identity, not an inventory key. CribFlag intentionally
+// keeps stock at parent-product level; size/fabric combinations only split Torob offers.
 const variantKey = (size = '', fabric = '') => {
   const normalizedSize = clean(size);
   const normalizedFabric = clean(fabric);
   if (!normalizedSize && !normalizedFabric) return BASE_VARIANT_ID;
-  return `v-${crypto.createHash('sha256').update(`${normalizedSize}\u0000${normalizedFabric}`).digest('hex').slice(0, 24)}`;
+  return `v-${crypto.createHash('sha256').update(`${normalizedSize}\u0000${normalizedFabric}`, 'utf8').digest('hex').slice(0, 24)}`;
 };
+
+const variantDescriptor = (size, fabric, pricing, index) => ({
+  size: clean(size),
+  fabric: clean(fabric),
+  variantKey: variantKey(size, fabric),
+  pricing,
+  index
+});
+
+const sortVariants = variants => [...variants].sort((a, b) =>
+  String(a.variantKey).localeCompare(String(b.variantKey), 'en')
+);
 
 const getProductVariants = product => {
   const prepared = prepareProductPricing(product || {});
@@ -19,24 +33,29 @@ const getProductVariants = product => {
     ? prepared.variantPrices.filter(item => clean(item?.size) && clean(item?.fabric))
     : [];
 
+  // Explicit variant prices are also an explicit list of valid combinations.
   if (pricedVariants.length) {
-    return pricedVariants.map((item, index) => ({
-      size: clean(item.size),
-      fabric: clean(item.fabric),
-      variantKey: variantKey(item.size, item.fabric),
-      pricing: {
+    const seen = new Set();
+    const rows = [];
+    for (const item of pricedVariants) {
+      const key = variantKey(item.size, item.fabric);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push(variantDescriptor(item.size, item.fabric, {
         price: Number(item.price || 0),
         hasDiscount: Boolean(item.hasDiscount),
         oldPrice: item.hasDiscount && Number(item.oldPrice) > Number(item.price) ? Number(item.oldPrice) : null
-      },
-      index
-    }));
+      }, rows.length));
+    }
+    return sortVariants(rows);
   }
 
+  // In this business every configured size can be produced in every configured fabric.
+  // Therefore, unlike Kidle, there is deliberately NO per-combination availability list.
   const sizes = unique(Array.isArray(product?.sizes) ? product.sizes : []);
   const fabrics = unique(Array.isArray(product?.fabrics) ? product.fabrics : []);
   if (!sizes.length && !fabrics.length) {
-    return [{ size: '', fabric: '', variantKey: BASE_VARIANT_ID, pricing: fallbackPricing(product), index: 0 }];
+    return [variantDescriptor('', '', fallbackPricing(product), 0)];
   }
 
   const sizeOptions = sizes.length ? sizes : [''];
@@ -45,10 +64,10 @@ const getProductVariants = product => {
   const variants = [];
   for (const size of sizeOptions) {
     for (const fabric of fabricOptions) {
-      variants.push({ size, fabric, variantKey: variantKey(size, fabric), pricing, index: variants.length });
+      variants.push(variantDescriptor(size, fabric, pricing, variants.length));
     }
   }
-  return variants;
+  return sortVariants(variants);
 };
 
 const findVariant = (product, size = '', fabric = '') => {
@@ -56,11 +75,32 @@ const findVariant = (product, size = '', fabric = '') => {
   const wantedSize = clean(size);
   const wantedFabric = clean(fabric);
   if (!wantedSize && !wantedFabric) return variants[0] || null;
-  return variants.find(item => (!wantedSize || item.size === wantedSize) && (!wantedFabric || item.fabric === wantedFabric)) || null;
+  return variants.find(item =>
+    (!wantedSize || item.size === wantedSize) &&
+    (!wantedFabric || item.fabric === wantedFabric)
+  ) || null;
 };
 
-const findVariantByKey = (product, key) =>
-  getProductVariants(product).find(item => item.variantKey === clean(key)) || null;
+const findVariantByKey = (product, key) => {
+  const wanted = clean(key);
+  if (!wanted || wanted.length > MAX_PAGE_UNIQUE_LENGTH) return null;
+  return getProductVariants(product).find(item => item.variantKey === wanted) || null;
+};
+
+const resolveVariant = (product, { variant = '', size = '', fabric = '' } = {}) => {
+  const wantedVariant = clean(variant);
+  const wantedSize = clean(size);
+  const wantedFabric = clean(fabric);
+
+  if (wantedVariant) {
+    const matched = findVariantByKey(product, wantedVariant);
+    if (!matched) return null;
+    if (wantedSize && matched.size !== wantedSize) return null;
+    if (wantedFabric && matched.fabric !== wantedFabric) return null;
+    return matched;
+  }
+  return findVariant(product, wantedSize, wantedFabric);
+};
 
 const buildVariantTitle = (product, descriptor = null) => {
   const variant = descriptor || getProductVariants(product)[0] || {};
@@ -70,21 +110,68 @@ const buildVariantTitle = (product, descriptor = null) => {
   return parts.filter(Boolean).join(' - ');
 };
 
-const baseUrl = () => clean(process.env.SITE_BASE_URL || env.siteUrl || process.env.SITE_URL || 'https://cribflag.ir').replace(/\/+$/, '');
+const baseUrl = () => {
+  let configured = process.env.SITE_BASE_URL || process.env.SITE_URL || '';
+  if (!configured) {
+    try { configured = require('../config/env').siteUrl; } catch {}
+  }
+  return clean(configured || 'https://cribflag.ir').replace(/\/+$/, '');
+};
 
 const buildPageUrl = (product, descriptor = null) => {
   const id = Number(product?.publicId ?? product?.id);
   const url = new URL(`/product/${encodeURIComponent(id)}`, baseUrl());
   const variant = descriptor || getProductVariants(product)[0] || {};
 
-  // ترب برای هر تنوع، شناسه و URL مستقل می‌خواهد. variantKey شناسه پایدار
-  // ترکیب سایز + جنس است؛ size/fabric هم برای رندر مستقیم همان انتخاب حفظ می‌شوند.
   if (variant.variantKey && variant.variantKey !== BASE_VARIANT_ID) {
     url.searchParams.set('variant', variant.variantKey);
   }
   if (variant.size) url.searchParams.set('size', variant.size);
   if (variant.fabric) url.searchParams.set('fabric', variant.fabric);
   return url.toString();
+};
+
+const parseProductPageUrl = rawUrl => {
+  try {
+    const requested = new URL(rawUrl, baseUrl());
+    const expected = new URL(baseUrl());
+    const normalizeHost = value => String(value || '').replace(/^www\./i, '').toLowerCase();
+    if (!['http:', 'https:'].includes(requested.protocol)) return null;
+    if (normalizeHost(requested.hostname) !== normalizeHost(expected.hostname)) return null;
+
+    const match = requested.pathname.match(/^\/product\/(\d+)\/?$/i);
+    if (!match) return null;
+    const publicId = Number(match[1]);
+    if (!Number.isInteger(publicId) || publicId < 1) return null;
+    if (requested.searchParams.getAll('variant').length > 1) return null;
+    if (requested.searchParams.getAll('size').length > 1) return null;
+    if (requested.searchParams.getAll('fabric').length > 1) return null;
+
+    return {
+      publicId,
+      variant: clean(requested.searchParams.get('variant')),
+      size: clean(requested.searchParams.get('size')),
+      fabric: clean(requested.searchParams.get('fabric'))
+    };
+  } catch {
+    return null;
+  }
+};
+
+const pageUnique = (product, descriptor = null) => {
+  const variant = descriptor || getProductVariants(product)[0] || {};
+  const productId = String(product?.publicId ?? product?.id ?? '');
+  return `${productId}_${variant.variantKey || BASE_VARIANT_ID}`;
+};
+
+const parsePageUnique = value => {
+  const raw = clean(value);
+  if (!raw || raw.length > MAX_PAGE_UNIQUE_LENGTH) return null;
+  const match = raw.match(/^(\d+)_(base|v-[a-f0-9]{24})$/i);
+  if (!match) return null;
+  const publicId = Number(match[1]);
+  if (!Number.isInteger(publicId) || publicId < 1) return null;
+  return { publicId, variantKey: match[2].toLowerCase(), raw };
 };
 
 const absoluteImageUrl = image => {
@@ -99,7 +186,12 @@ const imageLinks = product => {
   return [...new Set(sources.map(absoluteImageUrl).filter(Boolean))];
 };
 
-const isAvailable = product => product?.inventoryMode !== 'managed' || Number(product?.stock || 0) > 0;
+// This is intentionally parent-level only. A size/fabric combination never becomes
+// unavailable independently. If the whole product is out of stock, every Torob offer
+// becomes unavailable together.
+const isAvailable = product => product?.status !== 'draft' && (
+  product?.inventoryMode !== 'managed' || Number(product?.stock || 0) > 0
+);
 
 const categoryName = product => {
   if (clean(product?.category)) return clean(product.category);
@@ -118,10 +210,17 @@ const buildSpec = (product, descriptor = null) => {
 
 const compactDescription = value => clean(value).replace(/\s+/g, ' ').slice(0, 500);
 
+const safeIsoDate = value => {
+  const date = value ? new Date(value) : new Date();
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+};
+
 const formatProductForTorob = (product, descriptor = null) => {
   const variant = descriptor || getProductVariants(product)[0];
+  if (!variant) throw new Error(`No Torob variant for product ${product?.publicId ?? product?.id ?? '?'}`);
+
   const availability = isAvailable(product);
-  const pricing = variant?.pricing || fallbackPricing(product);
+  const pricing = variant.pricing || fallbackPricing(product);
   const currentPrice = availability ? Number(pricing.price || 0) : 0;
   const oldPrice = availability && pricing.hasDiscount && Number(pricing.oldPrice) > currentPrice
     ? Number(pricing.oldPrice)
@@ -129,11 +228,11 @@ const formatProductForTorob = (product, descriptor = null) => {
   const productId = String(product?.publicId ?? product?.id ?? '');
   const description = compactDescription(product?.description);
   const subtitleParts = [];
-  if (variant?.size) subtitleParts.push(`سایز ${variant.size}`);
-  if (variant?.fabric) subtitleParts.push(`پارچه ${variant.fabric}`);
+  if (variant.size) subtitleParts.push(`سایز ${variant.size}`);
+  if (variant.fabric) subtitleParts.push(`پارچه ${variant.fabric}`);
 
   return {
-    page_unique: `${productId}_${variant?.variantKey || BASE_VARIANT_ID}`,
+    page_unique: pageUnique(product, variant),
     page_url: buildPageUrl(product, variant),
     product_group_id: productId,
     title: buildVariantTitle(product, variant),
@@ -151,20 +250,18 @@ const formatProductForTorob = (product, descriptor = null) => {
   };
 };
 
-function safeIsoDate(value) {
-  const date = value ? new Date(value) : new Date();
-  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
-}
-
-const buildProductPageMeta = (product, requestedSize = '', requestedFabric = '') => {
-  const variant = findVariant(product, requestedSize, requestedFabric) || getProductVariants(product)[0];
+const buildProductPageMeta = (product, requestedSize = '', requestedFabric = '', requestedVariant = '') => {
+  const variant = resolveVariant(product, {
+    variant: requestedVariant,
+    size: requestedSize,
+    fabric: requestedFabric
+  }) || getProductVariants(product)[0];
   const pricing = variant?.pricing || fallbackPricing(product);
   const availability = isAvailable(product);
   const canonicalUrl = buildPageUrl(product, variant);
   const images = imageLinks(product);
   const description = compactDescription(product?.description) || buildVariantTitle(product, variant);
   const productId = String(product?.id ?? product?.publicId ?? '');
-  const pageUnique = `${productId}_${variant?.variantKey || BASE_VARIANT_ID}`;
   const title = buildVariantTitle(product, variant);
   const currentPrice = availability ? Number(pricing.price || 0) : 0;
   const oldPrice = availability && pricing.hasDiscount && Number(pricing.oldPrice) > currentPrice ? Number(pricing.oldPrice) : null;
@@ -179,7 +276,7 @@ const buildProductPageMeta = (product, requestedSize = '', requestedFabric = '')
     currentPrice: Math.max(0, Math.trunc(currentPrice)),
     oldPrice: oldPrice === null ? null : Math.max(0, Math.trunc(oldPrice)),
     availability,
-    pageUnique,
+    pageUnique: pageUnique(product, variant),
     variantKey: variant?.variantKey || BASE_VARIANT_ID,
     productGroupId: productId,
     categoryName: categoryName(product),
@@ -190,9 +287,13 @@ const buildProductPageMeta = (product, requestedSize = '', requestedFabric = '')
 module.exports = {
   BASE_VARIANT_ID,
   variantKey,
+  pageUnique,
+  parsePageUnique,
+  parseProductPageUrl,
   getProductVariants,
   findVariant,
   findVariantByKey,
+  resolveVariant,
   buildVariantTitle,
   buildPageUrl,
   formatProductForTorob,
