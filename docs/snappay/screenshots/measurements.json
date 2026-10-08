@@ -1,0 +1,222 @@
+{
+ "pdp mobile-320": {
+  "logo": {
+   "text": "",
+   "fontSize": "16px",
+   "fontWeight": "400",
+   "color": "rgb(17, 24, 39)",
+   "w": 32,
+   "h": 32,
+   "src": "http://localhost:7411/assets/images/payments/snapp-pay/logo-32x32.svg"
+  },
+  "title": {
+   "text": "هر قسط با اسنپ‌پی: ۱۲۳,۴۵۶ تومان",
+   "fontSize": "13px",
+   "fontWeight": "700",
+   "color": "rgb(26, 28, 35)",
+   "w": 189,
+   "h": 21
+  },
+  "subtitle": {
+   "text": "۴ قسط ماهانه. بدون سود، چک و ضامن.",
+   "fontSize": "11px",
+   "fontWeight": "400",
+   "color": "rgb(97, 100, 117)",
+   "w": 189,
+   "h": 18
+  }
+ },
+ "checkout mobile-320": {
+  "logo": {
+   "text": "",
+   "fontSize": "16px",
+   "fontWeight": "400",
+   "color": "rgb(17, 24, 39)",
+   "w": 32,
+   "h": 32,
+   "src": "http://localhost:7411/assets/images/payments/snapp-pay/logo-32x32.svg"
+  },
+  "title": {
+   "text": "پرداخت قسطی و اعتباری با اسنپ‌پی",
+   "fontSize": "13px",
+   "fontWeight": "700",
+   "color": "rgb(26, 28, 35)",
+   "w": 139,
+   "h": 42
+  },
+  "description": {
+   "text": "۴ قسط بدون کارمزد، ماهانه ۱۰۰٬۰۰۰ تومان",
+   "fontSize": "11px",
+   "fontWeight": "400",
+   "color": "rgb(97, 100, 117)",
+   "w": 139,
+   "h": 35
+  },
+  "horizontalOverflowPx": 0
+ },
+ "pdp mobile-375": {
+  "logo": {
+   "text": "",
+   "fontSize": "16px",
+   "fontWeight": "400",
+   "color": "rgb(17, 24, 39)",
+   "w": 32,
+   "h": 32,
+   "src": "http://localhost:7411/assets/images/payments/snapp-pay/logo-32x32.svg"
+  },
+  "title": {
+   "text": "هر قسط با اسنپ‌پی: ۱۲۳,۴۵۶ تومان",
+   "fontSize": "13px",
+   "fontWeight": "700",
+   "color": "rgb(26, 28, 35)",
+   "w": 189,
+   "h": 21
+  },
+  "subtitle": {
+   "text": "۴ قسط ماهانه. بدون سود، چک و ضامن.",
+   "fontSize": "11px",
+   "fontWeight": "400",
+   "color": "rgb(97, 100, 117)",
+   "w": 189,
+   "h": 18
+  }
+ },
+ "checkout mobile-375": {
+  "logo": {
+   "text": "",
+   "fontSize": "16px",
+   "fontWeight": "400",
+   "color": "rgb(17, 24, 39)",
+   "w": 32,
+   "h": 32,
+   "src": "http://localhost:7411/assets/images/payments/snapp-pay/logo-32x32.svg"
+  },
+  "title": {
+   "text": "پرداخت قسطی و اعتباری با اسنپ‌پی",
+   "fontSize": "13px",
+   "fontWeight": "700",
+   "color": "rgb(26, 28, 35)",
+   "w": 194,
+   "h": 21
+  },
+  "description": {
+   "text": "۴ قسط بدون کارمزد، ماهانه ۱۰۰٬۰۰۰ تومان",
+   "fontSize": "11px",
+   "fontWeight": "400",
+   "color": "rgb(97, 100, 117)",
+   "w": 194,
+   "h": 18
+  },
+  "horizontalOverflowPx": 0
+ },
+ "pdp tablet-768": {
+  "logo": {
+   "text": "",
+   "fontSize": "16px",
+   "fontWeight": "400",
+   "color": "rgb(17, 24, 39)",
+   "w": 40,
+   "h": 40,
+   "src": "http://localhost:7411/assets/images/payments/snapp-pay/logo-40x40.svg"
+  },
+  "title": {
+   "text": "هر قسط با اسنپ‌پی: ۱۲۳,۴۵۶ تومان",
+   "fontSize": "14px",
+   "fontWeight": "700",
+   "color": "rgb(26, 28, 35)",
+   "w": 204,
+   "h": 22
+  },
+  "subtitle": {
+   "text": "۴ قسط ماهانه. بدون سود، چک و ضامن.",
+   "fontSize": "12px",
+   "fontWeight": "400",
+   "color": "rgb(97, 100, 117)",
+   "w": 204,
+   "h": 19
+  }
+ },
+ "checkout tablet-768": {
+  "logo": {
+   "text": "",
+   "fontSize": "16px",
+   "fontWeight": "400",
+   "color": "rgb(17, 24, 39)",
+   "w": 40,
+   "h": 40,
+   "src": "http://localhost:7411/assets/images/payments/snapp-pay/logo-40x40.svg"
+  },
+  "title": {
+   "text": "پرداخت قسطی و اعتباری با اسنپ‌پی",
+   "fontSize": "14px",
+   "fontWeight": "700",
+   "color": "rgb(26, 28, 35)",
+   "w": 554,
+   "h": 22
+  },
+  "description": {
+   "text": "۴ قسط بدون کارمزد، ماهانه ۱۰۰٬۰۰۰ تومان",
+   "fontSize": "12px",
+   "fontWeight": "400",
+   "color": "rgb(97, 100, 117)",
+   "w": 554,
+   "h": 19
+  },
+  "horizontalOverflowPx": 0
+ },
+ "pdp desktop-1440": {
+  "logo": {
+   "text": "",
+   "fontSize": "16px",
+   "fontWeight": "400",
+   "color": "rgb(17, 24, 39)",
+   "w": 40,
+   "h": 40,
+   "src": "http://localhost:7411/assets/images/payments/snapp-pay/logo-40x40.svg"
+  },
+  "title": {
+   "text": "هر قسط با اسنپ‌پی: ۱۲۳,۴۵۶ تومان",
+   "fontSize": "14px",
+   "fontWeight": "700",
+   "color": "rgb(26, 28, 35)",
+   "w": 204,
+   "h": 22
+  },
+  "subtitle": {
+   "text": "۴ قسط ماهانه. بدون سود، چک و ضامن.",
+   "fontSize": "12px",
+   "fontWeight": "400",
+   "color": "rgb(97, 100, 117)",
+   "w": 204,
+   "h": 19
+  }
+ },
+ "checkout desktop-1440": {
+  "logo": {
+   "text": "",
+   "fontSize": "16px",
+   "fontWeight": "400",
+   "color": "rgb(17, 24, 39)",
+   "w": 40,
+   "h": 40,
+   "src": "http://localhost:7411/assets/images/payments/snapp-pay/logo-40x40.svg"
+  },
+  "title": {
+   "text": "پرداخت قسطی و اعتباری با اسنپ‌پی",
+   "fontSize": "14px",
+   "fontWeight": "700",
+   "color": "rgb(26, 28, 35)",
+   "w": 718,
+   "h": 22
+  },
+  "description": {
+   "text": "۴ قسط بدون کارمزد، ماهانه ۱۰۰٬۰۰۰ تومان",
+   "fontSize": "12px",
+   "fontWeight": "400",
+   "color": "rgb(97, 100, 117)",
+   "w": 718,
+   "h": 19
+  },
+  "horizontalOverflowPx": 0
+ }
+}

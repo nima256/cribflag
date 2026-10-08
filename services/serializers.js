@@ -113,6 +113,13 @@ const order = (o) => ({
   },
   status: o.status,
   payment: o.payment, paymentStatus: o.paymentStatus, shippingMethod: o.shippingMethod, tracking: o.tracking || '',
+  snappPay: o.snappPay?.paymentToken ? {
+    paymentToken: o.snappPay.paymentToken,
+    transactionId: o.snappPay.transactionId || o.orderNumber,
+    status: o.snappPay.status || '',
+    lastError: o.snappPay.lastError || '',
+    updates: (o.snappPay.updateHistory || []).length
+  } : null,
   address: o.address, adminNote: o.adminNote || '', items: (o.items || []).map((item, index) => {
     const value = item.toObject ? item.toObject() : item;
     // مسیر واقعی فایل نباید به مرورگر ادمین نشت کند. برای هر آیتم اختصاصی

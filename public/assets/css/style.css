@@ -4559,3 +4559,19 @@ body.is-scrolling .categories-grid {
 .custom-fabric-field small{color:var(--muted);font-size:12px;line-height:1.8}
 .custom-fabric-field select:disabled{background:#eef2f7;color:#475569;cursor:not-allowed}
 @media(max-width:640px){.custom-product-grid{grid-template-columns:1fr}}
+
+/* SnappPay PDP component (Snapp!Pay PDP Guidelines):
+   logo >= 24px, title > 12px bold #1A1C23, subtitle > 10px regular #616475. */
+.snapppay-pdp { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; }
+.snapppay-pdp[hidden] { display: none; }
+.snapppay-pdp-logo { display: block; flex-shrink: 0; width: 40px; height: 40px; }
+.snapppay-pdp-logo img { display: block; width: 100%; height: 100%; }
+.snapppay-pdp-text { display: grid; gap: 2px; min-width: 0; }
+.snapppay-pdp-text p { margin: 0; }
+.snapppay-pdp-title { font-size: 14px; font-weight: 700; line-height: 1.6; color: #1A1C23; }
+.snapppay-pdp-subtitle { font-size: 12px; font-weight: 400; line-height: 1.6; color: #616475; }
+@media (max-width: 767.98px) {
+  .snapppay-pdp-logo { width: 32px; height: 32px; }
+  .snapppay-pdp-title { font-size: 13px; }
+  .snapppay-pdp-subtitle { font-size: 11px; }
+}

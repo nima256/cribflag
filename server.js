@@ -180,6 +180,8 @@ async function start() {
   await require('./services/adminAccount').ensureAdminFromEnv();
   await require('./services/categories').ensureLegacyCategories();
   require('./services/reviewRequestSms').startReviewSmsWorker();
+  // SnappPay requires automatic Get Payment Status reconciliation.
+  require('./routes/orders').startSnappPayReconciler();
   app.listen(env.port, () => console.log(`Crib Flag listening on ${env.siteUrl} | EJS enabled`));
 }
 if (require.main === module) start().catch(err => { console.error('Startup failed:', err); process.exit(1); });

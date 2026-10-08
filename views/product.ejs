@@ -40,7 +40,7 @@
     seller: { '@type': 'Organization', name: 'Crib Flag' }
   }
 }) %></script>
-<link href="/assets/css/style.css?v=20260801-final-scroll-v3" rel="stylesheet"/>
+<link href="/assets/css/style.css?v=20261008-snappay-v1" rel="stylesheet"/>
 <link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
 <%- include("partials/review-styles") %>
 </head>
@@ -134,7 +134,7 @@
 <section class="detail-card info-card"><span class="product-category-tag" id="detailCategory"><%= product.category %></span><h1 class="detail-title" id="detailTitle"><%= torobMeta.title %></h1>
 <div class="features-list"><div class="feature-item"><span>✓</span><div><strong>جنس پارچه</strong><small id="detailFabricSummary">ساتن آمریکایی، ساتن براق یا مخمل</small></div></div><div class="feature-item"><span>✓</span><div><strong>نوع چاپ</strong><small>تک‌رو، شفاف و تمیز</small></div></div><div class="feature-item"><span>✓</span><div><strong>ابعاد</strong><small id="detailSizeSummary">قابل انتخاب در چند سایز</small></div></div><div class="feature-item"><span>✓</span><div><strong>ارسال</strong><small>تا ۴ روز کاری با تیپاکس</small></div></div></div>
 <button aria-controls="sizeGuideModal" aria-expanded="false" class="size-guide-btn" type="button">مشاهده راهنمای سایز</button></section>
-<aside class="detail-card purchase-card"><div class="detail-stock-status <%= product.inventoryMode === 'managed' ? (product.stock > 0 ? 'limited' : 'out') : 'available' %>" id="detailStockStatus"><% if (product.inventoryMode === 'managed') { %><%= product.stock > 0 ? `فقط ${toFa(product.stock)} عدد موجود` : 'ناموجود' %><% } else { %>موجود<% } %></div><div class="purchase-price"><small>قیمت محصول</small><span class="old-price" id="detailOldPrice" <%= torobMeta.oldPrice && torobMeta.oldPrice > torobMeta.currentPrice ? "" : "hidden" %>><%= torobMeta.oldPrice && torobMeta.oldPrice > torobMeta.currentPrice ? toman(torobMeta.oldPrice) : "" %></span><strong id="detailPrice"><%= toman(torobMeta.currentPrice) %></strong></div><div class="product-option-group" id="detailPillowOptionGroup" hidden>
+<aside class="detail-card purchase-card"><div class="detail-stock-status <%= product.inventoryMode === 'managed' ? (product.stock > 0 ? 'limited' : 'out') : 'available' %>" id="detailStockStatus"><% if (product.inventoryMode === 'managed') { %><%= product.stock > 0 ? `فقط ${toFa(product.stock)} عدد موجود` : 'ناموجود' %><% } else { %>موجود<% } %></div><div class="purchase-price"><small>قیمت محصول</small><span class="old-price" id="detailOldPrice" <%= torobMeta.oldPrice && torobMeta.oldPrice > torobMeta.currentPrice ? "" : "hidden" %>><%= torobMeta.oldPrice && torobMeta.oldPrice > torobMeta.currentPrice ? toman(torobMeta.oldPrice) : "" %></span><strong id="detailPrice"><%= toman(torobMeta.currentPrice) %></strong></div><% const snappInstallment = Math.ceil(Number(torobMeta.currentPrice || 0) / 4); const snappFa = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',').replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d]); %><%# SnappPay PDP component (Snapp!Pay PDP Guidelines): logo + title + subtitle; no eligible call on PDP. %><div class="snapppay-pdp" id="detailSnappPay" <%= snappInstallment > 0 ? '' : 'hidden' %>><picture class="snapppay-pdp-logo"><source media="(max-width: 767.98px)" srcset="/assets/images/payments/snapp-pay/logo-32x32.svg" width="32" height="32"/><img src="/assets/images/payments/snapp-pay/logo-40x40.svg" alt="اسنپ‌پی" width="40" height="40"/></picture><div class="snapppay-pdp-text"><p class="snapppay-pdp-title">هر قسط با اسنپ‌پی: <span id="detailSnappInstallment"><%= snappFa(snappInstallment) %></span> تومان</p><p class="snapppay-pdp-subtitle">۴ قسط ماهانه. بدون سود، چک و ضامن.</p></div></div><div class="product-option-group" id="detailPillowOptionGroup" hidden>
 <div class="product-option-label"><strong>انتخاب نوع سفارش</strong><small>فقط کاور یا همراه با الیاف</small></div>
 <div class="detail-option-list" id="detailPillowOptions"></div>
 </div><div class="product-option-group">
@@ -143,7 +143,7 @@
 </div><div class="product-option-group" id="detailFabricGroup">
 <div class="product-option-label"><strong>انتخاب جنس پارچه</strong><small>نوع پارچه موردنظر را مشخص کنید</small></div>
 <div class="detail-option-list" id="detailFabricOptions"><% product.fabrics.forEach((value,index) => { const selected = torobMeta.requestedFabric ? value === torobMeta.requestedFabric : index === 0; %><label class="detail-option"><input type="radio" name="detailFabric" value="<%= value %>" <%= selected ? "checked" : "" %>><span><%= value %></span></label><% }) %></div>
-</div><div class="qty-box"><label>تعداد</label><div class="qty-control"><button class="detail-plus" type="button">+</button><span id="detailQty">۱</span><button class="detail-minus" type="button">−</button></div></div><button class="btn btn-primary detail-add-cart" type="button" <%= product.inventoryMode === 'managed' && product.stock <= 0 ? 'disabled' : '' %>><%= product.inventoryMode === 'managed' && product.stock <= 0 ? 'ناموجود' : 'افزودن به سبد خرید' %></button><a class="btn btn-ghost product-cart-link" href="/cart">مشاهده سبد خرید</a><div class="installment-box">خرید قسطی برای سفارش‌های عمده و سازمانی با هماهنگی پشتیبانی امکان‌پذیر است.</div></aside>
+</div><div class="qty-box"><label>تعداد</label><div class="qty-control"><button class="detail-plus" type="button">+</button><span id="detailQty">۱</span><button class="detail-minus" type="button">−</button></div></div><button class="btn btn-primary detail-add-cart" type="button" <%= product.inventoryMode === 'managed' && product.stock <= 0 ? 'disabled' : '' %>><%= product.inventoryMode === 'managed' && product.stock <= 0 ? 'ناموجود' : 'افزودن به سبد خرید' %></button><a class="btn btn-ghost product-cart-link" href="/cart">مشاهده سبد خرید</a></aside>
 </div>
 <% if (productReviews && productReviews.length) { %>
 <section class="cf-review-section" id="customer-reviews">
@@ -280,6 +280,6 @@
 <%- include("partials/page-data") %>
 <script src="/assets/js/api.js"></script>
 <script src="/assets/js/portal-data.js"></script>
-<script src="/assets/js/app.js?v=20260915-custom-live-pricing-v1"></script>
+<script src="/assets/js/app.js?v=20261008-snappay-v1"></script>
 </body>
 </html>

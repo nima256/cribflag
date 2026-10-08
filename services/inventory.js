@@ -76,4 +76,20 @@ async function releaseInventory(order) {
   return true;
 }
 
-module.exports = { applyInventory, releaseInventory };
+// Puts partially returned quantities back (SnappPay update). Only for orders whose
+// inventory was applied; `returned` is [{ productId, qty, inventoryManaged }].
+async function restockReturnedItems(order, returned) {
+  if (!order?.inventoryApplied) return false;
+  for (const item of returned || []) {
+    if (!item.productId) continue;
+    const qty = Math.max(0, Number(item.qty || 0));
+    if (!qty) continue;
+    const update = isManagedItem(item)
+      ? { $inc: { stock: qty, sales: -qty } }
+      : { $inc: { sales: -qty } };
+    await Product.updateOne({ publicId: item.productId }, update);
+  }
+  return true;
+}
+
+module.exports = { applyInventory, releaseInventory, restockReturnedItems };

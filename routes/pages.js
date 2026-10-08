@@ -6,6 +6,7 @@ const Category = require('../models/Category');
 const User = require('../models/User');
 const Admin = require('../models/Admin');
 const CustomerReview = require('../models/CustomerReview');
+const Order = require('../models/Order');
 const S = require('../services/serializers');
 const { publicReview } = require('../services/customerReviews');
 const { asyncHandler } = require('../utils/http');
@@ -247,9 +248,23 @@ router.get('/admin', asyncHandler(async (req, res) => {
   if (req.session?.adminId) admin = await Admin.findById(req.session.adminId).lean();
   await render(req, res, 'admin', { admin });
 }));
-router.get('/payment/success', asyncHandler((req, res) => render(req, res, 'success', { paymentFailed: false, paymentPending: false })));
-router.get('/payment/failed', asyncHandler((req, res) => render(req, res, 'success', { paymentFailed: true, paymentPending: false })));
-router.get('/payment/pending', asyncHandler((req, res) => render(req, res, 'success', { paymentFailed: false, paymentPending: true })));
+// SnappPay requires its transaction ID (the shared, unique merchant ↔ SnappPay id) to be
+// shown after a successful payment. It equals the order number already in the URL.
+async function paymentResultExtras(req) {
+  const isSnappPay = req.query.gateway === 'snappay';
+  const extras = { gatewayName: isSnappPay ? 'اسنپ‌پی' : 'ترب‌پی', snappPayTransactionId: '' };
+  const orderNumber = String(req.query.order || '').trim().slice(0, 40);
+  if (isSnappPay && orderNumber) {
+    const order = await Order.findOne({ orderNumber }).select('payment paymentStatus snappPay.status snappPay.transactionId').lean();
+    if (order?.paymentStatus === 'paid' && order.snappPay?.status === 'SETTLE') {
+      extras.snappPayTransactionId = order.snappPay.transactionId || orderNumber;
+    }
+  }
+  return extras;
+}
+router.get('/payment/success', asyncHandler(async (req, res) => render(req, res, 'success', { paymentFailed: false, paymentPending: false, ...(await paymentResultExtras(req)) })));
+router.get('/payment/failed', asyncHandler(async (req, res) => render(req, res, 'success', { paymentFailed: true, paymentPending: false, ...(await paymentResultExtras(req)) })));
+router.get('/payment/pending', asyncHandler(async (req, res) => render(req, res, 'success', { paymentFailed: false, paymentPending: true, ...(await paymentResultExtras(req)) })));
 router.get('/product/:id', asyncHandler(async (req, res) => {
   const startedAt = performance.now();
   const data = await common(req);

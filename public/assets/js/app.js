@@ -813,6 +813,10 @@ function initProduct(){
     const fabric=document.querySelector('input[name="detailFabric"]:checked')?.value||selectedProduct.fabrics[0];
     const pricing=getVariantPricing(selectedProduct,size,fabric);
     set('detailPrice',toman(pricing.price));
+    // SnappPay PDP guideline: "هر قسط با اسنپ‌پی: X تومان" for the selected variant (4 instalments).
+    const snappInstallment=Math.ceil(Number(pricing.price||0)/4);
+    const snappBox=document.getElementById('detailSnappPay');
+    if(snappBox){snappBox.hidden=!(snappInstallment>0);set('detailSnappInstallment',String(snappInstallment).replace(/\B(?=(\d{3})+(?!\d))/g,',').replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]));}
     const oldElement=document.getElementById('detailOldPrice');
     if(oldElement){oldElement.textContent=pricing.hasDiscount&&pricing.oldPrice>pricing.price?toman(pricing.oldPrice):'';oldElement.hidden=!(pricing.hasDiscount&&pricing.oldPrice>pricing.price);}
     syncTorobProductMeta(size,fabric,pricing);
@@ -1134,6 +1138,37 @@ function initCheckout(){
     }
   };
 
+  // SnappPay: eligible is called with the final server-side amount whenever it changes;
+  // title_message and description are shown exactly as returned (never static text).
+  let snappEligibilitySequence=0;
+  const refreshSnappPayEligibility=async()=>{
+    const option=get('snappPayOption');
+    if(!option||!cart.length)return false;
+    const input=option.querySelector('input[name="payment"]');
+    const hide=()=>{
+      option.hidden=true;
+      if(input?.checked){
+        const zarinpal=document.querySelector('input[name="payment"][value="zarinpal"]');
+        if(zarinpal)zarinpal.checked=true;
+        clearCheckoutQuote();renderCheckout();
+        showToast('پرداخت با اسنپ‌پی برای مبلغ فعلی سفارش در دسترس نیست؛ روش پرداخت دیگری انتخاب شد.');
+      }
+    };
+    const sequence=++snappEligibilitySequence;
+    try{
+      const result=await api('/api/orders/snappay/eligibility',{method:'POST',body:JSON.stringify(orderQuotePayload('snappay',sessionStorage.getItem('cribFlagActiveCoupon')||''))});
+      if(sequence!==snappEligibilitySequence)return false;
+      if(result.eligible!==true||!result.title_message){hide();return false;}
+      get('snappPayTitle').textContent=String(result.title_message);
+      get('snappPayDescription').textContent=String(result.description||'');
+      option.hidden=false;
+      return true;
+    }catch{
+      if(sequence===snappEligibilitySequence)hide();
+      return false;
+    }
+  };
+
   const showStep=n=>{
     current=n;
     document.querySelectorAll('.checkout-step').forEach(section=>section.classList.toggle('active',Number(section.dataset.step)===n));
@@ -1143,7 +1178,7 @@ function initCheckout(){
       indicator.classList.toggle('done',value<n);
     });
     window.scrollTo({top:0,behavior:'smooth'});
-    if(n===2)refreshTorobPayEligibility();
+    if(n===2){refreshTorobPayEligibility();refreshSnappPayEligibility();}
 
     if(n===3){
       const review=get('checkoutCustomerReview');
@@ -1222,9 +1257,9 @@ function initCheckout(){
       renderCheckout();return false;
     }
   };
-  get('applyDiscountBtn')?.addEventListener('click',async()=>{clearCheckoutQuote();await validateDiscount(get('discountCodeInput').value);await refreshTorobPayEligibility();if(current===3)await refreshCheckoutQuote();});
-  get('removeDiscountBtn')?.addEventListener('click',async()=>{clearCheckoutQuote();clearAppliedDiscount('کد تخفیف از سفارش حذف شد.','neutral');showToast('کد تخفیف حذف شد.');await refreshTorobPayEligibility();if(current===3)await refreshCheckoutQuote();});
-  const savedCoupon=sessionStorage.getItem('cribFlagActiveCoupon');if(savedCoupon){get('discountCodeInput').value=savedCoupon;validateDiscount(savedCoupon,{silent:true}).then(refreshTorobPayEligibility);}
+  get('applyDiscountBtn')?.addEventListener('click',async()=>{clearCheckoutQuote();await validateDiscount(get('discountCodeInput').value);await refreshTorobPayEligibility();await refreshSnappPayEligibility();if(current===3)await refreshCheckoutQuote();});
+  get('removeDiscountBtn')?.addEventListener('click',async()=>{clearCheckoutQuote();clearAppliedDiscount('کد تخفیف از سفارش حذف شد.','neutral');showToast('کد تخفیف حذف شد.');await refreshTorobPayEligibility();await refreshSnappPayEligibility();if(current===3)await refreshCheckoutQuote();});
+  const savedCoupon=sessionStorage.getItem('cribFlagActiveCoupon');if(savedCoupon){get('discountCodeInput').value=savedCoupon;validateDiscount(savedCoupon,{silent:true}).then(refreshTorobPayEligibility).then(refreshSnappPayEligibility);}
 
   get('finalPaymentBtn')?.addEventListener('click',async()=>{
     if(!currentUser){requireLogin('/checkout');return;}

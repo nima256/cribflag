@@ -390,6 +390,7 @@ function renderOrderDonut(statusCounts={}){
 function paymentGatewayLabel(order = {}) {
   const raw = String(order.payment || '').trim();
   if (/ترب|torob/i.test(raw)) return 'ترب‌پی';
+  if (/اسنپ|snapp/i.test(raw)) return 'اسنپ‌پی';
   if (/زرین|zarin/i.test(raw)) return 'زرین‌پال';
   if (/کارت\s*به\s*کارت/i.test(raw)) return 'کارت به کارت';
   if (/ثبت دستی/i.test(raw)) return 'ثبت دستی مدیر';
@@ -782,6 +783,8 @@ function renderOrders() {
         ${order.phone || ''}
         ${order.fileName || ''}
         ${order.linkedOrderNumber || ''}
+        ${order.snappPay?.transactionId || ''}
+        ${order.snappPay?.paymentToken || ''}
         ${order.acquisition?.source || ''}
         ${order.acquisition?.medium || ''}
         ${itemSearch}
@@ -1749,6 +1752,69 @@ function productModal(id=null){
   applyProductCategoryRules({sizes:product?.sizes||D.DEFAULT_SIZES,fabrics:product?.fabrics||D.DEFAULT_FABRICS,variants:product?.variantPrices||[]});
   toggleDiscountFields();toggleInventoryFields();openModal('#productModal');
 }
+// SnappPay: transaction id + payment token, partial return (update) and full cancel.
+// Each irreversible action asks the admin to confirm (SnappPay requirement).
+function snappPayPanel(order){
+  const sp=order.snappPay;if(!sp)return '';
+  const items=order.items||[];
+  const units=items.reduce((sum,item)=>sum+Math.max(1,Number(item?.qty||1)),0);
+  const canCancel=order.paymentStatus==='paid'&&sp.status==='SETTLE'&&order.status!=='cancelled';
+  const canUpdate=canCancel&&units>1;
+  const qtyRows=canUpdate?items.map((item,index)=>{
+    const qty=Math.max(1,Number(item?.qty||1));
+    return `<label class="snapp-admin-qty"><span>${D.esc(item.title||'')}<small>${orderItemOptions(item)}</small></span><input type="number" min="0" max="${qty}" step="1" value="${qty}" data-snapp-index="${index}" data-snapp-max="${qty}" data-snapp-title="${D.esc(item.title||'')}" aria-label="تعداد جدید ${D.esc(item.title||'')}"></label>`;
+  }).join(''):'';
+  return `<section class="snapp-admin-panel" aria-label="اسنپ‌پی">
+    <div class="snapp-admin-head"><img src="/assets/images/payments/snapp-pay/logo-32x32.svg" alt="" width="32" height="32"><strong>اسنپ‌پی</strong><span class="snapp-admin-status">${D.esc(sp.status||'نامشخص')}</span></div>
+    <div class="order-payment-breakdown">
+      <div><span>شناسه تراکنش اسنپ‌پی</span><strong dir="ltr" style="user-select:all">${D.esc(sp.transactionId||order.id)}</strong></div>
+      <div><span>پیمنت توکن</span><strong dir="ltr" style="user-select:all;overflow-wrap:anywhere;max-width:65%">${D.esc(sp.paymentToken||'—')}</strong></div>
+      ${sp.updates?`<div><span>تعداد بروزرسانی‌ها</span><strong>${D.fa(sp.updates)}</strong></div>`:''}
+      ${sp.lastError?`<div><span>آخرین خطا</span><strong style="color:#b91c1c;max-width:65%">${D.esc(sp.lastError)}</strong></div>`:''}
+    </div>
+    ${qtyRows?`<div class="snapp-admin-qtys"><h5>کاهش تعداد / حذف قلم (۰ = حذف)</h5>${qtyRows}</div>`:''}
+    <div class="snapp-admin-actions">
+      <button type="button" class="portal-btn portal-btn-light" data-snapp-action="sync" data-order="${D.esc(order.id)}">استعلام وضعیت</button>
+      ${canCancel?`<button type="button" class="portal-btn" data-snapp-action="update" data-order="${D.esc(order.id)}" ${canUpdate?'':'disabled title="فقط یک آیتم در سفارش باقی مانده است؛ فقط لغو کامل ممکن است"'}>بروزرسانی سفارش</button>`:''}
+      ${canCancel?`<button type="button" class="portal-btn snapp-admin-danger" data-snapp-action="cancel" data-order="${D.esc(order.id)}">لغو کامل در اسنپ‌پی</button>`:''}
+    </div>
+    ${canCancel&&!canUpdate?'<p class="snapp-admin-note">فقط یک آیتم در سفارش باقی مانده است؛ بروزرسانی غیرفعال است و فقط لغو کامل سفارش امکان‌پذیر است.</p>':''}
+    ${canCancel?'<p class="snapp-admin-note">بروزرسانی و لغو در اسنپ‌پی برگشت‌ناپذیرند و فقط پس از تأیید مجدد شما ارسال می‌شوند.</p>':''}
+  </section>`;
+}
+
+async function runSnappPayAction(button){
+  const id=button.dataset.order;const action=button.dataset.snappAction;
+  const order=D.get('orders').find(item=>item.id===id);if(!order)return;
+  let body={};
+  if(action==='update'){
+    const inputs=[...document.querySelectorAll('#adminOrderModalBody [data-snapp-index]')];
+    const items=[];const changes=[];
+    for(const input of inputs){
+      const qty=Number(input.value),max=Number(input.dataset.snappMax);
+      if(!Number.isInteger(qty)||qty<0||qty>max){D.toast(`تعداد «${input.dataset.snappTitle}» معتبر نیست.`,'error');return;}
+      items.push({index:Number(input.dataset.snappIndex),qty});
+      if(qty<max)changes.push(qty===0?`• حذف «${input.dataset.snappTitle}»`:`• «${input.dataset.snappTitle}»: ${D.fa(max)} ← ${D.fa(qty)}`);
+    }
+    if(!changes.length){D.toast('حداقل تعداد یک قلم را کاهش دهید.','error');return;}
+    if(items.every(item=>item.qty===0)){D.toast('برای مرجوعی کامل از «لغو کامل در اسنپ‌پی» استفاده کنید.','error');return;}
+    if(!confirm(`تأیید بروزرسانی سفارش ${id} در اسنپ‌پی\n\n${changes.join('\n')}\n\nاین عملیات برگشت‌ناپذیر است. ادامه می‌دهید؟`))return;
+    body={confirmed:true,items};
+  }else if(action==='cancel'){
+    if(!confirm(`تأیید لغو کامل سفارش ${id} در اسنپ‌پی\n\nکل سفارش در اسنپ‌پی لغو می‌شود و این عملیات برگشت‌ناپذیر است. ادامه می‌دهید؟`))return;
+    body={confirmed:true};
+  }
+  button.disabled=true;
+  try{
+    const result=await window.CribAPI.request(`/api/admin/orders/${encodeURIComponent(id)}/snappay/${action}`,{method:'POST',body:JSON.stringify(body)});
+    await D.syncFromApi('admin');renderAll();orderModal(id);
+    D.toast(result.message||'انجام شد.');
+  }catch(error){
+    button.disabled=false;
+    D.toast(error.message||'عملیات اسنپ‌پی انجام نشد.','error');
+  }
+}
+
 function orderModal(id){
   const order=getOrdersForDisplay().find(item=>item.displayType==='order'&&item.id===id)||D.get('orders').find(item=>item.id===id);if(!order)return;activeOrder=id;
   const discount=Number(order.discount||0),shipping=Number(order.shipping||0),subtotal=Number.isFinite(Number(order.subtotal))?Number(order.subtotal):Math.max(0,Number(order.total||0)+discount-shipping);
@@ -1768,6 +1834,7 @@ function orderModal(id){
       <div class="detail-chip"><small>درگاه پرداخت</small><strong>${D.esc(paymentGatewayLabel(order))}</strong></div>
       <div class="detail-chip"><small>منبع ورود</small><strong>${D.esc(order.acquisition?.source||'ثبت نشده')}${order.acquisition?.medium?` / ${D.esc(order.acquisition.medium)}`:''}</strong></div>
     </div>
+    ${snappPayPanel(order)}
     <div class="order-payment-breakdown" style="margin:12px 0 16px">
       <div><span>صفحه ورود</span><strong style="direction:ltr;text-align:left;max-width:65%;overflow-wrap:anywhere">${D.esc(order.acquisition?.landingPage||'ثبت نشده')}</strong></div>
       <div><span>Referrer</span><strong style="direction:ltr;text-align:left;max-width:65%;overflow-wrap:anywhere">${D.esc(order.acquisition?.referrer||'ثبت نشده')}</strong></div>
@@ -2322,6 +2389,8 @@ document.addEventListener('click',async event=>{
     await deleteAdminOrder(deleteOrderButton.dataset.id,deleteOrderButton.dataset.source,deleteOrderButton);
     return;
   }
+  const snappAction=event.target.closest('[data-snapp-action]');
+  if(snappAction&&!snappAction.disabled){await runSnappPayAction(snappAction);return;}
   const orderView = event.target.closest('.admin-order-view');
 
 

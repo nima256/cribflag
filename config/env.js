@@ -25,6 +25,14 @@ const env = {
   torobPayClientSecret: process.env.TOROBPAY_CLIENT_SECRET || '',
   torobPayUsername: process.env.TOROBPAY_USERNAME || '',
   torobPayPassword: process.env.TOROBPAY_PASSWORD || '',
+  // SnappPay (اسنپ‌پی). Secrets live only in .env — see .env.snappay.example.
+  snappPayBaseUrl: (process.env.SNAPPPAY_BASE_URL || '').trim().replace(/\/$/, ''),
+  snappPayClientId: (process.env.SNAPPPAY_CLIENT_ID || '').trim(),
+  snappPayClientSecret: (process.env.SNAPPPAY_CLIENT_SECRET || '').trim(),
+  snappPayUsername: (process.env.SNAPPPAY_USERNAME || '').trim(),
+  snappPayPassword: (process.env.SNAPPPAY_PASSWORD || '').trim(),
+  snappPayTimeoutMs: Number(process.env.SNAPPPAY_TIMEOUT_MS || 30000),
+  snappPayPaymentMethodTypeDto: String(process.env.SNAPPPAY_PAYMENT_METHOD_TYPE_DTO ?? 'INSTALLMENT').trim(),
   adminEmail: process.env.ADMIN_EMAIL || "iUqcjT1Nh62e@gmail.com",
   adminPassword: process.env.ADMIN_PASSWORD || "gl4N}(E9o99An%fCSND#",
   adminMobile: process.env.ADMIN_MOBILE

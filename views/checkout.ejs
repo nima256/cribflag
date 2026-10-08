@@ -6,7 +6,7 @@
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
 <meta content="Crib Flag؛ فروشگاه تخصصی پرچم" name="description"/>
 <title>تسویه حساب | Crib Flag</title>
-<link href="/assets/css/style.css?v=20260801-final-scroll-v3" rel="stylesheet"/>
+<link href="/assets/css/style.css?v=20261008-snappay-v1" rel="stylesheet"/>
 <link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
 <style>
 .checkout-field input[readonly] {
@@ -47,6 +47,21 @@
   height: 46px;
   object-fit: contain;
   display: block;
+}
+
+/* SnappPay gateway (guideline: new logo, title_message + description from the
+   eligible response on two lines beside the logo; text #1A1C23 / #616475). */
+.snapppay-option { grid-template-columns: auto 52px minmax(0, 1fr); }
+.snapppay-option .payment-brand-logo img { width: 40px; height: 40px; }
+.snapppay-text { display: grid; gap: 2px; min-width: 0; }
+.option-card .snapppay-text strong { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.6; color: #1A1C23; }
+.option-card .snapppay-text small { display: block; font-size: 12px; font-weight: 400; line-height: 1.6; color: #616475; }
+
+@media (max-width: 560px) {
+  .snapppay-option { grid-template-columns: auto 44px minmax(0, 1fr); gap: 9px; }
+  .snapppay-option .payment-brand-logo img { width: 32px; height: 32px; }
+  .option-card .snapppay-text strong { font-size: 13px; }
+  .option-card .snapppay-text small { font-size: 11px; }
 }
 
 @media (max-width: 560px) {
@@ -250,6 +265,7 @@
     <h3 class="choice-title">روش پرداخت</h3>
     <div class="payment-options">
       <label class="option-card payment-option-card"><input checked="" name="payment" type="radio" value="zarinpal"/><span class="payment-brand-logo" aria-hidden="true"><img src="/assets/images/payments/zarinpal.webp" alt=""/></span><span><strong>پرداخت آنلاین</strong><small>اتصال به درگاه بانکی امن زرین‌پال</small></span><b>پیشنهادی</b></label>
+      <label class="option-card payment-option-card snapppay-option" id="snappPayOption" hidden><input name="payment" type="radio" value="snappay"/><span class="payment-brand-logo"><picture><source media="(max-width: 560px)" srcset="/assets/images/payments/snapp-pay/logo-32x32.svg" width="32" height="32"/><img src="/assets/images/payments/snapp-pay/logo-40x40.svg" alt="اسنپ‌پی" width="40" height="40"/></picture></span><span class="snapppay-text"><strong id="snappPayTitle"></strong><small id="snappPayDescription"></small></span></label>
       <label class="option-card payment-option-card" id="torobPayOption" hidden><input name="payment" type="radio" value="torobpay"/><span class="payment-brand-logo" aria-hidden="true"><img src="/assets/images/payments/torobpay.webp" alt=""/></span><span><strong id="torobPayTitle">پرداخت اقساطی با ترب‌پی</strong><small id="torobPayDescription">خرید اعتباری و پرداخت اقساطی از طریق ترب‌پی</small></span><b>اقساطی</b></label>
     </div>
     <small id="torobPayAvailability" class="secure-note" aria-live="polite">در حال بررسی امکان پرداخت اقساطی ترب‌پی...</small>
@@ -364,7 +380,7 @@
 <%- include("partials/page-data") %>
 <script src="/assets/js/api.js"></script>
 <script src="/assets/js/portal-data.js"></script>
-<script src="/assets/js/app.js?v=20260915-custom-live-pricing-v1"></script>
+<script src="/assets/js/app.js?v=20261008-snappay-v1"></script>
 <script>
 (() => {
   const provinceSelect = document.getElementById('checkoutProvince');

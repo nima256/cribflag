@@ -10,7 +10,8 @@
     "seed": "node scripts/seed.js",
     "check": "node scripts/check.js",
     "smoke": "node scripts/smoke.js",
-    "test": "npm run check && npm run smoke",
+    "test": "npm run check && npm run test:unit && npm run smoke",
+    "test:unit": "node --test test/*.test.js",
     "migrate:ready": "node scripts/migrate-ready-designs.js",
     "admin:sync": "node scripts/sync-admin.js",
     "migrate:pillows": "node scripts/migrate-pillow-products.js"

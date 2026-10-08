@@ -6,7 +6,7 @@
 <meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
 <meta content="Crib Flag؛ فروشگاه تخصصی پرچم" name="description"/>
 <title><%= paymentPending ? "در حال بررسی پرداخت" : (paymentFailed ? "پرداخت ناموفق" : "ثبت موفق سفارش") %> | Crib Flag</title>
-<link href="/assets/css/style.css?v=20260801-final-scroll-v3" rel="stylesheet"/>
+<link href="/assets/css/style.css?v=20261008-snappay-v1" rel="stylesheet"/>
 <link rel="icon" type="image/x-icon" href="/assets/images/logo.ico">
 </head>
 <body data-page="success">
@@ -76,7 +76,7 @@
 <h1><%= paymentPending ? "پرداخت در حال بررسی است" : (paymentFailed ? "پرداخت انجام نشد" : "پرداخت با موفقیت انجام شد") %></h1>
 <p>
   <%= paymentPending
-    ? "نتیجه پرداخت هنوز از ترب‌پی قطعی نشده است. سفارش شما حذف نشده و پس از مشخص شدن وضعیت، نتیجه نهایی در پنل فروشگاه قابل پیگیری است."
+    ? "نتیجه پرداخت هنوز از " + (typeof gatewayName !== 'undefined' ? gatewayName : 'ترب‌پی') + " قطعی نشده است. سفارش شما حذف نشده و پس از مشخص شدن وضعیت، نتیجه نهایی در پنل فروشگاه قابل پیگیری است."
     : paymentFailed
       ? "تراکنش تکمیل نشد و مبلغی به‌عنوان پرداخت موفق ثبت نشده است. می‌توانید دوباره از سبد خرید اقدام کنید."
       : "سفارش شما ثبت شد و پس از بررسی اطلاعات، وارد مرحله آماده‌سازی و چاپ می‌شود. کد پیگیری سفارش برای شما قابل مشاهده است." %>
@@ -88,8 +88,14 @@
 </div>
 <div class="order-info-box">
 <small>وضعیت</small>
-<strong><%= paymentPending ? "در انتظار تأیید ترب‌پی" : (paymentFailed ? "ناموفق" : "در حال بررسی") %></strong>
+<strong><%= paymentPending ? `در انتظار تأیید ${typeof gatewayName !== 'undefined' ? gatewayName : 'ترب‌پی'}` : (paymentFailed ? "ناموفق" : "در حال بررسی") %></strong>
 </div>
+<% if (typeof snappPayTransactionId !== 'undefined' && snappPayTransactionId) { %>
+<div class="order-info-box">
+<small>شناسه تراکنش اسنپ‌پی</small>
+<strong id="snappPayTransactionId" dir="ltr" style="user-select:all"><%= snappPayTransactionId %></strong>
+</div>
+<% } %>
 <div class="order-info-box">
 <small>روش ارسال</small>
 <strong id="successShipping">تیپاکس</strong>
@@ -208,6 +214,6 @@
 <%- include("partials/page-data") %>
 <script src="/assets/js/api.js"></script>
 <script src="/assets/js/portal-data.js"></script>
-<script src="/assets/js/app.js?v=20260915-custom-live-pricing-v1"></script>
+<script src="/assets/js/app.js?v=20261008-snappay-v1"></script>
 </body>
 </html>

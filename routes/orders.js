@@ -6,6 +6,9 @@ const CustomRequest = require('../models/CustomRequest');
 const { calculate } = require('./discounts');
 const { requestPayment, verifyPayment } = require('../services/payment');
 const torobPay = require('../services/torobPay');
+const snappPay = require('../services/snappPay');
+const { buildSnappPayPayload, snappPayMobile } = require('../services/snappPayPricing');
+const { reconcilerConfig, resolveSnappPayAction, startSnappPayReconciler } = require('../services/snappPayReconciler');
 const { sendOrderRegisteredSms } = require('../services/sms');
 const { requireUser } = require('../middlewares/auth');
 const { asyncHandler, ok, AppError } = require('../utils/http');
@@ -18,6 +21,9 @@ const { consumeCoupon, releaseCoupon } = require('../services/coupons');
 const { syncCustomRequestsFromOrder } = require('../services/customOrderSync');
 
 const router = express.Router();
+
+const SNAPPPAY_LABEL = 'پرداخت اقساطی اسنپ‌پی';
+const PAYMENT_METHODS = ['zarinpal', 'torobpay', 'snappay'];
 
 function orderAcquisitionFromSession(req) {
   const touch = req.session?.attribution?.lastTouch || req.session?.attribution?.firstTouch || null;
@@ -321,12 +327,10 @@ async function updateCustomDelivery({ customItems, user, province, city, address
   return publicIds;
 }
 
-router.post('/quote', requireUser, asyncHandler(async (req, res) => {
-  const user = await User.findById(req.session.userId);
-  if (!user || !user.isActive) throw new AppError(401, 'ابتدا وارد حساب کاربری فعال شوید');
-
-  const rawItems = Array.isArray(req.body.items) ? req.body.items : [];
-  assertClientCartSnapshot(req.body, rawItems);
+// Server-authoritative price of the current cart for a payment method.
+async function quoteCart(user, body, paymentMethodOverride) {
+  const rawItems = Array.isArray(body.items) ? body.items : [];
+  assertClientCartSnapshot(body, rawItems);
   const customItems = rawItems.filter(isCustomItem);
   const normalItems = rawItems.filter(item => !isCustomItem(item));
 
@@ -341,20 +345,27 @@ router.post('/quote', requireUser, asyncHandler(async (req, res) => {
   }
 
   let discount = 0;
-  if (req.body.couponCode && subtotal > 0) {
-    const result = await calculate(req.body.couponCode, { items, subtotal }, user._id);
+  if (body.couponCode && subtotal > 0) {
+    const result = await calculate(body.couponCode, { items, subtotal }, user._id);
     discount = result.amount;
   }
 
-  const requestedPaymentMethod = String(req.body.paymentMethod || '').trim();
-  if (requestedPaymentMethod && !['zarinpal', 'torobpay'].includes(requestedPaymentMethod)) {
+  const requestedPaymentMethod = String(paymentMethodOverride || body.paymentMethod || '').trim();
+  if (requestedPaymentMethod && !PAYMENT_METHODS.includes(requestedPaymentMethod)) {
     throw new AppError(400, 'روش پرداخت انتخاب‌شده معتبر نیست');
   }
   const paymentMethod = requestedPaymentMethod || 'zarinpal';
   const payableBeforeTax = Math.max(0, subtotal - discount);
   const tax = paymentMethod === 'torobpay' ? Math.round(payableBeforeTax * 0.15) : 0;
   const total = payableBeforeTax + tax;
+  return { items, subtotal, discount, tax, total, paymentMethod };
+}
 
+router.post('/quote', requireUser, asyncHandler(async (req, res) => {
+  const user = await User.findById(req.session.userId);
+  if (!user || !user.isActive) throw new AppError(401, 'ابتدا وارد حساب کاربری فعال شوید');
+
+  const { items, subtotal, discount, tax, total, paymentMethod } = await quoteCart(user, req.body);
   const pricedItems = items.map(item => ({
     productId: item.productId,
     customRequestId: item.customRequestId,
@@ -367,6 +378,29 @@ router.post('/quote', requireUser, asyncHandler(async (req, res) => {
   }));
 
   return ok(res, { subtotal, discount, tax, total, paymentMethod, items: pricedItems });
+}));
+
+// SnappPay eligible: called with the final (server-computed) cart amount every time it
+// changes; title_message and description are returned verbatim for the gateway option.
+router.post('/snappay/eligibility', requireUser, asyncHandler(async (req, res) => {
+  if (!snappPay.isConfigured()) return ok(res, { eligible: false, unavailable: true });
+  const user = await User.findById(req.session.userId);
+  if (!user || !user.isActive) throw new AppError(401, 'ابتدا وارد حساب کاربری فعال شوید');
+
+  const quote = await quoteCart(user, req.body, 'snappay');
+  try {
+    const result = await snappPay.eligible(snappPay.toRial(quote.total));
+    return ok(res, {
+      eligible: result?.eligible === true,
+      title_message: result?.title_message ?? '',
+      description: result?.description ?? '',
+      total: quote.total
+    });
+  } catch (error) {
+    console.error('[SNAPPPAY ELIGIBILITY]', error?.message || error);
+    // An outage of SnappPay must never block the other payment methods.
+    return ok(res, { eligible: false, unavailable: true });
+  }
 }));
 
 router.get('/torobpay/eligibility', requireUser, asyncHandler(async (req, res) => {
@@ -444,10 +478,13 @@ router.post('/', requireUser, asyncHandler(async (req, res) => {
   }
 
   const requestedPaymentMethod = String(req.body.paymentMethod || '').trim();
-  if (requestedPaymentMethod && !['zarinpal', 'torobpay'].includes(requestedPaymentMethod)) {
+  if (requestedPaymentMethod && !PAYMENT_METHODS.includes(requestedPaymentMethod)) {
     throw new AppError(400, 'روش پرداخت انتخاب‌شده معتبر نیست');
   }
   const paymentMethod = requestedPaymentMethod || 'zarinpal';
+  if (paymentMethod === 'snappay' && !snappPay.isConfigured()) {
+    throw new AppError(503, 'درگاه اسنپ‌پی هنوز روی سرور تنظیم نشده است');
+  }
   const customerMobile = normalizeMobile(user.mobile);
   if (!/^09\d{9}$/.test(customerMobile)) {
     throw new AppError(400, 'شماره موبایل حساب کاربری معتبر نیست؛ ابتدا آن را در پروفایل اصلاح کنید');
@@ -482,9 +519,23 @@ router.post('/', requireUser, asyncHandler(async (req, res) => {
     }
   }
 
+  let snappEligibility = null;
+  if (paymentMethod === 'snappay') {
+    try {
+      snappEligibility = await snappPay.eligible(snappPay.toRial(total));
+    } catch (error) {
+      throw new AppError(502, `بررسی امکان پرداخت اسنپ‌پی انجام نشد: ${error?.message || 'خطای نامشخص'}`);
+    }
+    if (snappEligibility?.eligible !== true) {
+      throw new AppError(400, snappEligibility?.description || 'این مبلغ در حال حاضر واجد شرایط پرداخت اسنپ‌پی نیست');
+    }
+  }
+
   const paymentLabel = paymentMethod === 'torobpay'
     ? 'پرداخت اقساطی ترب‌پی'
-    : 'پرداخت آنلاین زرین‌پال';
+    : paymentMethod === 'snappay'
+      ? SNAPPPAY_LABEL
+      : 'پرداخت آنلاین زرین‌پال';
 
   const order = await Order.create({
     orderNumber: orderNumber(),
@@ -525,6 +576,40 @@ router.post('/', requireUser, asyncHandler(async (req, res) => {
       orderNumber: order.orderNumber,
       successUrl: `/payment/success?order=${encodeURIComponent(order.orderNumber)}&shipping=${encodeURIComponent(order.shippingMethod)}`
     }, 201);
+  }
+
+  if (paymentMethod === 'snappay') {
+    try {
+      const payload = buildSnappPayPayload(order);
+      // The SnappPay amount must be exactly the order total the customer reviewed.
+      if (payload.amount !== snappPay.toRial(order.total)) throw new Error('مبلغ سفارش با مبلغ اسنپ‌پی یکسان نیست');
+      const payment = await snappPay.createPaymentToken({
+        ...payload,
+        mobile: snappPayMobile(order.phone),
+        returnURL: `${env.siteUrl}/api/orders/snappay/callback`,
+        transactionId: String(order.orderNumber)
+      });
+      if (!payment?.paymentToken || !payment?.paymentPageUrl) throw new Error('پاسخ معتبر از اسنپ‌پی دریافت نشد');
+      order.snappPay = {
+        paymentToken: payment.paymentToken,
+        transactionId: String(order.orderNumber),
+        status: 'PENDING',
+        eligibleTitle: snappEligibility?.title_message || '',
+        eligibleDescription: snappEligibility?.description || ''
+      };
+      order.paymentInfo.url = payment.paymentPageUrl;
+      await order.save();
+      await syncCustomRequestsFromOrder(order);
+      console.log(`[SNAPPPAY TOKEN] order=${order.orderNumber} paymentToken=${payment.paymentToken}`);
+      return ok(res, {
+        message: 'انتقال به درگاه اسنپ‌پی',
+        orderNumber: order.orderNumber,
+        paymentUrl: payment.paymentPageUrl
+      }, 201);
+    } catch (error) {
+      await Order.deleteOne({ _id: order._id });
+      throw new AppError(502, `اتصال به درگاه اسنپ‌پی انجام نشد: ${error?.message || 'خطای نامشخص'}`);
+    }
   }
 
   if (paymentMethod === 'torobpay') {
@@ -695,6 +780,271 @@ router.post('/torobpay/callback', asyncHandler(async (req, res) => {
 }));
 
 
+// ---------------------------------------------------------------- SnappPay
+function snappSuccessUrl(order) {
+  const transactionId = order.snappPay?.transactionId || order.orderNumber;
+  return `/payment/success?order=${encodeURIComponent(order.orderNumber)}&shipping=${encodeURIComponent(order.shippingMethod || '')}&refId=${encodeURIComponent(transactionId)}&gateway=snappay`;
+}
+const snappFailedUrl = (order, reason = '') =>
+  `/payment/failed?order=${encodeURIComponent(order.orderNumber)}${reason ? `&reason=${encodeURIComponent(reason)}` : ''}&gateway=snappay`;
+const snappPendingUrl = order => `/payment/pending?order=${encodeURIComponent(order.orderNumber)}&gateway=snappay`;
+
+const isSnappPaid = order => order?.paymentStatus === 'paid' && order?.snappPay?.status === 'SETTLE';
+
+// Atomic per-order lock shared by the callback, the reconciler and admin actions;
+// an abandoned lock (crash mid-request) expires after reconcilerConfig.staleLockMs.
+function lockSnappPayOrder(orderId, extraSet = {}) {
+  return Order.findOneAndUpdate(
+    {
+      _id: orderId,
+      'snappPay.status': { $ne: 'SETTLE' },
+      $or: [
+        { 'snappPay.processing': { $ne: true } },
+        { 'snappPay.processingStartedAt': { $lt: new Date(Date.now() - reconcilerConfig.staleLockMs) } }
+      ]
+    },
+    { $set: { 'snappPay.processing': true, 'snappPay.processingStartedAt': new Date(), ...extraSet } },
+    { new: true }
+  );
+}
+
+async function releaseSnappPayLock(order, { error, paymentStatus } = {}) {
+  order.snappPay.processing = false;
+  order.snappPay.processingStartedAt = undefined;
+  if (error) order.snappPay.lastError = String(error).slice(0, 500);
+  if (paymentStatus) order.paymentStatus = paymentStatus;
+  await order.save();
+}
+
+async function markSnappPayOrderPaid(order, result = {}) {
+  order.snappPay.status = 'SETTLE';
+  order.snappPay.transactionId = String(result?.transactionId || order.snappPay.transactionId || order.orderNumber);
+  order.snappPay.settledAt = order.snappPay.settledAt || new Date();
+  order.snappPay.lastStatusCheckAt = new Date();
+  order.snappPay.lastError = undefined;
+  order.snappPay.processing = false;
+  order.snappPay.processingStartedAt = undefined;
+  order.paymentStatus = 'paid';
+  order.paymentInfo.refId = order.snappPay.transactionId;
+  order.paymentInfo.paidAt = order.paymentInfo.paidAt || new Date();
+  try {
+    await applyInventory(order);
+  } catch (inventoryError) {
+    // Money is already settled here; keep the order paid and let the admin resolve
+    // the stock conflict with SnappPay update/cancel.
+    order.snappPay.lastError = `موجودی: ${inventoryError.message}`.slice(0, 500);
+    console.error(`[SNAPPPAY INVENTORY AFTER SETTLE] order=${order.orderNumber}`, inventoryError);
+  }
+  await consumeCoupon(order);
+  await order.save();
+  await syncCustomRequestsFromOrder(order);
+  await notifyOrderRegistered(order);
+}
+
+async function failSnappPayOrder(order, { gatewayStatus = 'FAILED', error } = {}) {
+  await releaseInventory(order).catch(releaseError => console.error('[SNAPPPAY RELEASE INVENTORY]', releaseError));
+  await releaseCoupon(order).catch(releaseError => console.error('[SNAPPPAY RELEASE COUPON]', releaseError));
+  order.snappPay.status = gatewayStatus;
+  order.snappPay.processing = false;
+  order.snappPay.processingStartedAt = undefined;
+  if (error) order.snappPay.lastError = String(error).slice(0, 500);
+  order.paymentStatus = 'failed';
+  order.status = 'cancelled';
+  await order.save();
+  await syncCustomRequestsFromOrder(order);
+}
+
+// After a successful verify: reserve stock, then settle. If the stock is gone the
+// payment is reverted (revert is valid between verify and settle).
+async function completeVerifiedSnappPayment(order, verified) {
+  const token = order.snappPay.paymentToken;
+  order.snappPay.verifiedAt = order.snappPay.verifiedAt || new Date();
+  if (verified?.status === 'SETTLE') {
+    await markSnappPayOrderPaid(order, verified);
+    return 'paid';
+  }
+  order.snappPay.status = 'VERIFY';
+  try {
+    await applyInventory(order);
+  } catch (inventoryError) {
+    try {
+      await snappPay.revert(token);
+      order.snappPay.revertedAt = new Date();
+    } catch (revertError) {
+      console.error(`[SNAPPPAY REVERT AFTER INVENTORY] order=${order.orderNumber}`, revertError);
+    }
+    await failSnappPayOrder(order, { gatewayStatus: 'REVERT', error: `موجودی: ${inventoryError.message}` });
+    return 'reverted';
+  }
+  const settled = await snappPay.settleWithStatusRecovery(token);
+  await markSnappPayOrderPaid(order, { ...verified, ...settled });
+  return 'paid';
+}
+
+// A payment completed after the order was closed locally (expired) must not be
+// settled: verify it, then revert it so the customer's credit is returned.
+async function revertLateSnappPayment(order) {
+  try {
+    await snappPay.verify(order.snappPay.paymentToken);
+    await snappPay.revert(order.snappPay.paymentToken);
+    order.snappPay.status = 'REVERT';
+    order.snappPay.revertedAt = new Date();
+  } catch (error) {
+    order.snappPay.lastError = `revert: ${error.message}`.slice(0, 500);
+  }
+}
+
+router.post('/snappay/callback', asyncHandler(async (req, res) => {
+  const transactionId = String(req.body?.transactionId || '').trim();
+  const state = String(req.body?.state || '').trim().toUpperCase();
+  const rawAmount = req.body?.amount;
+  const hasAmount = rawAmount !== undefined && rawAmount !== null && String(rawAmount).trim() !== '';
+  const callbackAmount = hasAmount ? Number(rawAmount) : undefined;
+
+  if (!transactionId || transactionId.length > 120) return res.redirect(303, '/payment/failed?reason=snappay-transaction');
+
+  const found = await Order.findOne({ orderNumber: transactionId, payment: SNAPPPAY_LABEL });
+  if (!found || !found.snappPay?.paymentToken) return res.redirect(303, '/payment/failed?reason=snappay-order');
+
+  // Duplicate callback / refresh after a successful payment.
+  if (isSnappPaid(found)) return res.redirect(303, snappSuccessUrl(found));
+
+  const order = await lockSnappPayOrder(found._id, {
+    'snappPay.callbackState': state,
+    'snappPay.callbackAmount': Number.isFinite(callbackAmount) ? callbackAmount : null
+  });
+  if (!order) {
+    const latest = await Order.findById(found._id);
+    if (isSnappPaid(latest)) return res.redirect(303, snappSuccessUrl(latest));
+    return res.redirect(303, snappPendingUrl(found));
+  }
+
+  try {
+    // Order was already closed locally (payment window expired).
+    if (order.status === 'cancelled') {
+      if (state === 'OK') await revertLateSnappPayment(order);
+      await releaseSnappPayLock(order);
+      return res.redirect(303, snappFailedUrl(order, 'snappay-expired'));
+    }
+
+    // Callback fields come from the customer's browser and decide nothing on their own.
+    if (hasAmount && callbackAmount !== snappPay.toRial(order.total)) {
+      order.snappPay.status = 'UNKNOWN';
+      await releaseSnappPayLock(order, {
+        error: `مبلغ callback (${Number.isFinite(callbackAmount) ? callbackAmount : 'نامعتبر'}) با مبلغ سفارش (${snappPay.toRial(order.total)}) یکسان نیست`,
+        paymentStatus: 'review'
+      });
+      return res.redirect(303, snappPendingUrl(order));
+    }
+
+    if (state !== 'OK') {
+      // Confirm with Get Payment Status so a stray/forged FAILED never cancels a real payment.
+      let gatewayStatus = '';
+      try {
+        gatewayStatus = snappPay.normalizeStatus((await snappPay.getPaymentStatus(order.snappPay.paymentToken))?.status);
+        order.snappPay.lastStatusCheckAt = new Date();
+      } catch (statusError) {
+        order.snappPay.lastError = `status: ${statusError.message}`.slice(0, 500);
+      }
+      if (gatewayStatus !== 'SETTLE' && gatewayStatus !== 'VERIFY') {
+        await failSnappPayOrder(order, { gatewayStatus: ['CANCEL', 'REVERT'].includes(gatewayStatus) ? gatewayStatus : 'FAILED' });
+        return res.redirect(303, snappFailedUrl(order, 'snappay-failed'));
+      }
+    }
+
+    const verified = await snappPay.verifyWithRecovery(order.snappPay.paymentToken);
+    const outcome = await completeVerifiedSnappPayment(order, verified);
+    return res.redirect(303, outcome === 'paid' ? snappSuccessUrl(order) : snappFailedUrl(order, 'inventory'));
+  } catch (error) {
+    console.error(`[SNAPPPAY CALLBACK] order=${order.orderNumber}`, error?.message || error);
+    try {
+      let recovered = '';
+      try {
+        recovered = snappPay.normalizeStatus((await snappPay.getPaymentStatus(order.snappPay.paymentToken))?.status);
+        order.snappPay.lastStatusCheckAt = new Date();
+      } catch (statusError) {
+        order.snappPay.lastError = `${error.message}; status: ${statusError.message}`.slice(0, 500);
+      }
+      if (recovered === 'SETTLE') {
+        await markSnappPayOrderPaid(order);
+        return res.redirect(303, snappSuccessUrl(order));
+      }
+      if (['CANCEL', 'REVERT'].includes(recovered)) {
+        await failSnappPayOrder(order, { gatewayStatus: recovered, error: error.message });
+        return res.redirect(303, snappFailedUrl(order, 'snappay-reverted'));
+      }
+      // Still unresolved: the automatic reconciler retries via Get Payment Status.
+      order.snappPay.status = 'UNKNOWN';
+      await releaseSnappPayLock(order, { error: order.snappPay.lastError || error.message, paymentStatus: 'review' });
+    } catch (saveError) {
+      console.error(`[SNAPPPAY CALLBACK PERSIST] order=${order.orderNumber}`, saveError);
+    }
+    return res.redirect(303, snappPendingUrl(order));
+  }
+}));
+
+// Automatic Get Payment Status reconciliation for SnappPay orders that are still open.
+async function reconcileSnappPayOrder(orderId) {
+  const order = await lockSnappPayOrder(orderId);
+  if (!order) return 'locked';
+  try {
+    const ageMs = Date.now() - new Date(order.createdAt).getTime();
+    let gatewayStatus = '';
+    try {
+      gatewayStatus = snappPay.normalizeStatus((await snappPay.getPaymentStatus(order.snappPay.paymentToken))?.status);
+      order.snappPay.lastStatusCheckAt = new Date();
+    } catch (statusError) {
+      order.snappPay.lastError = `status: ${statusError.message}`.slice(0, 500);
+    }
+
+    const action = resolveSnappPayAction({ status: gatewayStatus, ageMs });
+    if (action === 'settled') {
+      await markSnappPayOrderPaid(order);
+    } else if (action === 'settle') {
+      await completeVerifiedSnappPayment(order, { status: 'VERIFY' });
+    } else if (action === 'verify') {
+      let verified;
+      try {
+        // Succeeds only if the customer paid but never came back to the callback.
+        verified = await snappPay.verifyWithRecovery(order.snappPay.paymentToken);
+      } catch {
+        await releaseSnappPayLock(order);
+        return 'pending';
+      }
+      await completeVerifiedSnappPayment(order, verified);
+    } else if (action === 'cancelled') {
+      await failSnappPayOrder(order, { gatewayStatus });
+    } else if (action === 'expire') {
+      await failSnappPayOrder(order, { error: `مهلت پرداخت به پایان رسید (وضعیت اسنپ‌پی: ${gatewayStatus || 'نامشخص'})` });
+    } else {
+      await releaseSnappPayLock(order);
+    }
+    return action;
+  } catch (error) {
+    console.error(`[SNAPPPAY RECONCILE] order=${order.orderNumber}`, error?.message || error);
+    await releaseSnappPayLock(order, { error: error.message }).catch(() => {});
+    return 'error';
+  }
+}
+
+async function reconcileOpenSnappPayOrders() {
+  const candidates = await Order.find({
+    payment: SNAPPPAY_LABEL,
+    'snappPay.paymentToken': { $exists: true, $ne: null },
+    paymentStatus: { $in: ['pending', 'review'] },
+    status: { $ne: 'cancelled' },
+    createdAt: { $lte: new Date(Date.now() - reconcilerConfig.minAgeMs) }
+  }).select('_id').sort({ createdAt: 1 }).limit(reconcilerConfig.batchSize).lean();
+
+  const results = {};
+  for (const { _id } of candidates) {
+    const action = await reconcileSnappPayOrder(_id);
+    results[action] = (results[action] || 0) + 1;
+  }
+  if (candidates.length) console.log('[SNAPPPAY RECONCILE]', results);
+  return results;
+}
+
 router.get('/verify', asyncHandler(async (req, res) => {
   const { Authority, Status } = req.query;
   if (!Authority) return res.redirect('/payment/failed?reason=authority');
@@ -735,3 +1085,10 @@ router.get('/verify', asyncHandler(async (req, res) => {
 }));
 
 module.exports = router;
+module.exports.SNAPPPAY_LABEL = SNAPPPAY_LABEL;
+module.exports.lockSnappPayOrder = lockSnappPayOrder;
+module.exports.releaseSnappPayLock = releaseSnappPayLock;
+module.exports.reconcileOpenSnappPayOrders = reconcileOpenSnappPayOrders;
+module.exports.reconcileSnappPayOrder = reconcileSnappPayOrder;
+module.exports.startSnappPayReconciler = () =>
+  snappPay.isConfigured() ? startSnappPayReconciler({ runOnce: reconcileOpenSnappPayOrders }) : () => {};

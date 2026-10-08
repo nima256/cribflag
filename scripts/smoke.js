@@ -119,7 +119,7 @@ const product = {
   if (!routedCustom.text.includes('data-page=\"custom\"') || !routedCustom.text.includes('customFileInput') || routedCustom.text.includes('checkoutProvince')) {
     throw new Error('Custom page route/template regression failed');
   }
-  if (!routedCustom.text.includes('۹۹۰٬۰۰۰ تومان') || !routedCustom.text.includes('20260915-custom-live-pricing-v1')) {
+  if (!routedCustom.text.includes('۹۹۰٬۰۰۰ تومان') || !routedCustom.text.includes('20261008-snappay-v1')) {
     throw new Error('Custom page did not render the live admin price or current asset version');
   }
 

@@ -21,9 +21,14 @@ const crypto = require('crypto');
 const { prepareProductPricing, findVariantPricing, fallbackPricing, normalizeVariantPrices, variantKey } = require('../utils/productPricing');
 const { assertUploadedFile } = require('../utils/uploadValidation');
 const { processUploadedImage, removeManagedImage, removeManagedImages, unlinkQuietly } = require('../utils/imageProcessing');
-const { applyInventory, releaseInventory } = require('../services/inventory');
+const { applyInventory, releaseInventory, restockReturnedItems } = require('../services/inventory');
 const { consumeCoupon, releaseCoupon } = require('../services/coupons');
 const torobPay = require('../services/torobPay');
+const snappPay = require('../services/snappPay');
+const { buildSnappPayPayload, countUnits, itemsSubtotal, recalculateDiscount } = require('../services/snappPayPricing');
+const { itemIsEligible } = require('./discounts');
+const SNAPPPAY_LABEL = 'پرداخت اقساطی اسنپ‌پی';
+const SNAPPPAY_STALE_LOCK_MS = 10 * 60 * 1000;
 const upload = require('../middlewares/upload');
 const { buildAnalytics, isPaidSale } = require('../services/analytics');
 const { categoryPayload, ensureLegacyCategories, nextCategoryId, resolveCategorySelection, syncProductCategoryNames } = require('../services/categories');
@@ -50,7 +55,17 @@ const ORDER_STATUS_LABELS = Object.freeze({
 });
 const ORDER_STATUSES = new Set(Object.keys(ORDER_STATUS_LABELS));
 
+// Paid SnappPay orders are only cancelled/refunded through the SnappPay cancel action
+// (admin confirmation + payment/v1/cancel), otherwise the two sides would disagree.
+function assertNotSilentSnappPayCancel(order, status, paymentStatus) {
+  const paidSnappPay = order.payment === SNAPPPAY_LABEL && order.paymentStatus === 'paid' && order.snappPay?.status === 'SETTLE';
+  if (paidSnappPay && (status === 'cancelled' || ['failed', 'refunded'].includes(paymentStatus))) {
+    throw new AppError(409, `سفارش ${order.orderNumber} با اسنپ‌پی پرداخت شده است؛ لغو آن فقط از دکمه «لغو کامل در اسنپ‌پی» در جزئیات سفارش ممکن است`);
+  }
+}
+
 async function applyBulkOrderStatus(order, status) {
+  assertNotSilentSnappPayCancel(order, status, order.paymentStatus);
   const previousStatus = order.status;
   let paymentStatus = order.paymentStatus;
   const isTorobPayOrder = order.payment === 'پرداخت اقساطی ترب‌پی';
@@ -428,6 +443,171 @@ router.post('/logout', requireAdmin, asyncHandler(async (req, res) => {
   ok(res, { message: 'خارج شدید' });
 }));
 router.use(requireAdmin);
+
+// ---------------------------------------------------------------- SnappPay order actions
+async function loadSnappPayOrder(orderNumber) {
+  const order = await Order.findOne({ orderNumber: String(orderNumber || '').trim(), payment: SNAPPPAY_LABEL });
+  if (!order || !order.snappPay?.paymentToken) throw new AppError(404, 'سفارش اسنپ‌پی یافت نشد');
+  return order;
+}
+
+function requireSnappPayConfirmation(req) {
+  if (req.body?.confirmed !== true) throw new AppError(400, 'برای این عملیات برگشت‌ناپذیر، تأیید مجدد مدیر الزامی است');
+}
+
+// Atomic lock so a double click or two admins never send two irreversible requests.
+async function acquireSnappPayLock(order) {
+  const locked = await Order.findOneAndUpdate(
+    {
+      _id: order._id,
+      $or: [
+        { 'snappPay.processing': { $ne: true } },
+        { 'snappPay.processingStartedAt': { $lt: new Date(Date.now() - SNAPPPAY_STALE_LOCK_MS) } }
+      ]
+    },
+    { $set: { 'snappPay.processing': true, 'snappPay.processingStartedAt': new Date() } },
+    { new: true }
+  );
+  if (!locked) throw new AppError(409, 'عملیات دیگری روی این سفارش اسنپ‌پی در حال انجام است');
+  order.snappPay.processing = true;
+  return locked;
+}
+
+async function releaseSnappPayAdminLock(order, error) {
+  await Order.updateOne(
+    { _id: order._id },
+    { $set: { 'snappPay.processing': false, ...(error ? { 'snappPay.lastError': String(error).slice(0, 500) } : {}) }, $unset: { 'snappPay.processingStartedAt': 1 } }
+  ).catch(() => {});
+}
+
+async function assertGatewaySettled(order) {
+  const result = await snappPay.getPaymentStatus(order.snappPay.paymentToken);
+  const status = snappPay.normalizeStatus(result?.status);
+  order.snappPay.lastStatusCheckAt = new Date();
+  if (status !== 'SETTLE') throw new AppError(409, `این عملیات فقط در وضعیت SETTLE ممکن است (وضعیت فعلی اسنپ‌پی: ${status || 'نامشخص'})`);
+}
+
+const snappAdminView = order => ({ ...S.order(order) });
+
+router.post('/orders/:orderNumber/snappay/sync', asyncHandler(async (req, res) => {
+  let order = await loadSnappPayOrder(req.params.orderNumber);
+  if (['pending', 'review'].includes(order.paymentStatus) && order.status !== 'cancelled') {
+    // Open payment: run the same Get Payment Status reconciliation as the scheduler.
+    const action = await require('./orders').reconcileSnappPayOrder(order._id);
+    order = await loadSnappPayOrder(req.params.orderNumber);
+    return ok(res, { message: `وضعیت اسنپ‌پی بررسی شد (${action})`, status: order.snappPay.status, order: snappAdminView(order) });
+  }
+  const result = await snappPay.getPaymentStatus(order.snappPay.paymentToken);
+  const status = snappPay.normalizeStatus(result?.status);
+  order.snappPay.lastStatusCheckAt = new Date();
+  if (['PENDING', 'VERIFY', 'SETTLE', 'CANCEL', 'REVERT'].includes(status)) order.snappPay.status = status;
+  if (['CANCEL', 'REVERT'].includes(status) && order.status !== 'cancelled') {
+    await releaseInventory(order);
+    await releaseCoupon(order);
+    order.status = 'cancelled';
+    order.paymentStatus = order.paymentStatus === 'paid' ? 'refunded' : 'failed';
+  }
+  await order.save();
+  await syncCustomRequestsFromOrder(order);
+  ok(res, { message: `وضعیت اسنپ‌پی: ${status || 'نامشخص'}`, status, order: snappAdminView(order) });
+}));
+
+// payment/v1/update — partial return. Body: { confirmed: true, items: [{ index, qty }] }.
+router.post('/orders/:orderNumber/snappay/update', asyncHandler(async (req, res) => {
+  requireSnappPayConfirmation(req);
+  const order = await loadSnappPayOrder(req.params.orderNumber);
+  if (order.paymentStatus !== 'paid' || order.snappPay.status !== 'SETTLE' || order.status === 'cancelled') {
+    throw new AppError(409, 'بروزرسانی فقط برای سفارش پرداخت‌شده و تسویه‌شده اسنپ‌پی ممکن است');
+  }
+  // SnappPay review: with a single item left, update is disabled and only cancel remains.
+  if (countUnits(order.items) <= 1) throw new AppError(400, 'در سفارش فقط یک آیتم باقی مانده است؛ برای مرجوعی از «لغو کامل در اسنپ‌پی» استفاده کنید');
+
+  const requested = new Map((Array.isArray(req.body.items) ? req.body.items : [])
+    .map(item => [Number(item.index), Number(item.qty)]));
+  const previousItems = order.items.map(item => (typeof item.toObject === 'function' ? item.toObject() : { ...item }));
+  const nextItems = [];
+  const returned = [];
+  previousItems.forEach((item, index) => {
+    const current = Math.max(1, Number(item.qty || 1));
+    const next = requested.has(index) ? requested.get(index) : current;
+    if (!Number.isInteger(next) || next < 0 || next > current) {
+      throw new AppError(400, `تعداد جدید «${item.title}» معتبر نیست (افزایش تعداد مجاز نیست)`);
+    }
+    if (next < current) returned.push({ ...item, qty: current - next });
+    if (next > 0) nextItems.push({ ...item, qty: next });
+  });
+  if (!returned.length) throw new AppError(400, 'برای بروزرسانی باید حداقل تعداد یک قلم کاهش یابد');
+  if (!nextItems.length) throw new AppError(400, 'برای مرجوعی کامل از «لغو کامل در اسنپ‌پی» استفاده کنید');
+
+  const coupon = order.couponCode ? await Coupon.findOne({ code: order.couponCode }).lean() : null;
+  const discount = recalculateDiscount({
+    coupon,
+    previousItems,
+    nextItems,
+    previousDiscount: order.discount,
+    isEligible: itemIsEligible
+  });
+  const payload = buildSnappPayPayload(order, { items: nextItems, discount });
+  if (payload.amount >= snappPay.toRial(order.total)) throw new AppError(400, 'مبلغ بروزرسانی باید از مبلغ فعلی سفارش کمتر باشد');
+
+  await acquireSnappPayLock(order);
+  try {
+    await assertGatewaySettled(order);
+    await snappPay.update({ ...payload, paymentToken: order.snappPay.paymentToken });
+
+    await restockReturnedItems(order, returned);
+    order.items = nextItems;
+    order.subtotal = itemsSubtotal(nextItems);
+    order.discount = discount;
+    order.total = payload.amount / 10;
+    order.snappPay.updateHistory.push({
+      amount: payload.amount,
+      discount: payload.discountAmount,
+      changedBy: String(req.session.adminId || ''),
+      items: nextItems.map(item => ({ title: item.title, qty: item.qty, price: item.price }))
+    });
+    order.snappPay.processing = false;
+    order.snappPay.processingStartedAt = undefined;
+    order.snappPay.lastError = undefined;
+    await order.save();
+    await syncCustomRequestsFromOrder(order);
+  } catch (error) {
+    await releaseSnappPayAdminLock(order, error.message);
+    throw error instanceof AppError ? error : new AppError(502, `بروزرسانی در اسنپ‌پی انجام نشد: ${error.message}`);
+  }
+  ok(res, { message: 'سفارش در اسنپ‌پی بروزرسانی شد', order: snappAdminView(order) });
+}));
+
+// payment/v1/cancel — full return (allowed on an updated order too).
+router.post('/orders/:orderNumber/snappay/cancel', asyncHandler(async (req, res) => {
+  requireSnappPayConfirmation(req);
+  const order = await loadSnappPayOrder(req.params.orderNumber);
+  if (order.snappPay.status === 'CANCEL') return ok(res, { message: 'این سفارش قبلاً در اسنپ‌پی لغو شده است', order: snappAdminView(order) });
+  if (order.paymentStatus !== 'paid' || order.snappPay.status !== 'SETTLE') {
+    throw new AppError(409, 'لغو در اسنپ‌پی فقط برای سفارش پرداخت‌شده و تسویه‌شده ممکن است');
+  }
+
+  await acquireSnappPayLock(order);
+  try {
+    await assertGatewaySettled(order);
+    await snappPay.cancel(order.snappPay.paymentToken);
+    await releaseInventory(order);
+    await releaseCoupon(order);
+    order.snappPay.status = 'CANCEL';
+    order.snappPay.cancelledAt = new Date();
+    order.snappPay.processing = false;
+    order.snappPay.processingStartedAt = undefined;
+    order.snappPay.lastError = undefined;
+    order.status = 'cancelled';
+    order.paymentStatus = 'refunded';
+    await order.save();
+    await syncCustomRequestsFromOrder(order);
+  } catch (error) {
+    await releaseSnappPayAdminLock(order, error.message);
+    throw error instanceof AppError ? error : new AppError(502, `لغو در اسنپ‌پی انجام نشد: ${error.message}`);
+  }
+  ok(res, { message: 'سفارش در اسنپ‌پی لغو شد', order: snappAdminView(order) });
+}));
 
 router.post('/products/upload-image', upload.fields([
   { name: 'images', maxCount: 12 },
@@ -1184,6 +1364,7 @@ router.put('/sync/:name', asyncHandler(async (req, res) => {
       const previousStatus = order.status;
       const status = validStatuses.has(submitted.status) ? submitted.status : order.status;
       const paymentStatus = validPaymentStatuses.has(submitted.paymentStatus) ? submitted.paymentStatus : order.paymentStatus;
+      assertNotSilentSnappPayCancel(order, status, paymentStatus);
       let finalStatus = status;
       let finalPaymentStatus = paymentStatus;
       const shouldRelease = finalStatus === 'cancelled' || ['failed', 'refunded'].includes(finalPaymentStatus);

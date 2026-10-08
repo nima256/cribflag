@@ -71,6 +71,35 @@ const orderSchema = new mongoose.Schema({
     torobStatus: String,
     torobVerifiedAt: Date,
     torobSettledAt: Date
+  },
+  snappPay: {
+    paymentToken: { type: String, index: true, sparse: true },
+    transactionId: { type: String, index: true, sparse: true },
+    status: { type: String, enum: ['PENDING', 'VERIFY', 'SETTLE', 'CANCEL', 'REVERT', 'FAILED', 'UNKNOWN'] },
+    eligibleTitle: String,
+    eligibleDescription: String,
+    callbackState: String,
+    callbackAmount: Number,
+    // Per-order lock: callback, reconciler and admin actions never overlap.
+    processing: { type: Boolean, default: false },
+    processingStartedAt: Date,
+    lastStatusCheckAt: Date,
+    lastError: String,
+    verifiedAt: Date,
+    settledAt: Date,
+    revertedAt: Date,
+    cancelledAt: Date,
+    updateHistory: {
+      type: [{
+        _id: false,
+        amount: Number,
+        discount: Number,
+        changedAt: { type: Date, default: Date.now },
+        changedBy: String,
+        items: [{ _id: false, title: String, qty: Number, price: Number }]
+      }],
+      default: []
+    }
   }
 }, { timestamps: true });
 module.exports = mongoose.model('Order', orderSchema);
