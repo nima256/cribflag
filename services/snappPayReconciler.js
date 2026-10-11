@@ -9,8 +9,9 @@ const minutes = (value, fallback) => {
 
 const reconcilerConfig = {
   intervalMs: minutes(process.env.SNAPPPAY_RECONCILE_INTERVAL_MINUTES, 5),
-  // Leave fresh orders alone: the customer may still be on SnappPay's page.
-  minAgeMs: minutes(process.env.SNAPPPAY_RECONCILE_MIN_AGE_MINUTES, 15),
+  // SnappPay gives the customer 30 minutes to finish paying: never touch an order
+  // (not even with verify) inside that window.
+  minAgeMs: minutes(process.env.SNAPPPAY_RECONCILE_MIN_AGE_MINUTES, 35),
   // After this an unpaid order is closed locally.
   pendingExpireMs: minutes(process.env.SNAPPPAY_PENDING_EXPIRE_MINUTES, 60),
   // A processing lock older than this is treated as abandoned (crash/restart).

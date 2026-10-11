@@ -254,7 +254,7 @@ test('قفل پردازش: callback هم‌زمان به صفحه در حال ب
 
 // ---------------------------------------------------------------- reconciler
 test('استعلام خودکار: پرداخت بدون بازگشت تسویه، VERIFY تسویه، رهاشده منقضی', async () => {
-  const old = new Date(Date.now() - 20 * 60 * 1000);
+  const old = new Date(Date.now() - 40 * 60 * 1000);
   const paid = pending('KR-20001', { createdAt: old });
   const verified = pending('KR-20002', { createdAt: old });
   gateway.status.set('tok-KR-20002', 'VERIFY');
